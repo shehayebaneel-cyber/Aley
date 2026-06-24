@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { optionalUser, requireUser } from "../auth";
 import { prisma } from "../db";
+import { paymentProvider } from "../lib/payments";
 import { recomputeProject } from "../lib/ratings";
 import { outProject, slugify } from "../lib/serialize";
 
@@ -108,10 +109,28 @@ projectsRouter.post("/:id/donate", optionalUser, async (req, res) => {
   if (!(amount > 0)) return res.status(400).json({ error: "Enter a donation amount." });
   const anonymous = !!req.body.anonymous;
   const donorName = anonymous ? "Anonymous" : STR(req.body.donorName, 80) || "A supporter";
-  await prisma.donation.create({ data: { projectId: id, userId: req.userId ?? null, donorName, amount, anonymous, message: STR(req.body.message, 300) } });
+  const message = STR(req.body.message, 300);
+
+  // Route through the payment provider. Mock returns PAID instantly; a real
+  // hosted gateway returns a redirect URL for the donor to pay on its page.
+  const reference = `DON-${id}-${Date.now().toString(36)}`;
+  const payment = await paymentProvider.startDonation({
+    amount, currency: "USD", projectId: id, donorName, reference,
+    returnUrl: `${req.headers.origin ?? ""}/projects/${project.slug}?donation=success&ref=${reference}`,
+  });
+
+  if (payment.status === "REDIRECT" && payment.redirectUrl) {
+    // Real gateway: the donation is recorded after the donor pays + we verify.
+    return res.json({ status: "redirect", redirectUrl: payment.redirectUrl });
+  }
+  if (payment.status !== "PAID") {
+    return res.status(402).json({ error: payment.error ?? "Payment could not be started." });
+  }
+
+  await prisma.donation.create({ data: { projectId: id, userId: req.userId ?? null, donorName, amount, anonymous, message } });
   await recomputeProject(id);
   const updated = await prisma.project.findUnique({ where: { id } });
-  res.status(201).json({ ok: true, message: "Thank you for supporting Aley! 💚", project: outProject(updated!) });
+  res.status(201).json({ ok: true, status: "paid", message: "Thank you for supporting Aley! 💚", project: outProject(updated!) });
 });
 
 // POST /api/projects/:id/comment
