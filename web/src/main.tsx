@@ -1,0 +1,28 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import { AdminAuthProvider } from "./context/AdminAuthContext";
+import { ContentProvider } from "./context/ContentContext";
+import { OwnerAuthProvider } from "./context/OwnerAuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { UserAuthProvider } from "./context/UserAuthContext";
+import "./index.css";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <ThemeProvider>
+      <BrowserRouter>
+        <ContentProvider>
+          <AdminAuthProvider>
+            <UserAuthProvider>
+              <OwnerAuthProvider>
+                <App />
+              </OwnerAuthProvider>
+            </UserAuthProvider>
+          </AdminAuthProvider>
+        </ContentProvider>
+      </BrowserRouter>
+    </ThemeProvider>
+  </StrictMode>
+);

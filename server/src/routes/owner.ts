@@ -1,0 +1,267 @@
+import bcrypt from "bcryptjs";
+import { Router } from "express";
+import { requireOwner, signToken } from "../auth";
+import { prisma } from "../db";
+import { outBusiness, slugify, toJson } from "../lib/serialize";
+
+const ownerToken = (id: number) => signToken({ ownerId: id, role: "owner" });
+const safeOwner = (o: { id: number; name: string; email: string; phone: string }) => ({ id: o.id, name: o.name, email: o.email, phone: o.phone });
+
+// ---------------------------------------------------------------------------
+// Owner authentication (email + password)
+// ---------------------------------------------------------------------------
+export const ownerAuthRouter = Router();
+
+ownerAuthRouter.post("/register", async (req, res) => {
+  const name = String(req.body.name ?? "").trim();
+  const email = String(req.body.email ?? "").trim().toLowerCase();
+  const password = String(req.body.password ?? "");
+  const phone = String(req.body.phone ?? "").trim();
+  if (!name || !email || password.length < 6) {
+    return res.status(400).json({ error: "Name, email, and a password (6+ chars) are required." });
+  }
+  if (await prisma.owner.findUnique({ where: { email } })) {
+    return res.status(409).json({ error: "An account with this email already exists." });
+  }
+  const owner = await prisma.owner.create({ data: { name, email, phone, passwordHash: await bcrypt.hash(password, 10) } });
+  res.status(201).json({ token: ownerToken(owner.id), owner: safeOwner(owner) });
+});
+
+ownerAuthRouter.post("/login", async (req, res) => {
+  const email = String(req.body.email ?? "").trim().toLowerCase();
+  const password = String(req.body.password ?? "");
+  const owner = await prisma.owner.findUnique({ where: { email } });
+  if (!owner || !(await bcrypt.compare(password, owner.passwordHash))) {
+    return res.status(401).json({ error: "Wrong email or password." });
+  }
+  res.json({ token: ownerToken(owner.id), owner: safeOwner(owner) });
+});
+
+// ---------------------------------------------------------------------------
+// Owner dashboard (token required)
+// ---------------------------------------------------------------------------
+export const ownerRouter = Router();
+ownerRouter.use(requireOwner);
+
+/** Load a business and confirm the logged-in owner owns it. */
+async function ownedBusiness(req: { ownerId?: number; params: { id: string } }) {
+  const id = Number(req.params.id);
+  const business = await prisma.business.findUnique({ where: { id } });
+  if (!business || business.ownerId !== req.ownerId) return null;
+  return business;
+}
+
+// GET /api/owner/me — owner profile + their businesses (with counts).
+ownerRouter.get("/me", async (req, res) => {
+  const owner = await prisma.owner.findUnique({ where: { id: req.ownerId! } });
+  if (!owner) return res.status(404).json({ error: "Account not found." });
+  const businesses = await prisma.business.findMany({
+    where: { ownerId: owner.id },
+    orderBy: { createdAt: "asc" },
+    include: { category: true, _count: { select: { reviews: true, offers: true, events: true } } },
+  });
+  res.json({ owner: safeOwner(owner), businesses: businesses.map((b) => ({ ...outBusiness(b), _count: b._count })) });
+});
+
+// POST /api/owner/businesses — create a new listing owned by this owner.
+ownerRouter.post("/businesses", async (req, res) => {
+  const name = String(req.body.name ?? "").trim();
+  const categoryId = Number(req.body.categoryId);
+  if (!name || !categoryId) return res.status(400).json({ error: "Business name and category are required." });
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!category) return res.status(400).json({ error: "Pick a valid category." });
+
+  // Unique slug.
+  let base = slugify(name) || "business";
+  let slug = base;
+  for (let i = 2; await prisma.business.findUnique({ where: { slug } }); i++) slug = `${base}-${i}`;
+
+  const aley = await prisma.city.findUnique({ where: { slug: "aley" } });
+  const business = await prisma.business.create({
+    data: {
+      slug, name, categoryId, cityId: aley!.id, ownerId: req.ownerId!,
+      tagline: String(req.body.tagline ?? "").trim(),
+      isPublished: true, isClaimed: true,
+    },
+    include: { category: true },
+  });
+  res.status(201).json(outBusiness(business));
+});
+
+// GET /api/owner/businesses/:id — full editable business.
+ownerRouter.get("/businesses/:id", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const full = await prisma.business.findUnique({ where: { id: business.id }, include: { category: true } });
+  res.json(outBusiness(full!));
+});
+
+const STR = (v: unknown, max = 2000) => String(v ?? "").slice(0, max);
+
+// PATCH /api/owner/businesses/:id — update profile, contact, hours, attributes.
+ownerRouter.patch("/businesses/:id", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const b = req.body as Record<string, unknown>;
+
+  const data: Record<string, unknown> = {};
+  if ("name" in b) data.name = STR(b.name, 120).trim() || business.name;
+  if ("tagline" in b) data.tagline = STR(b.tagline, 160);
+  if ("description" in b) data.description = STR(b.description, 4000);
+  if ("logo" in b) data.logo = b.logo ? STR(b.logo, 500) : null;
+  if ("cover" in b) data.cover = b.cover ? STR(b.cover, 500) : null;
+  if ("gallery" in b && Array.isArray(b.gallery)) data.gallery = toJson(b.gallery.slice(0, 20));
+  if ("tags" in b && Array.isArray(b.tags)) data.tags = toJson(b.tags.slice(0, 30));
+  if ("faqs" in b && Array.isArray(b.faqs)) data.faqs = toJson(b.faqs.slice(0, 30));
+  if ("hours" in b && Array.isArray(b.hours)) data.hours = toJson(b.hours.slice(0, 7));
+  if ("phone" in b) data.phone = STR(b.phone, 40);
+  if ("whatsapp" in b) data.whatsapp = STR(b.whatsapp, 40);
+  if ("instagram" in b) data.instagram = STR(b.instagram, 80).replace(/^@/, "");
+  if ("facebook" in b) data.facebook = STR(b.facebook, 200);
+  if ("website" in b) data.website = STR(b.website, 200);
+  if ("email" in b) data.email = STR(b.email, 120);
+  if ("address" in b) data.address = STR(b.address, 200);
+  if ("lat" in b) data.lat = b.lat === null || b.lat === "" ? null : Number(b.lat);
+  if ("lng" in b) data.lng = b.lng === null || b.lng === "" ? null : Number(b.lng);
+  if ("priceRange" in b) data.priceRange = Math.max(1, Math.min(4, Number(b.priceRange) || 2));
+  if ("hasDelivery" in b) data.hasDelivery = !!b.hasDelivery;
+  if ("hasReservations" in b) data.hasReservations = !!b.hasReservations;
+  if ("categoryId" in b) {
+    const cat = await prisma.category.findUnique({ where: { id: Number(b.categoryId) } });
+    if (cat) data.categoryId = cat.id;
+  }
+
+  const updated = await prisma.business.update({ where: { id: business.id }, data, include: { category: true } });
+  res.json(outBusiness(updated));
+});
+
+// GET /api/owner/businesses/:id/analytics
+ownerRouter.get("/businesses/:id/analytics", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const reviews = await prisma.review.findMany({ where: { businessId: business.id, status: "APPROVED" } });
+  const breakdown = [1, 2, 3, 4, 5].map((star) => ({ star, count: reviews.filter((r) => r.rating === star).length }));
+  const [offers, events, pendingReviews] = await Promise.all([
+    prisma.offer.count({ where: { businessId: business.id } }),
+    prisma.event.count({ where: { businessId: business.id } }),
+    prisma.review.count({ where: { businessId: business.id, status: "PENDING" } }),
+  ]);
+  res.json({
+    viewCount: business.viewCount,
+    rating: business.rating,
+    reviewCount: business.reviewCount,
+    pendingReviews,
+    offers,
+    events,
+    breakdown,
+  });
+});
+
+// ---- Offers ----
+ownerRouter.get("/businesses/:id/offers", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.offer.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" } }));
+});
+
+ownerRouter.post("/businesses/:id/offers", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const title = STR(req.body.title, 120).trim();
+  if (!title) return res.status(400).json({ error: "Offer title is required." });
+  const offer = await prisma.offer.create({
+    data: {
+      businessId: business.id, cityId: business.cityId, title,
+      description: STR(req.body.description, 500), type: STR(req.body.type, 30) || "DISCOUNT",
+      image: req.body.image ? STR(req.body.image, 500) : null, isActive: req.body.isActive !== false,
+    },
+  });
+  res.status(201).json(offer);
+});
+
+async function ownedOffer(ownerId: number | undefined, id: number) {
+  const offer = await prisma.offer.findUnique({ where: { id }, include: { business: true } });
+  return offer && offer.business.ownerId === ownerId ? offer : null;
+}
+
+ownerRouter.patch("/offers/:id", async (req, res) => {
+  if (!(await ownedOffer(req.ownerId, Number(req.params.id)))) return res.status(404).json({ error: "Offer not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("title" in b) data.title = STR(b.title, 120);
+  if ("description" in b) data.description = STR(b.description, 500);
+  if ("type" in b) data.type = STR(b.type, 30);
+  if ("image" in b) data.image = b.image ? STR(b.image, 500) : null;
+  if ("isActive" in b) data.isActive = !!b.isActive;
+  res.json(await prisma.offer.update({ where: { id: Number(req.params.id) }, data }));
+});
+
+ownerRouter.delete("/offers/:id", async (req, res) => {
+  if (!(await ownedOffer(req.ownerId, Number(req.params.id)))) return res.status(404).json({ error: "Offer not found." });
+  await prisma.offer.delete({ where: { id: Number(req.params.id) } });
+  res.json({ ok: true });
+});
+
+// ---- Events ----
+ownerRouter.get("/businesses/:id/events", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.event.findMany({ where: { businessId: business.id }, orderBy: { startTime: "desc" } }));
+});
+
+ownerRouter.post("/businesses/:id/events", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const title = STR(req.body.title, 120).trim();
+  const startTime = new Date(String(req.body.startTime));
+  if (!title || Number.isNaN(startTime.getTime())) return res.status(400).json({ error: "Title and a valid start date/time are required." });
+  const event = await prisma.event.create({
+    data: {
+      businessId: business.id, cityId: business.cityId, title,
+      description: STR(req.body.description, 1000), category: STR(req.body.category, 40) || "Community",
+      location: STR(req.body.location, 160) || business.name, image: req.body.image ? STR(req.body.image, 500) : null,
+      startTime, isPublished: req.body.isPublished !== false,
+    },
+  });
+  res.status(201).json(event);
+});
+
+async function ownedEvent(ownerId: number | undefined, id: number) {
+  const event = await prisma.event.findUnique({ where: { id }, include: { business: true } });
+  return event && event.business?.ownerId === ownerId ? event : null;
+}
+
+ownerRouter.patch("/events/:id", async (req, res) => {
+  if (!(await ownedEvent(req.ownerId, Number(req.params.id)))) return res.status(404).json({ error: "Event not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("title" in b) data.title = STR(b.title, 120);
+  if ("description" in b) data.description = STR(b.description, 1000);
+  if ("category" in b) data.category = STR(b.category, 40);
+  if ("location" in b) data.location = STR(b.location, 160);
+  if ("image" in b) data.image = b.image ? STR(b.image, 500) : null;
+  if ("startTime" in b) { const d = new Date(String(b.startTime)); if (!Number.isNaN(d.getTime())) data.startTime = d; }
+  if ("isPublished" in b) data.isPublished = !!b.isPublished;
+  res.json(await prisma.event.update({ where: { id: Number(req.params.id) }, data }));
+});
+
+ownerRouter.delete("/events/:id", async (req, res) => {
+  if (!(await ownedEvent(req.ownerId, Number(req.params.id)))) return res.status(404).json({ error: "Event not found." });
+  await prisma.event.delete({ where: { id: Number(req.params.id) } });
+  res.json({ ok: true });
+});
+
+// ---- Reviews + reply ----
+ownerRouter.get("/businesses/:id/reviews", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.review.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" }, take: 100 }));
+});
+
+ownerRouter.post("/reviews/:id/reply", async (req, res) => {
+  const review = await prisma.review.findUnique({ where: { id: Number(req.params.id) }, include: { business: true } });
+  if (!review || review.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Review not found." });
+  const reply = STR(req.body.reply, 1000).trim();
+  const updated = await prisma.review.update({ where: { id: review.id }, data: { reply: reply || null, repliedAt: reply ? new Date() : null } });
+  res.json(updated);
+});

@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+*.tsbuildinfo
+
+# Secrets / env (NEVER commit)
+.env
+*.local
+
+# Local DB & uploads
+server/dev.db
+server/dev.db-journal
+server/uploads/
+
+# OS / editor
+.DS_Store
+Thumbs.db

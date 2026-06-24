@@ -1,0 +1,313 @@
+// Aley Platform — database schema.
+//
+// Multi-city by design: every Business, Event and Offer belongs to a City, so
+// the same codebase serves Aley today and Beirut/Byblos/Batroun/Zahle/Sidon
+// later with no rebuild. SQLite for local dev (statuses are strings, list/object
+// columns are JSON-encoded strings); switch `provider` to postgresql to scale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A city the platform serves. `isActive` gates it on the public site.
+model City {
+  id        Int        @id @default(autoincrement())
+  slug      String     @unique // "aley", "beirut", ...
+  name      String
+  nameAr    String     @default("")
+  tagline   String     @default("")
+  lat       Float      @default(33.8056)
+  lng       Float      @default(35.6011)
+  isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  businesses Business[]
+  events     Event[]
+  offers     Offer[]
+  projects   Project[]
+}
+
+// A business category (Coffee Shops, Restaurants, ...). Global across cities,
+// fully editable from the admin panel.
+model Category {
+  id         Int        @id @default(autoincrement())
+  slug       String     @unique
+  name       String
+  icon       String     @default("🏷️") // emoji or icon key
+  color      String     @default("#0ea5a4")
+  sortOrder  Int        @default(0)
+  isActive   Boolean    @default(true)
+  businesses Business[]
+}
+
+// A business listing. One profile page per business, scoped to a city.
+model Business {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique // global unique slug -> /aley/<slug>
+  cityId      Int
+  city        City     @relation(fields: [cityId], references: [id])
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  name        String
+  tagline     String   @default("")
+  description String   @default("")
+  logo        String?
+  cover       String?
+  gallery     String   @default("[]") // JSON string[] of image URLs
+
+  // Contact & socials
+  phone     String   @default("")
+  whatsapp  String   @default("")
+  instagram String   @default("")
+  facebook  String   @default("")
+  website   String   @default("")
+  email     String   @default("")
+
+  // Location
+  address String  @default("")
+  lat     Float?
+  lng     Float?
+
+  // Hours: JSON [{day:0-6, open:"09:00", close:"22:00", closed:false}]
+  hours String @default("[]")
+
+  // Attributes used by filters
+  priceRange      Int     @default(2) // 1-4 ($ to $$$$)
+  hasDelivery     Boolean @default(false)
+  hasReservations Boolean @default(false)
+
+  // Rich content (JSON strings)
+  tags String @default("[]") // string[] of services/keywords
+  faqs String @default("[]") // [{q,a}]
+
+  // Curation & trust
+  isPublished Boolean @default(true)
+  isFeatured  Boolean @default(false)
+  isVerified  Boolean @default(false)
+  isClaimed   Boolean @default(false)
+
+  // Cached review aggregates (kept in sync when a review is approved)
+  rating      Float @default(0)
+  reviewCount Int   @default(0)
+  viewCount   Int   @default(0)
+
+  ownerId   Int?
+  owner     Owner?   @relation(fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  reviews   Review[]
+  events    Event[]
+  offers    Offer[]
+  favorites Favorite[]
+}
+
+// A business owner account (manages one or more businesses from a dashboard).
+model Owner {
+  id           Int        @id @default(autoincrement())
+  name         String
+  email        String     @unique
+  passwordHash String
+  phone        String     @default("")
+  createdAt    DateTime   @default(now())
+  businesses   Business[]
+}
+
+// A platform visitor account (favourites, reviews, follows).
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String?  @unique
+  phone        String?  @unique
+  passwordHash String?
+  googleId     String?  @unique
+  appleId      String?  @unique
+  avatar       String?
+  createdAt    DateTime @default(now())
+  reviews      Review[]
+  favorites    Favorite[]
+}
+
+model Favorite {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, businessId])
+}
+
+// A rating + review for a business. Moderated before it shows publicly.
+model Review {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName String
+  rating     Int // 1-5
+  comment    String   @default("")
+  reply      String? // business owner's response
+  repliedAt  DateTime?
+  status     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt  DateTime @default(now())
+}
+
+// An event published by a business or the city.
+model Event {
+  id          Int      @id @default(autoincrement())
+  cityId      Int
+  city        City     @relation(fields: [cityId], references: [id])
+  businessId  Int?
+  business    Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  title       String
+  description String   @default("")
+  category    String   @default("") // Live Music, Sports, Community, Promotion...
+  image       String?
+  location    String   @default("")
+  startTime   DateTime
+  endTime     DateTime?
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// A promotion / discount published by a business.
+model Offer {
+  id          Int      @id @default(autoincrement())
+  cityId      Int
+  city        City     @relation(fields: [cityId], references: [id])
+  businessId  Int
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  type        String   @default("DISCOUNT") // DISCOUNT | BOGO | HAPPY_HOUR | SEASONAL
+  image       String?
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// Key/value store for homepage content, ads, feature flags, etc.
+model Setting {
+  key   String @id
+  value String
+}
+
+// ---------------------------------------------------------------------------
+// Community Projects — civic crowdfunding for the city (GoFundMe-style, local).
+// ---------------------------------------------------------------------------
+model Project {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  cityId      Int
+  city        City     @relation(fields: [cityId], references: [id])
+  title       String
+  description String   @default("")
+  type        String   @default("") // Street, Trees, Lighting, Benches, Cleanup...
+  location    String   @default("")
+  lat         Float?
+  lng         Float?
+
+  // Image sets (JSON string[] of URLs)
+  beforePhotos   String @default("[]")
+  proposedPhotos String @default("[]")
+  progressPhotos String @default("[]")
+
+  // Timeline / milestones: JSON [{ label, date, done }]
+  timeline String @default("[]")
+
+  manager  String @default("") // who is managing the project (transparency)
+  fundingGoal Float @default(0)
+  amountRaised Float @default(0) // cached sum of donations
+  contributorCount Int @default(0) // cached count of donations
+  voteCount Int @default(0) // cached count of votes
+
+  // PROPOSED | FUNDING | APPROVED | IN_PROGRESS | COMPLETED | PAUSED
+  status     String  @default("PROPOSED")
+  isFeatured Boolean @default(false)
+  isPublished Boolean @default(true) // user suggestions can be hidden until approved
+
+  finalCost       Float?
+  completedReport String @default("")
+  submittedBy     String @default("") // suggester display name
+  submittedByUserId Int?
+  createdAt DateTime @default(now())
+
+  donations Donation[]
+  expenses  Expense[]
+  updates   ProjectUpdate[]
+  comments  ProjectComment[]
+  votes     ProjectVote[]
+  follows   ProjectFollow[]
+}
+
+model Donation {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    Int? // visitor account, if logged in
+  donorName String
+  amount    Float
+  anonymous Boolean  @default(false)
+  message   String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Expense {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label      String
+  amount     Float
+  receipt    String? // uploaded receipt image URL
+  contractor String   @default("") // contractor / quotation note
+  createdAt  DateTime @default(now())
+}
+
+model ProjectUpdate {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  body      String   @default("")
+  images    String   @default("[]") // JSON string[]
+  createdAt DateTime @default(now())
+}
+
+model ProjectComment {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     Int?
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+}
+
+model ProjectVote {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model ProjectFollow {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
