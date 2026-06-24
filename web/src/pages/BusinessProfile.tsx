@@ -94,6 +94,31 @@ export function BusinessProfile() {
               </section>
             )}
 
+            {/* Menu / Products / Services */}
+            {!!b.products?.length && (
+              <section className="card p-5">
+                <h2 className="font-display text-lg font-bold text-ink">{b.productLabel || "Products & Services"}</h2>
+                <div className="mt-3 space-y-5">
+                  {b.products.map((sec) => (
+                    <div key={sec.title}>
+                      <p className="text-xs font-bold uppercase tracking-wide text-brand">{sec.title}</p>
+                      <ul className="mt-2 divide-y divide-border">
+                        {sec.items.map((it, i) => (
+                          <li key={i} className="flex items-baseline justify-between gap-3 py-2">
+                            <span>
+                              <span className="font-semibold text-ink">{it.name}</span>
+                              {it.description && <span className="block text-xs text-muted">{it.description}</span>}
+                            </span>
+                            {it.price ? <span className="shrink-0 font-semibold text-ink">${it.price}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Offers */}
             {!!b.offers?.length && (
               <section className="card p-5">
@@ -171,6 +196,7 @@ export function BusinessProfile() {
             <section className="card p-5">
               <h2 className="font-display text-lg font-bold text-ink">Contact</h2>
               <ul className="mt-3 space-y-2.5 text-sm">
+                {b.ownerName && <li className="text-muted">👤 Owner: <span className="font-semibold text-ink">{b.ownerName}</span></li>}
                 {b.address && <li className="flex items-start gap-2 text-muted"><MapPinIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> {b.address}</li>}
                 {b.phone && <li><a href={`tel:${b.phone}`} className="flex items-center gap-2 text-muted hover:text-brand"><PhoneIcon className="h-4 w-4 text-brand" /> {b.phone}</a></li>}
                 {wa && <li><a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><WhatsAppIcon className="h-4 w-4 text-emerald-500" /> WhatsApp</a></li>}

@@ -34,12 +34,20 @@ export interface Review {
   createdAt: string;
 }
 
+export interface ProductSection {
+  title: string;
+  items: { name: string; price?: number; description?: string }[];
+}
+
 export interface Business {
   id: number;
   slug: string;
   name: string;
   tagline: string;
   description: string;
+  products?: ProductSection[];
+  productLabel?: string;
+  ownerName?: string;
   logo: string | null;
   cover: string | null;
   gallery: string[];

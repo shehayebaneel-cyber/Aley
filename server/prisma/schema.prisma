@@ -83,8 +83,12 @@ model Business {
   hasReservations Boolean @default(false)
 
   // Rich content (JSON strings)
-  tags String @default("[]") // string[] of services/keywords
-  faqs String @default("[]") // [{q,a}]
+  tags     String @default("[]") // string[] of services/keywords (amenities)
+  faqs     String @default("[]") // [{q,a}]
+  products String @default("[]") // [{title, items:[{name, price?, description?}]}] — menus/collections/rooms/services
+  ownerName String @default("") // display-only owner/manager name
+
+  productLabel String @default("Products & Services") // section heading on the profile
 
   // Curation & trust
   isPublished Boolean @default(true)

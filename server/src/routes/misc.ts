@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
-import { outBusiness } from "../lib/serialize";
+import { outBusiness, outCard } from "../lib/serialize";
 
 // Cities, categories, events, offers, reviews, and the homepage aggregate.
 
@@ -105,9 +105,9 @@ homeRouter.get("/", async (req, res) => {
     city: cityRow,
     totalBusinesses,
     stats: { businesses: totalBusinesses, categories: activeCategories, events: eventsCount, offers: offersCount },
-    featured: featured.map(outBusiness),
-    newest: newest.map(outBusiness),
-    popular: popular.map(outBusiness),
+    featured: featured.map(outCard),
+    newest: newest.map(outCard),
+    popular: popular.map(outCard),
     offers,
     events,
     categories: categories.map((c) => ({ ...c, count: countMap.get(c.id) ?? 0 })).filter((c) => c.count > 0).slice(0, 12),

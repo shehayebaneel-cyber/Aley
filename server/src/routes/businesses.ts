@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { isOpenNow, outBusiness, parseArr, type HoursRow } from "../lib/serialize";
+import { isOpenNow, outBusiness, outCard, parseArr, type HoursRow } from "../lib/serialize";
 
 export const businessesRouter = Router();
 
@@ -44,7 +44,7 @@ businessesRouter.get("/", async (req, res) => {
   });
 
   // "Open now" is computed from the JSON hours, so filter after fetching.
-  let list = rows.map(outBusiness);
+  let list = rows.map(outCard);
   if (q.openNow === "true") list = list.filter((b) => b.openNow);
 
   res.json(list);
@@ -80,7 +80,7 @@ businessesRouter.get("/:slug/related", async (req, res) => {
     take: 6,
     include: { category: true },
   });
-  res.json(rows.map(outBusiness));
+  res.json(rows.map(outCard));
 });
 
 // GET /api/map — lightweight pins for the interactive map.

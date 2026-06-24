@@ -23,14 +23,40 @@ export interface HoursRow {
   closed: boolean;
 }
 
-/** Decode a business row's JSON fields into real arrays. */
+/** Full business (detail pages) — decode all JSON fields incl. products. */
 export function outBusiness<T extends Record<string, unknown>>(b: T) {
   return {
     ...b,
     gallery: parseArr(b.gallery) as string[],
     tags: parseArr(b.tags) as string[],
     faqs: parseArr(b.faqs) as { q: string; a: string }[],
+    products: parseArr(b.products),
     hours: parseArr(b.hours) as HoursRow[],
+    openNow: isOpenNow(parseArr(b.hours) as HoursRow[]),
+  };
+}
+
+/** Lean business for directory cards/lists — omits heavy gallery/products/faqs. */
+export function outCard<T extends Record<string, unknown>>(b: T) {
+  return {
+    id: b.id,
+    slug: b.slug,
+    name: b.name,
+    tagline: b.tagline,
+    logo: b.logo,
+    cover: b.cover,
+    category: b.category,
+    rating: b.rating,
+    reviewCount: b.reviewCount,
+    priceRange: b.priceRange,
+    hasDelivery: b.hasDelivery,
+    hasReservations: b.hasReservations,
+    isFeatured: b.isFeatured,
+    isVerified: b.isVerified,
+    address: b.address,
+    phone: b.phone,
+    whatsapp: b.whatsapp,
+    city: b.city,
     openNow: isOpenNow(parseArr(b.hours) as HoursRow[]),
   };
 }
