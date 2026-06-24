@@ -100,7 +100,10 @@ export function BusinessProfile() {
             {/* Menu / Products / Services */}
             {!!b.products?.length && (
               <section className="card p-5">
-                <h2 className="font-display text-lg font-bold text-ink">{b.productLabel || "Products & Services"}</h2>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="font-display text-lg font-bold text-ink">{b.productLabel || "Products & Services"}</h2>
+                  {!b.openNow && <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-bold text-red-500">Closed — ordering unavailable</span>}
+                </div>
                 <div className="mt-3 space-y-5">
                   {b.products.map((sec) => (
                     <div key={sec.title}>
@@ -116,8 +119,9 @@ export function BusinessProfile() {
                               <span className="flex shrink-0 items-center gap-2">
                                 <span className="font-semibold text-ink">${it.price}</span>
                                 <button
+                                  disabled={!b.openNow}
                                   onClick={() => { cart.add({ businessId: b.id, businessSlug: b.slug, businessName: b.name, businessLogo: b.logo, name: it.name, price: it.price! }); setAdded(it.name); }}
-                                  className="btn btn-primary px-3 py-1.5 text-xs"
+                                  className="btn btn-primary px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                   {added === it.name ? "Added ✓" : "Add"}
                                 </button>

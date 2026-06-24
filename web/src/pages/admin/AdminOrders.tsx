@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { adminApi, currency, DELIVERY_STATUS, formatEventDate, TICKET_STATUS } from "../../lib/api";
+import { mapsLinkFromCoords } from "../../lib/maps";
 import type { MarketOrder } from "../../types";
 
 const DELIVERY_OPTS = ["PENDING", "COLLECTING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
@@ -35,7 +36,7 @@ export function AdminOrders() {
               <div>
                 <p className="font-display text-lg font-bold text-ink">{o.number}</p>
                 <p className="text-sm text-muted">{formatEventDate(o.createdAt)} · {o.customerName} · <a href={`tel:${o.customerPhone}`} className="text-brand">{o.customerPhone}</a></p>
-                <p className="text-sm text-muted">{o.fulfillment === "DELIVERY" ? `🛵 ${o.address}` : "🏬 Pickup"} · {o.paymentMethod === "ONLINE" ? (o.paid ? "Paid online" : "Online (unpaid)") : "Cash on delivery"}</p>
+                <p className="text-sm text-muted">{o.fulfillment === "DELIVERY" ? `🛵 ${o.address}` : "🏬 Pickup"} · {o.paymentMethod === "ONLINE" ? (o.paid ? "Paid online" : "Online (unpaid)") : "Cash on delivery"}{o.lat != null && o.lng != null && <> · <a href={mapsLinkFromCoords(o.lat, o.lng)} target="_blank" rel="noreferrer" className="font-semibold text-brand">Open in Maps</a></>}</p>
               </div>
               <div className="text-right">
                 <p className="font-display text-xl font-extrabold text-ink">{currency(o.total)}</p>

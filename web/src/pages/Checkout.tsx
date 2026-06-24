@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { MapPicker } from "../components/MapPicker";
 import { useCart } from "../context/CartContext";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, currency, userApi } from "../lib/api";
@@ -14,6 +15,7 @@ export function Checkout() {
   const [f, setF] = useState({
     customerName: user?.name ?? "", customerPhone: "", customerEmail: user?.email ?? "",
     fulfillment: "DELIVERY", address: "", note: "", paymentMethod: "CASH",
+    lat: null as number | null, lng: null as number | null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -63,7 +65,12 @@ export function Checkout() {
                 <button key={opt} type="button" onClick={() => set({ fulfillment: opt })} className={`chip ${f.fulfillment === opt ? "chip-active" : ""}`}>{opt === "DELIVERY" ? "🛵 Delivery" : "🏬 Pickup from each"}</button>
               ))}
             </div>
-            {f.fulfillment === "DELIVERY" && <textarea value={f.address} onChange={(e) => set({ address: e.target.value })} rows={2} placeholder="Delivery address in Aley" className="input mt-3" />}
+            {f.fulfillment === "DELIVERY" && (
+              <>
+                <textarea value={f.address} onChange={(e) => set({ address: e.target.value })} rows={2} placeholder="Delivery address in Aley" className="input mt-3" />
+                <div className="mt-3"><MapPicker lat={f.lat} lng={f.lng} onChange={({ lat, lng }) => set({ lat, lng })} /></div>
+              </>
+            )}
             <textarea value={f.note} onChange={(e) => set({ note: e.target.value })} rows={2} placeholder="Note for the driver / businesses (optional)" className="input mt-3" />
           </section>
 

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
+import { isOpenNow, parseArr, type HoursRow } from "../lib/serialize";
 
 export const ordersRouter = Router();
 
@@ -49,12 +50,24 @@ ordersRouter.post("/", optionalUser, async (req, res) => {
 
   const aley = await prisma.city.findUnique({ where: { slug: "aley" } });
 
+  // Validate every business is available + open BEFORE creating anything.
+  const businessesById = new Map<number, Awaited<ReturnType<typeof prisma.business.findUnique>>>();
+  const closed: string[] = [];
+  for (const bk of baskets) {
+    const business = await prisma.business.findUnique({ where: { id: Number(bk.businessId) } });
+    if (!business || !business.isPublished) return res.status(400).json({ error: "One of the businesses is no longer available." });
+    if (!isOpenNow(parseArr(business.hours) as HoursRow[])) closed.push(business.name);
+    businessesById.set(business.id, business);
+  }
+  if (closed.length) {
+    return res.status(422).json({ error: `${closed.join(", ")} ${closed.length > 1 ? "are" : "is"} currently closed. Please remove ${closed.length > 1 ? "them" : "it"} or order during opening hours.`, closed: true });
+  }
+
   // Build per-business tickets with commission.
   const tickets = [];
   let itemsSubtotal = 0;
   for (const bk of baskets) {
-    const business = await prisma.business.findUnique({ where: { id: Number(bk.businessId) } });
-    if (!business) return res.status(400).json({ error: "One of the businesses is no longer available." });
+    const business = businessesById.get(Number(bk.businessId))!;
     const items = bk.items.map((it) => {
       const price = round2(Number(it.price) || 0);
       const quantity = Math.max(1, Math.round(Number(it.quantity) || 1));

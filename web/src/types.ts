@@ -224,7 +224,7 @@ export interface BusinessOrder {
   commissionAmount: number;
   items: OrderItem[];
   business?: { name: string; slug: string; logo?: string | null; address?: string; phone?: string };
-  order?: { number: string; customerName: string; customerPhone: string; fulfillment: string; address: string; note: string; deliveryStatus: string; createdAt: string };
+  order?: { number: string; customerName: string; customerPhone: string; fulfillment: string; address: string; note: string; deliveryStatus: string; createdAt: string; lat?: number | null; lng?: number | null };
 }
 export interface MarketOrder {
   id: number;
@@ -234,6 +234,8 @@ export interface MarketOrder {
   customerEmail: string;
   fulfillment: "DELIVERY" | "PICKUP";
   address: string;
+  lat: number | null;
+  lng: number | null;
   note: string;
   itemsSubtotal: number;
   deliveryFee: number;

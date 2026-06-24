@@ -275,7 +275,7 @@ ownerRouter.get("/businesses/:id/orders", async (req, res) => {
     where: { businessId: business.id },
     orderBy: { createdAt: "desc" },
     take: 100,
-    include: { items: true, order: { select: { number: true, customerName: true, customerPhone: true, fulfillment: true, address: true, note: true, deliveryStatus: true, createdAt: true } } },
+    include: { items: true, order: { select: { number: true, customerName: true, customerPhone: true, fulfillment: true, address: true, lat: true, lng: true, note: true, deliveryStatus: true, createdAt: true } } },
   });
   res.json(tickets);
 });

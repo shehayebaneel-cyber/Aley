@@ -160,7 +160,9 @@ function OrdersTab({ biz }: { biz: Business }) {
               </div>
               <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>
             </div>
-            {t.order?.fulfillment === "DELIVERY" && t.order?.address && <p className="mt-1 text-xs text-muted">📍 {t.order.address}</p>}
+            {t.order?.fulfillment === "DELIVERY" && t.order?.address && (
+              <p className="mt-1 text-xs text-muted">📍 {t.order.address}{t.order.lat != null && t.order.lng != null && <> · <a href={`https://www.google.com/maps/search/?api=1&query=${t.order.lat},${t.order.lng}`} target="_blank" rel="noreferrer" className="font-semibold text-brand">Maps</a></>}</p>
+            )}
             {t.order?.note && <p className="mt-1 text-xs text-muted">📝 {t.order.note}</p>}
             <ul className="mt-2 divide-y divide-border">
               {t.items.map((it) => (
