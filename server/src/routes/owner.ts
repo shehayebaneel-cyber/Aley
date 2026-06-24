@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { prisma } from "../db";
 import { outBusiness, slugify, toJson } from "../lib/serialize";
+import { recomputeOrder } from "./orders";
 
 const ownerToken = (id: number) => signToken({ ownerId: id, role: "owner" });
 const safeOwner = (o: { id: number; name: string; email: string; phone: string }) => ({ id: o.id, name: o.name, email: o.email, phone: o.phone });
@@ -263,5 +264,30 @@ ownerRouter.post("/reviews/:id/reply", async (req, res) => {
   if (!review || review.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Review not found." });
   const reply = STR(req.body.reply, 1000).trim();
   const updated = await prisma.review.update({ where: { id: review.id }, data: { reply: reply || null, repliedAt: reply ? new Date() : null } });
+  res.json(updated);
+});
+
+// ---- Orders (this business's tickets only) ----
+ownerRouter.get("/businesses/:id/orders", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const tickets = await prisma.businessOrder.findMany({
+    where: { businessId: business.id },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: { items: true, order: { select: { number: true, customerName: true, customerPhone: true, fulfillment: true, address: true, note: true, deliveryStatus: true, createdAt: true } } },
+  });
+  res.json(tickets);
+});
+
+const TICKET_STATUSES = ["PENDING", "PREPARING", "READY", "CANCELLED"];
+ownerRouter.patch("/business-orders/:id", async (req, res) => {
+  const ticket = await prisma.businessOrder.findUnique({ where: { id: Number(req.params.id) }, include: { business: true } });
+  if (!ticket || ticket.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Order not found." });
+  const data: Record<string, unknown> = {};
+  if ("status" in req.body && TICKET_STATUSES.includes(String(req.body.status))) data.status = req.body.status;
+  if ("prepTime" in req.body) data.prepTime = STR(req.body.prepTime, 40);
+  const updated = await prisma.businessOrder.update({ where: { id: ticket.id }, data });
+  if (data.status === "CANCELLED") await recomputeOrder(ticket.orderId);
   res.json(updated);
 });

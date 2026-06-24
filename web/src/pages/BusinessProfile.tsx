@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { BusinessCard } from "../components/BusinessCard";
 import { FavoriteButton } from "../components/FavoriteButton";
 import { Stars } from "../components/Stars";
+import { useCart } from "../context/CartContext";
 import {
   CalendarIcon, CheckIcon, ClockIcon, FacebookIcon, GlobeIcon, InstagramIcon,
   MapPinIcon, PhoneIcon, StarIcon, TagIcon, VerifiedIcon, WhatsAppIcon,
@@ -14,9 +15,11 @@ import type { Business } from "../types";
 
 export function BusinessProfile() {
   const { slug } = useParams();
+  const cart = useCart();
   const { data: b, loading, error } = useFetch<Business>(slug ? `/api/businesses/${slug}` : null);
   const { data: related } = useFetch<Business[]>(slug ? `/api/businesses/${slug}/related` : null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
 
   if (loading) return <div className="mx-auto max-w-5xl px-4 py-16"><div className="card h-96 animate-pulse" /></div>;
   if (error || !b)
@@ -104,12 +107,22 @@ export function BusinessProfile() {
                       <p className="text-xs font-bold uppercase tracking-wide text-brand">{sec.title}</p>
                       <ul className="mt-2 divide-y divide-border">
                         {sec.items.map((it, i) => (
-                          <li key={i} className="flex items-baseline justify-between gap-3 py-2">
+                          <li key={i} className="flex items-center justify-between gap-3 py-2">
                             <span>
                               <span className="font-semibold text-ink">{it.name}</span>
                               {it.description && <span className="block text-xs text-muted">{it.description}</span>}
                             </span>
-                            {it.price ? <span className="shrink-0 font-semibold text-ink">${it.price}</span> : null}
+                            {it.price ? (
+                              <span className="flex shrink-0 items-center gap-2">
+                                <span className="font-semibold text-ink">${it.price}</span>
+                                <button
+                                  onClick={() => { cart.add({ businessId: b.id, businessSlug: b.slug, businessName: b.name, businessLogo: b.logo, name: it.name, price: it.price! }); setAdded(it.name); }}
+                                  className="btn btn-primary px-3 py-1.5 text-xs"
+                                >
+                                  {added === it.name ? "Added ✓" : "Add"}
+                                </button>
+                              </span>
+                            ) : null}
                           </li>
                         ))}
                       </ul>

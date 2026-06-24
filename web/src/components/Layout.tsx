@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useCart } from "../context/CartContext";
 import { useContent } from "../context/ContentContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserAuth } from "../context/UserAuthContext";
-import { CloseIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
+import { CartIcon, CloseIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
 
 const NAV = [
   { to: "/", label: "Home", end: true },
@@ -62,12 +63,25 @@ function AccountMenu() {
           <button onClick={() => { setOpen(false); navigate("/saved"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <HeartIcon className="h-4 w-4 text-rose-500" /> Saved places
           </button>
+          <button onClick={() => { setOpen(false); navigate("/orders"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            <CartIcon className="h-4 w-4 text-brand" /> My orders
+          </button>
           <button onClick={() => { logout(); setOpen(false); navigate("/"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <LogoutIcon className="h-4 w-4" /> Log out
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+function CartButton() {
+  const { count } = useCart();
+  return (
+    <Link to="/cart" aria-label="Cart" className="btn btn-ghost relative h-10 w-10 !p-0">
+      <CartIcon />
+      {count > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-bold text-white">{count}</span>}
+    </Link>
   );
 }
 
@@ -124,6 +138,7 @@ export function Layout() {
           <button onClick={toggle} aria-label="Toggle theme" className="btn btn-ghost h-10 w-10 !p-0">
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
+          <CartButton />
           <AccountMenu />
           <button onClick={() => setMenuOpen((o) => !o)} aria-label="Menu" className="btn btn-ghost h-10 w-10 !p-0 lg:hidden">
             {menuOpen ? <CloseIcon /> : <MenuIcon />}

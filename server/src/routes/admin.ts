@@ -5,6 +5,7 @@ import { getContent, saveContent } from "../lib/content";
 import { prisma } from "../db";
 import { recomputeProject, recomputeRating } from "../lib/ratings";
 import { outBusiness, outProject, slugify, toJson } from "../lib/serialize";
+import { recomputeOrder } from "./orders";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -331,6 +332,52 @@ adminRouter.delete("/donations/:id", async (req, res) => {
   const donation = await prisma.donation.delete({ where: { id: Number(req.params.id) } });
   await recomputeProject(donation.projectId);
   res.json({ ok: true });
+});
+
+// ---- Marketplace orders (full combined view) ----
+adminRouter.get("/orders", async (req, res) => {
+  const status = String(req.query.status ?? "");
+  const where: Record<string, unknown> = {};
+  if (status === "active") where.deliveryStatus = { in: ["PENDING", "COLLECTING", "OUT_FOR_DELIVERY"] };
+  else if (status) where.deliveryStatus = status;
+  const orders = await prisma.order.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true } } } } },
+  });
+  res.json(orders);
+});
+
+adminRouter.get("/orders/:id", async (req, res) => {
+  const order = await prisma.order.findUnique({ where: { id: Number(req.params.id) }, include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true, address: true, phone: true } } } } } });
+  if (!order) return res.status(404).json({ error: "Order not found." });
+  res.json(order);
+});
+
+const DELIVERY_STATUSES = ["PENDING", "COLLECTING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
+adminRouter.patch("/orders/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("deliveryStatus" in b && DELIVERY_STATUSES.includes(String(b.deliveryStatus))) {
+    data.deliveryStatus = b.deliveryStatus;
+    if (b.deliveryStatus === "DELIVERED") data.status = "COMPLETED";
+  }
+  if ("driverName" in b) data.driverName = STR(b.driverName, 120);
+  if ("paid" in b) data.paid = !!b.paid;
+  const order = await prisma.order.update({ where: { id }, data, include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true } } } } } });
+  res.json(order);
+});
+
+// Cancel a single business ticket (admin) without cancelling the whole order.
+adminRouter.patch("/business-orders/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const status = String(req.body.status ?? "");
+  if (!["PENDING", "PREPARING", "READY", "CANCELLED"].includes(status)) return res.status(400).json({ error: "Invalid status." });
+  const ticket = await prisma.businessOrder.update({ where: { id }, data: { status } });
+  await recomputeOrder(ticket.orderId);
+  res.json(ticket);
 });
 
 // ---- Users & owners (directory) ----

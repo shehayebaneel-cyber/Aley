@@ -3,8 +3,12 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { About } from "./pages/About";
 import { BusinessProfile } from "./pages/BusinessProfile";
+import { Cart } from "./pages/Cart";
 import { Categories } from "./pages/Categories";
+import { Checkout } from "./pages/Checkout";
 import { Contact } from "./pages/Contact";
+import { MyOrders } from "./pages/MyOrders";
+import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { Explore } from "./pages/Explore";
 import { Home } from "./pages/Home";
@@ -24,6 +28,7 @@ import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminEventsOffers } from "./pages/admin/AdminEventsOffers";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
+import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminProjects } from "./pages/admin/AdminProjects";
 import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
@@ -54,6 +59,10 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:slug" element={<ProjectDetail />} />
           <Route path="/love-aley" element={<LoveAley />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/order/:number" element={<OrderTracking />} />
+          <Route path="/orders" element={<MyOrders />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
@@ -71,6 +80,7 @@ export default function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
+          <Route path="orders" element={<AdminOrders />} />
           <Route path="businesses" element={<AdminBusinesses />} />
           <Route path="businesses/:id" element={<AdminBusinessEdit />} />
           <Route path="categories" element={<AdminCategories />} />

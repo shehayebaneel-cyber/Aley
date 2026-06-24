@@ -4,11 +4,11 @@ import { ImageField } from "../../components/ImageField";
 import { Stars } from "../../components/Stars";
 import { CheckIcon, GlobeIcon, StarIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
-import { dayName, formatEventDate, ownerApi, PRICE, timeAgo } from "../../lib/api";
+import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Business, Category, EventItem, HoursRow, Offer, Review } from "../../types";
+import type { Business, BusinessOrder, Category, EventItem, HoursRow, Offer, Review } from "../../types";
 
-const TABS = ["Overview", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Orders", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -62,6 +62,7 @@ export function BusinessDashboard() {
 
       <div className="mt-6">
         {tab === "Overview" && <Overview biz={biz} />}
+        {tab === "Orders" && <OrdersTab biz={biz} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
         {tab === "Hours" && <HoursTab biz={biz} save={save} />}
@@ -127,6 +128,58 @@ function Overview({ biz }: { biz: Business }) {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- Orders (this business's tickets) ----
+const NEXT: Record<string, string | null> = { PENDING: "PREPARING", PREPARING: "READY", READY: null, CANCELLED: null };
+function OrdersTab({ biz }: { biz: Business }) {
+  const [tickets, setTickets] = useState<BusinessOrder[] | null>(null);
+  const reload = () => ownerApi.get<BusinessOrder[]>(`/api/owner/businesses/${biz.id}/orders`).then(setTickets);
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [biz.id]);
+
+  async function update(id: number, body: Record<string, unknown>) {
+    await ownerApi.patch(`/api/owner/business-orders/${id}`, body);
+    reload();
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">Orders placed for {biz.name}. Update each as you prepare it — the customer sees the status live.</p>
+      {tickets?.length === 0 && <div className="card p-10 text-center text-muted">No orders yet.</div>}
+      {(tickets ?? []).map((t) => {
+        const st = TICKET_STATUS[t.status];
+        const next = NEXT[t.status];
+        return (
+          <div key={t.id} className="card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-display font-bold text-ink">{t.order?.number} · {t.order?.customerName}</p>
+                <p className="text-xs text-muted">{t.order ? formatEventDate(t.order.createdAt) : ""} · {t.order?.fulfillment === "DELIVERY" ? "Delivery" : "Pickup"} · <a href={`tel:${t.order?.customerPhone}`} className="text-brand">{t.order?.customerPhone}</a></p>
+              </div>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>
+            </div>
+            {t.order?.fulfillment === "DELIVERY" && t.order?.address && <p className="mt-1 text-xs text-muted">📍 {t.order.address}</p>}
+            {t.order?.note && <p className="mt-1 text-xs text-muted">📝 {t.order.note}</p>}
+            <ul className="mt-2 divide-y divide-border">
+              {t.items.map((it) => (
+                <li key={it.id} className="flex justify-between py-1.5 text-sm"><span className="text-ink">{it.quantity}× {it.name}</span><span className="text-muted">{currency(it.lineTotal)}</span></li>
+              ))}
+            </ul>
+            <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm">
+              <span className="text-muted">Your total: <b className="text-ink">{currency(t.subtotal)}</b> · commission {currency(t.commissionAmount)} ({t.commissionRate}%)</span>
+            </div>
+            {t.status !== "CANCELLED" && t.status !== "READY" && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {next && <button onClick={() => update(t.id, { status: next })} className="btn btn-primary px-4 py-2 text-sm">Mark {TICKET_STATUS[next].label}</button>}
+                {t.status === "PREPARING" && <input defaultValue={t.prepTime} onBlur={(e) => e.target.value !== t.prepTime && update(t.id, { prepTime: e.target.value })} placeholder="Prep time (e.g. 15 min)" className="rounded-xl border border-border bg-surface px-3 py-2 text-sm" />}
+                <button onClick={() => { if (confirm("Cancel this part of the order?")) update(t.id, { status: "CANCELLED" }); }} className="btn btn-ghost px-4 py-2 text-sm text-red-500">Cancel</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

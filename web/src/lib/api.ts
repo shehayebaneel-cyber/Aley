@@ -80,6 +80,21 @@ export const adminApi = makeApi(getAdminToken);
 export const PRICE = (n: number) => "$".repeat(Math.max(1, Math.min(4, n)));
 export const currency = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
+export const TICKET_STATUS: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: "Pending confirmation", cls: "bg-amber-400/20 text-amber-600" },
+  PREPARING: { label: "Preparing", cls: "bg-brand/20 text-brand-dark" },
+  READY: { label: "Ready", cls: "bg-emerald-500/20 text-emerald-600" },
+  CANCELLED: { label: "Cancelled", cls: "bg-rose-400/20 text-rose-500" },
+};
+export const DELIVERY_STATUS: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: "Order placed", cls: "bg-slate-400/20 text-slate-500" },
+  COLLECTING: { label: "Driver collecting items", cls: "bg-amber-400/20 text-amber-600" },
+  OUT_FOR_DELIVERY: { label: "Out for delivery", cls: "bg-brand/20 text-brand-dark" },
+  DELIVERED: { label: "Delivered", cls: "bg-emerald-500/20 text-emerald-600" },
+  CANCELLED: { label: "Cancelled", cls: "bg-rose-400/20 text-rose-500" },
+};
+export const DELIVERY_STEPS = ["PENDING", "COLLECTING", "OUT_FOR_DELIVERY", "DELIVERED"];
+
 export const PROJECT_STATUS: Record<string, { label: string; cls: string }> = {
   PROPOSED: { label: "Proposed", cls: "bg-slate-400/20 text-slate-500" },
   FUNDING: { label: "Funding", cls: "bg-amber-400/20 text-amber-600" },

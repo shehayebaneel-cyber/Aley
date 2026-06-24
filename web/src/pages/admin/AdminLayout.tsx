@@ -6,6 +6,7 @@ import { useTheme } from "../../context/ThemeContext";
 const LINKS = [
   { to: "/admin", label: "Dashboard", end: true },
   { to: "/admin/content", label: "Site Content" },
+  { to: "/admin/orders", label: "Orders" },
   { to: "/admin/businesses", label: "Businesses" },
   { to: "/admin/categories", label: "Categories" },
   { to: "/admin/reviews", label: "Reviews" },

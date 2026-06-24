@@ -206,6 +206,48 @@ export interface ProjectSummary {
   featured: Project[];
 }
 
+// ---- Marketplace orders ----
+export interface OrderItem {
+  id: number;
+  name: string;
+  price: number;
+  quantity: number;
+  lineTotal: number;
+}
+export interface BusinessOrder {
+  id: number;
+  businessId: number;
+  status: "PENDING" | "PREPARING" | "READY" | "CANCELLED";
+  prepTime: string;
+  subtotal: number;
+  commissionRate: number;
+  commissionAmount: number;
+  items: OrderItem[];
+  business?: { name: string; slug: string; logo?: string | null; address?: string; phone?: string };
+  order?: { number: string; customerName: string; customerPhone: string; fulfillment: string; address: string; note: string; deliveryStatus: string; createdAt: string };
+}
+export interface MarketOrder {
+  id: number;
+  number: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  fulfillment: "DELIVERY" | "PICKUP";
+  address: string;
+  note: string;
+  itemsSubtotal: number;
+  deliveryFee: number;
+  total: number;
+  commissionTotal: number;
+  paymentMethod: "CASH" | "ONLINE";
+  paid: boolean;
+  deliveryStatus: "PENDING" | "COLLECTING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
+  driverName: string;
+  status: string;
+  createdAt: string;
+  businessOrders: BusinessOrder[];
+}
+
 export interface HomeData {
   city: City | null;
   totalBusinesses: number;

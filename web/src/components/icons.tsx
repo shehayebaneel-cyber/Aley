@@ -125,6 +125,13 @@ export const UserIcon = ({ className = "h-5 w-5" }: P) => (
     <path d="M4 21a8 8 0 0 1 16 0" />
   </svg>
 );
+export const CartIcon = ({ className = "h-5 w-5" }: P) => (
+  <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
+    <circle cx="9" cy="20" r="1.4" />
+    <circle cx="18" cy="20" r="1.4" />
+    <path d="M2 3h3l2.2 12.4a1.6 1.6 0 0 0 1.6 1.3h8.5a1.6 1.6 0 0 0 1.6-1.3L21 7H6" />
+  </svg>
+);
 export const UsersIcon = ({ className = "h-5 w-5" }: P) => (
   <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
     <circle cx="9" cy="8" r="3.5" />

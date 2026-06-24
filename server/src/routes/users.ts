@@ -71,3 +71,14 @@ userRouter.delete("/favorites/:businessId", async (req, res) => {
   await prisma.favorite.deleteMany({ where: { userId: req.userId!, businessId } });
   res.json({ ok: true, favorited: false });
 });
+
+// GET /api/me/orders — this customer's marketplace orders
+userRouter.get("/orders", async (req, res) => {
+  const orders = await prisma.order.findMany({
+    where: { customerId: req.userId! },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true, logo: true } } } } },
+  });
+  res.json(orders);
+});

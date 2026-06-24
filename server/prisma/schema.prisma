@@ -30,6 +30,7 @@ model City {
   events     Event[]
   offers     Offer[]
   projects   Project[]
+  orders     Order[]
 }
 
 // A business category (Coffee Shops, Restaurants, ...). Global across cities,
@@ -101,14 +102,17 @@ model Business {
   reviewCount Int   @default(0)
   viewCount   Int   @default(0)
 
+  commissionRate Float @default(10) // platform commission % charged to this business
+
   ownerId   Int?
   owner     Owner?   @relation(fields: [ownerId], references: [id])
   createdAt DateTime @default(now())
 
-  reviews   Review[]
-  events    Event[]
-  offers    Offer[]
-  favorites Favorite[]
+  reviews        Review[]
+  events         Event[]
+  offers         Offer[]
+  favorites      Favorite[]
+  businessOrders BusinessOrder[]
 }
 
 // A business owner account (manages one or more businesses from a dashboard).
@@ -314,4 +318,69 @@ model ProjectFollow {
   createdAt DateTime @default(now())
 
   @@unique([projectId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace ordering — one customer checkout can span multiple businesses.
+// An Order is the combined checkout; each BusinessOrder is one business's
+// "ticket" with its own status/prep time/commission; OrderItems are the lines.
+// ---------------------------------------------------------------------------
+model Order {
+  id            Int      @id @default(autoincrement())
+  number        String   @unique
+  cityId        Int
+  city          City     @relation(fields: [cityId], references: [id])
+  customerId    Int? // visitor account, if logged in
+  customerName  String
+  customerPhone String
+  customerEmail String   @default("")
+  fulfillment   String   @default("DELIVERY") // DELIVERY | PICKUP
+  address       String   @default("")
+  lat           Float?
+  lng           Float?
+  note          String   @default("")
+
+  itemsSubtotal   Float @default(0)
+  deliveryFee     Float @default(0)
+  total           Float @default(0)
+  commissionTotal Float @default(0)
+
+  paymentMethod String @default("CASH") // CASH | ONLINE
+  paid          Boolean @default(false)
+
+  // Delivery / driver progress across the whole order.
+  deliveryStatus String @default("PENDING") // PENDING | COLLECTING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  driverName     String @default("")
+  status         String @default("PLACED") // PLACED | COMPLETED | CANCELLED
+
+  createdAt      DateTime @default(now())
+  businessOrders BusinessOrder[]
+}
+
+model BusinessOrder {
+  id         Int      @id @default(autoincrement())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id])
+
+  status   String @default("PENDING") // PENDING | PREPARING | READY | CANCELLED
+  prepTime String @default("")
+
+  subtotal         Float @default(0)
+  commissionRate   Float @default(0) // snapshot of the business's rate at order time
+  commissionAmount Float @default(0)
+
+  createdAt DateTime    @default(now())
+  items     OrderItem[]
+}
+
+model OrderItem {
+  id              Int           @id @default(autoincrement())
+  businessOrderId Int
+  businessOrder   BusinessOrder @relation(fields: [businessOrderId], references: [id], onDelete: Cascade)
+  name            String
+  price           Float
+  quantity        Int
+  lineTotal       Float
 }
