@@ -60,7 +60,7 @@ export function AdminBusinesses() {
             <img src={b.logo ?? b.cover ?? ""} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover surface-2" />
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-1 font-semibold text-ink">
-                <Link to={`/business/${b.slug}`} className="hover:text-brand">{b.name}</Link>
+                <Link to={`/admin/businesses/${b.id}`} className="hover:text-brand">{b.name}</Link>
                 {b.isVerified && <VerifiedIcon className="h-4 w-4 text-brand" />}
               </p>
               <p className="text-xs text-muted">{b.category.icon} {b.category.name} · {b.owner ? `owner: ${b.owner.name}` : "unclaimed"} · {b.reviewCount} reviews</p>
@@ -74,6 +74,7 @@ export function AdminBusinesses() {
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <div className="flex flex-wrap gap-2">
+              <Link to={`/admin/businesses/${b.id}`} className="chip chip-active">Edit</Link>
               <Toggle on={!!b.isPublished} label="Published" onClick={() => patch(b.id, { isPublished: !b.isPublished })} />
               <Toggle on={b.isFeatured} label="Featured" onClick={() => patch(b.id, { isFeatured: !b.isFeatured })} />
               <Toggle on={b.isVerified} label="Verified" onClick={() => patch(b.id, { isVerified: !b.isVerified })} />

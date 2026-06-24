@@ -16,6 +16,7 @@ import { ProjectDetail } from "./pages/ProjectDetail";
 import { Projects } from "./pages/Projects";
 import { Saved } from "./pages/Saved";
 import { AdminBusinesses } from "./pages/admin/AdminBusinesses";
+import { AdminBusinessEdit } from "./pages/admin/AdminBusinessEdit";
 import { AdminCategories } from "./pages/admin/AdminCategories";
 import { AdminCities } from "./pages/admin/AdminCities";
 import { AdminContent } from "./pages/admin/AdminContent";
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="businesses" element={<AdminBusinesses />} />
+          <Route path="businesses/:id" element={<AdminBusinessEdit />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="reviews" element={<AdminReviews />} />
           <Route path="projects" element={<AdminProjects />} />
