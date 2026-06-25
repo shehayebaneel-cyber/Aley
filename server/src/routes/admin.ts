@@ -152,15 +152,25 @@ adminRouter.post("/categories", async (req, res) => {
   for (let i = 2; await prisma.category.findUnique({ where: { slug } }); i++) slug = `${base}-${i}`;
   const max = await prisma.category.aggregate({ _max: { sortOrder: true } });
   const cat = await prisma.category.create({
-    data: { name, slug, icon: STR(req.body.icon, 8) || "🏷️", color: STR(req.body.color, 16) || "#0d9488", sortOrder: (max._max.sortOrder ?? 0) + 1 },
+    data: { name, slug, group: STR(req.body.group, 40) || "More", icon: STR(req.body.icon, 8) || "🏷️", color: STR(req.body.color, 16) || "#0d9488", sortOrder: (max._max.sortOrder ?? 0) + 1 },
   });
   res.status(201).json(cat);
+});
+
+// Rename a whole group (moves every category in it).
+adminRouter.post("/categories/rename-group", async (req, res) => {
+  const from = STR(req.body.from, 40);
+  const to = STR(req.body.to, 40);
+  if (!from || !to) return res.status(400).json({ error: "from and to are required." });
+  const r = await prisma.category.updateMany({ where: { group: from }, data: { group: to } });
+  res.json({ ok: true, moved: r.count });
 });
 
 adminRouter.patch("/categories/:id", async (req, res) => {
   const b = req.body as Record<string, unknown>;
   const data: Record<string, unknown> = {};
   if ("name" in b) data.name = STR(b.name, 60);
+  if ("group" in b) data.group = STR(b.group, 40) || "More";
   if ("icon" in b) data.icon = STR(b.icon, 8);
   if ("color" in b) data.color = STR(b.color, 16);
   if ("isActive" in b) data.isActive = !!b.isActive;
