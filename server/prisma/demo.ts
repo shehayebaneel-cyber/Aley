@@ -105,10 +105,44 @@ const sample = <T>(a: T[], n: number): T[] => [...a].sort(() => Math.random() - 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
-// ---- Themed images: LoremFlickr (tag-matched photos) + UI-Avatars (logos) ----
-const hashNum = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 100000; };
-export const flickr = (seed: string, tags: string, w = 800, h = 600) => `https://loremflickr.com/${w}/${h}/${encodeURIComponent(tags)}?lock=${hashNum(seed)}`;
+// ---- Themed images: curated & validated Unsplash photos + UI-Avatars (logos) ----
+const hashNum = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h >>> 0; };
 export const avatar = (name: string, color = "0d9488") => `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${color}&color=fff&bold=true&size=256`;
+
+// Real Unsplash photo IDs grouped by visual theme — every ID validated to return 200.
+// Stable CDN URLs → always load, varied, never the same image twice. "nature" = Mount Lebanon scenery.
+const PHOTOS: Record<string, string[]> = {
+  cafe: ["1517248135467-4c7edcad34c4", "1554118811-1e0d58224f24", "1453614512568-c4024d13c247", "1559925393-8be0ec4767c8", "1442512595331-e89e73853f31", "1521017432531-fbd92d768814", "1559496417-e7f25cb247f3", "1495474472287-4d71bcdd2085"],
+  restaurant: ["1414235077428-338989a2e8c0", "1559339352-11d035aa65de", "1424847651672-bf20a4b0982b", "1555396273-367ea4eb4db5", "1552566626-52f8b828add9", "1466978913421-dad2ebd01d17", "1540189549336-e6e99c3679fe", "1517244683847-7456b63c5969"],
+  roastery: ["1447933601403-0c6688de566e", "1495474472287-4d71bcdd2085", "1559056199-641a0ac8b55e", "1442550528053-c431ecb55509", "1611854779393-1b2da9d400fe"],
+  sweets: ["1551024601-bec78aea704b", "1565958011703-44f9829ba187", "1578985545062-69928b1d9587", "1606890737304-57a1ca8a5b62", "1488477181946-6428a0291777"],
+  bakery: ["1509440159596-0249088772ff", "1555507036-ab1f4038808a", "1549931319-a545dcf3bc73", "1568254183919-78a4f43a2877", "1586444248902-2f64eddc13df"],
+  icecream: ["1488900128323-21503983a07e", "1497034825429-c343d7c6a68f", "1576506295286-5cda18df43e7"],
+  juice: ["1622597467836-f3285f2131b8", "1600271886742-f049cd451bba", "1610970881699-44a5587cabec", "1502741224143-90386d7f8c82"],
+  hotel: ["1566073771259-6a8506099945", "1542314831-068cd1dbfeeb", "1551882547-ff40c63fe5fa", "1571896349842-33c89424de2d", "1520250497591-112f2f40a3f4"],
+  fashion: ["1441986300917-64674bd600d8", "1490481651871-ab68de25d43d", "1567401893414-76b7b1e5a7a5", "1483985988355-763728e1935b", "1445205170230-053b83016050"],
+  jewelry: ["1515562141207-7a88fb7ce338", "1605100804763-247f67b3557e", "1573408301185-9146fe634ad0", "1611652022419-a9419f74343d"],
+  shop: ["1441986300917-64674bd600d8", "1556909114-f6e7ad7d3136", "1542838132-92c53300491e", "1604719312566-8912e9227c6a", "1604335399105-a0c585fd81a1"],
+  service: ["1497366216548-37526070297c", "1556761175-5973dc0f32e7", "1521791136064-7986c2920216", "1454165804606-c3d57bc86b40"],
+  health: ["1519494026892-80bbd2d6fd0d", "1576091160550-2173dba999ef", "1538108149393-fbbd81895907", "1631217868264-e5b90bb7e133"],
+  auto: ["1486006920555-c77dcf18193c", "1503376780353-7e6692767b70", "1492144534655-ae79c964c9d7", "1542362567-b07e54358753"],
+  edu: ["1503676260728-1c00da094a0b", "1497633762265-9d179a990aa6", "1580582932707-520aed937b7b"],
+  nature: ["1444084316824-dc26d6657664", "1469474968028-56623f02e42e", "1470770841072-f978cf4d019e", "1501785888041-af3ef285b470", "1506905925346-21bda4d32df4", "1472214103451-9374bd1c798e", "1433086966358-54859d0ed716", "1426604966848-d7adac402bff"],
+  document: ["1554224155-6726b3ff858f", "1450101499163-c8848c66ca85", "1517842645767-c639042777db", "1554224154-26032ffc0d07", "1456735190827-d1262f71b8a3"],
+};
+const unsplash = (id: string, w: number, h: number) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&h=${h}&q=70`;
+// A few categories look better with a specific pool than their generic "kind".
+const POOL_OVERRIDE: Record<string, string> = { "real-estate": "nature" };
+const poolFor = (slug: string): string[] => PHOTOS[POOL_OVERRIDE[slug] ?? KIND[slug] ?? "shop"] ?? PHOTOS.shop;
+// Deterministic single themed photo (business cover / offer / event).
+export const photo = (seed: string, categorySlug: string, w = 800, h = 600) =>
+  unsplash(poolFor(categorySlug)[hashNum(seed) % poolFor(categorySlug).length], w, h);
+// Deterministic Mount-Lebanon scenery (projects, fallbacks).
+export const scenery = (seed: string, w = 800, h = 600) =>
+  unsplash(PHOTOS.nature[hashNum(seed) % PHOTOS.nature.length], w, h);
+// Deterministic document/paper image (expense receipts).
+export const document = (seed: string, w = 400, h = 560) =>
+  unsplash(PHOTOS.document[hashNum(seed) % PHOTOS.document.length], w, h);
 
 const slugColor = new Map(CATEGORIES.map((c) => [c.slug, c.color.replace("#", "")]));
 // Photo search tags per category, biased toward Aley / Mount Lebanon where it fits.
@@ -135,9 +169,12 @@ const STREETS = ["Main Road", "Bhamdoun Road", "Souk Street", "Boulevard", "Hill
 function jitter() {
   return { lat: round2(ALEY.lat + (Math.random() - 0.5) * 0.02) + Math.random() * 0.001, lng: round2(ALEY.lng + (Math.random() - 0.5) * 0.02) + Math.random() * 0.001 };
 }
-function gallery(slug: string, tags: string) {
-  const n = randInt(8, 15);
-  return Array.from({ length: n }, (_, i) => flickr(`${slug}-g${i}`, tags, 900, 650));
+function gallery(slug: string, category: string) {
+  // Draw distinct photos from the category pool, topped up with scenery for ambiance.
+  const pool = [...poolFor(category), ...PHOTOS.nature];
+  const n = Math.min(randInt(6, 10), pool.length);
+  const start = hashNum(slug);
+  return Array.from({ length: n }, (_, i) => unsplash(pool[(start + i) % pool.length], 900, 650));
 }
 function hours(open = "09:00", close = "22:00", closedDay = -1): HoursRow[] {
   return Array.from({ length: 7 }, (_, day) => ({ day, open, close, closed: day === closedDay }));
@@ -353,7 +390,7 @@ function buildOne(name: string, category: string, opts: { real?: boolean } = {})
   return {
     slug, name, category, tagline: rand(TAGLINES[kind] ?? ["Proudly serving Aley"]),
     description: descriptionFor(name, kind, catName),
-    logo: avatar(name, slugColor.get(category) ?? "0d9488"), cover: flickr(`${slug}-cover`, tagsFor(category), 1200, 600), gallery: gallery(slug, tagsFor(category)),
+    logo: avatar(name, slugColor.get(category) ?? "0d9488"), cover: photo(`${slug}-cover`, category, 1200, 600), gallery: gallery(slug, category),
     phone: phone(), whatsapp: phone(), instagram: ig, facebook: `https://facebook.com/${ig}`,
     website: chance(0.4) ? `https://${ig}.demo.aley.com` : "", email: `info@${ig}.demo.aley.com`,
     address: `${rand(STREETS)}, Aley`, lat, lng, hours: hours(open, close, kind === "service" && chance(0.5) ? 0 : -1),

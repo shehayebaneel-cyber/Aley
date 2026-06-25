@@ -1,12 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { buildBusinesses, CATEGORIES, flickr, GROUP_OF, tagsFor } from "./demo";
+import { buildBusinesses, CATEGORIES, document, GROUP_OF, photo, scenery } from "./demo";
 
 const prisma = new PrismaClient();
 
-// Themed images for projects: tags by project type, biased to Aley/Mount Lebanon.
-const projectTags = (type: string) => ({ Trees: "trees,park,greenery", Lighting: "streetlight,lamp,night", Benches: "bench,park,square" }[type] ?? "street,town,lebanon,mountain");
-const img = (seed: string, w = 800, h = 600) => flickr(seed, "street,town,lebanon,mountain", w, h);
+// Mount-Lebanon scenery for community projects (validated Unsplash photos).
+const img = (seed: string, w = 800, h = 600) => scenery(seed, w, h);
 
 async function main() {
   console.log("Seeding Aley Platform… (this generates ~290 businesses)");
@@ -69,10 +68,10 @@ async function main() {
   for (let i = 0; i < reviewRows.length; i += 500) await prisma.review.createMany({ data: reviewRows.slice(i, i + 500) });
 
   // ---- Offers + events (bulk) ----
-  const offerRows = businesses.filter((b) => b.offer).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.offer!.title, description: b.offer!.description, type: b.offer!.type, image: flickr(`${b.slug}-offer`, `${tagsFor(b.category)},offer,sale`, 800, 500), isActive: true }));
+  const offerRows = businesses.filter((b) => b.offer).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.offer!.title, description: b.offer!.description, type: b.offer!.type, image: photo(`${b.slug}-offer`, b.category, 800, 500), isActive: true }));
   await prisma.offer.createMany({ data: offerRows });
 
-  const eventRows = businesses.filter((b) => b.event).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.event!.title, category: b.event!.category, description: b.event!.description, location: b.name, image: flickr(`${b.slug}-event`, "event,celebration,party", 1000, 600), startTime: new Date(Date.now() + b.event!.days * 86400000), isPublished: true }));
+  const eventRows = businesses.filter((b) => b.event).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.event!.title, category: b.event!.category, description: b.event!.description, location: b.name, image: photo(`${b.slug}-event`, b.category, 1000, 600), startTime: new Date(Date.now() + b.event!.days * 86400000), isPublished: true }));
   await prisma.event.createMany({ data: eventRows });
 
   // ---- Demo owner (owns Bean Avenue) ----
@@ -108,11 +107,11 @@ async function main() {
       data: {
         slug: p.slug, cityId: aley.id, title: p.title, type: p.type, status: p.status, location: p.location, lat: p.lat, lng: p.lng,
         fundingGoal: p.goal, manager: p.manager, description: p.description, isFeatured: p.featured, finalCost: p.finalCost ?? null, completedReport: p.report ?? "",
-        beforePhotos: JSON.stringify(p.before.map((s) => flickr(s, projectTags(p.type), 800, 500))), proposedPhotos: JSON.stringify(p.proposed.map((s) => flickr(s, projectTags(p.type), 800, 500))), progressPhotos: JSON.stringify(p.progress.map((s) => flickr(s, projectTags(p.type), 800, 500))), timeline: p.timeline,
+        beforePhotos: JSON.stringify(p.before.map((s) => scenery(s, 800, 500))), proposedPhotos: JSON.stringify(p.proposed.map((s) => scenery(s, 800, 500))), progressPhotos: JSON.stringify(p.progress.map((s) => scenery(s, 800, 500))), timeline: p.timeline,
       },
     });
     for (const [donorName, amount, anonymous] of p.donations) await prisma.donation.create({ data: { projectId: project.id, donorName: donorName as string, amount: amount as number, anonymous: anonymous as boolean } });
-    for (const [label, amount, contractor] of p.expenses) await prisma.expense.create({ data: { projectId: project.id, label: label as string, amount: amount as number, contractor: contractor as string, receipt: flickr(`receipt-${project.id}-${label}`, "receipt,invoice,document", 400, 560) } });
+    for (const [label, amount, contractor] of p.expenses) await prisma.expense.create({ data: { projectId: project.id, label: label as string, amount: amount as number, contractor: contractor as string, receipt: document(`receipt-${project.id}-${label}`, 400, 560) } });
     let u = 0;
     for (const [title, body] of p.updates) { await prisma.projectUpdate.create({ data: { projectId: project.id, title, body, createdAt: days(-(p.updates.length - u)) } }); u++; }
     const ds = await prisma.donation.findMany({ where: { projectId: project.id } });
