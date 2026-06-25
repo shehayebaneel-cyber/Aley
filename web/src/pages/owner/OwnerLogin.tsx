@@ -1,14 +1,20 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 
 export function OwnerLogin() {
   const { login, register } = useOwnerAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [form, setForm] = useState({ name: "", email: "", password: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Carry a "claim this business" deep-link through login into the dashboard.
+  const claimId = params.get("claim");
+  const claimName = params.get("claimName") ?? "";
+  const afterAuth = claimId ? `/owner?claim=${encodeURIComponent(claimId)}&claimName=${encodeURIComponent(claimName)}` : "/owner";
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -18,7 +24,7 @@ export function OwnerLogin() {
     try {
       if (mode === "login") await login(form.email, form.password);
       else await register(form);
-      navigate("/owner");
+      navigate(afterAuth);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {

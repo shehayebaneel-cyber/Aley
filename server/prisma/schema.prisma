@@ -117,6 +117,7 @@ model Business {
   offers         Offer[]
   favorites      Favorite[]
   businessOrders BusinessOrder[]
+  claims         BusinessClaim[]
 }
 
 // A business owner account (manages one or more businesses from a dashboard).
@@ -128,6 +129,32 @@ model Owner {
   phone        String     @default("")
   createdAt    DateTime   @default(now())
   businesses   Business[]
+  claims       BusinessClaim[]
+}
+
+// An owner's request to take ownership of an existing (unclaimed) listing.
+// Admin reviews and approves → the business is assigned to that owner.
+model BusinessClaim {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ownerId    Int
+  owner      Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  message    String   @default("")
+  status     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt  DateTime @default(now())
+}
+
+// Admin alerts (new business submitted, claim requested, etc.). Shown in the
+// admin panel and, when SMTP is configured, mirrored to the admin's email.
+model Notification {
+  id        Int      @id @default(autoincrement())
+  kind      String // BUSINESS_SUBMITTED | BUSINESS_CLAIM
+  title     String
+  body      String   @default("")
+  link      String   @default("") // admin path to act on it
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 // A platform visitor account (favourites, reviews, follows).

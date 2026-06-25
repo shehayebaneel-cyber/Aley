@@ -12,6 +12,7 @@ const CARDS: { key: string; label: string; to?: string; highlight?: boolean }[] 
   { key: "businesses", label: "Businesses", to: "/admin/businesses" },
   { key: "published", label: "Published" },
   { key: "pendingBusinesses", label: "Pending approval", to: "/admin/businesses?status=pending", highlight: true },
+  { key: "pendingClaims", label: "Ownership claims", to: "/admin/claims", highlight: true },
   { key: "pendingReviews", label: "Pending reviews", to: "/admin/reviews", highlight: true },
   { key: "categories", label: "Categories", to: "/admin/categories" },
   { key: "offers", label: "Offers", to: "/admin/events-offers" },

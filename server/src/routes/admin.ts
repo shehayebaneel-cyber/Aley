@@ -15,10 +15,11 @@ const STR = (v: unknown, max = 200) => String(v ?? "").slice(0, max).trim();
 
 // GET /api/admin/dashboard — platform overview
 adminRouter.get("/dashboard", async (_req, res) => {
-  const [businesses, published, pendingBusinesses, categories, pendingReviews, totalReviews, events, offers, users, owners, cities] = await Promise.all([
+  const [businesses, published, pendingBusinesses, pendingClaims, categories, pendingReviews, totalReviews, events, offers, users, owners, cities] = await Promise.all([
     prisma.business.count(),
     prisma.business.count({ where: { isPublished: true } }),
     prisma.business.count({ where: { reviewStatus: "PENDING" } }),
+    prisma.businessClaim.count({ where: { status: "PENDING" } }),
     prisma.category.count(),
     prisma.review.count({ where: { status: "PENDING" } }),
     prisma.review.count(),
@@ -31,7 +32,7 @@ adminRouter.get("/dashboard", async (_req, res) => {
   const recent = await prisma.business.findMany({ orderBy: { createdAt: "desc" }, take: 6, include: { category: true } });
   const topViewed = await prisma.business.findMany({ orderBy: { viewCount: "desc" }, take: 6, include: { category: true } });
   res.json({
-    stats: { businesses, published, unpublished: businesses - published, pendingBusinesses, categories, pendingReviews, totalReviews, events, offers, users, owners, cities },
+    stats: { businesses, published, unpublished: businesses - published, pendingBusinesses, pendingClaims, categories, pendingReviews, totalReviews, events, offers, users, owners, cities },
     recent: recent.map(outBusiness),
     topViewed: topViewed.map(outBusiness),
   });
@@ -115,6 +116,55 @@ adminRouter.post("/businesses/:id/reject", async (req, res) => {
     include: { category: true },
   });
   res.json(outBusiness(updated));
+});
+
+// ---- Notifications (admin alerts) ----
+adminRouter.get("/notifications", async (_req, res) => {
+  const [items, unread] = await Promise.all([
+    prisma.notification.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.notification.count({ where: { isRead: false } }),
+  ]);
+  res.json({ items, unread });
+});
+adminRouter.post("/notifications/read-all", async (_req, res) => {
+  await prisma.notification.updateMany({ where: { isRead: false }, data: { isRead: true } });
+  res.json({ ok: true });
+});
+adminRouter.post("/notifications/:id/read", async (req, res) => {
+  await prisma.notification.update({ where: { id: Number(req.params.id) }, data: { isRead: true } });
+  res.json({ ok: true });
+});
+
+// ---- Business ownership claims ----
+adminRouter.get("/claims", async (req, res) => {
+  const status = String(req.query.status ?? "PENDING").toUpperCase();
+  const claims = await prisma.businessClaim.findMany({
+    where: status === "ALL" ? {} : { status },
+    orderBy: { createdAt: "desc" },
+    include: {
+      business: { select: { id: true, name: true, slug: true, logo: true, cover: true, isClaimed: true } },
+      owner: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  });
+  res.json(claims);
+});
+
+// Approve a claim → assign the business to that owner; reject any sibling claims.
+adminRouter.post("/claims/:id/approve", async (req, res) => {
+  const claim = await prisma.businessClaim.findUnique({ where: { id: Number(req.params.id) } });
+  if (!claim) return res.status(404).json({ error: "Claim not found." });
+  await prisma.business.update({ where: { id: claim.businessId }, data: { ownerId: claim.ownerId, isClaimed: true } });
+  await prisma.businessClaim.update({ where: { id: claim.id }, data: { status: "APPROVED" } });
+  // Any other pending claims for the same business are now moot.
+  await prisma.businessClaim.updateMany({
+    where: { businessId: claim.businessId, status: "PENDING", id: { not: claim.id } },
+    data: { status: "REJECTED" },
+  });
+  res.json({ ok: true });
+});
+adminRouter.post("/claims/:id/reject", async (req, res) => {
+  await prisma.businessClaim.update({ where: { id: Number(req.params.id) }, data: { status: "REJECTED" } });
+  res.json({ ok: true });
 });
 
 // Create an offer/event for a specific business (admin).

@@ -225,6 +225,14 @@ export function BusinessProfile() {
                 <a href={mapsLinkFromCoords(b.lat, b.lng)} target="_blank" rel="noreferrer" className="btn btn-ghost mt-4 w-full py-2.5"><MapPinIcon className="h-4 w-4" /> View on map</a>
               )}
             </section>
+
+            {!b.isClaimed && (
+              <section className="card border-dashed p-5 text-center">
+                <p className="font-display font-bold text-ink">Is this your business?</p>
+                <p className="mt-1 text-sm text-muted">Claim this page to manage your info, photos, offers and orders.</p>
+                <Link to={`/owner/login?claim=${b.id}&claimName=${encodeURIComponent(b.name)}`} className="btn btn-primary mt-3 w-full py-2.5">Claim this business</Link>
+              </section>
+            )}
           </aside>
         </div>
 

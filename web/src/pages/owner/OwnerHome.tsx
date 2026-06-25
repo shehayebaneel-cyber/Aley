@@ -1,10 +1,10 @@
-import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
-import { ChevronRight, StarIcon } from "../../components/icons";
+import { FormEvent, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ChevronRight, CloseIcon, SearchIcon, StarIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { ownerApi } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Category } from "../../types";
+import type { Category, ClaimableBusiness } from "../../types";
 
 export function OwnerHome() {
   const { owner, businesses, refresh } = useOwnerAuth();
@@ -14,6 +14,13 @@ export function OwnerHome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [params, setParams] = useSearchParams();
+
+  // Deep-linked from a public business page: open the claim dialog straight away.
+  useEffect(() => {
+    if (params.get("claim")) setClaiming(true);
+  }, [params]);
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -41,8 +48,19 @@ export function OwnerHome() {
           <h1 className="font-display text-3xl font-extrabold text-ink">Hi, {owner?.name?.split(" ")[0]} 👋</h1>
           <p className="mt-1 text-muted">Manage your {businesses.length === 1 ? "business" : "businesses"} on Aley.</p>
         </div>
-        <button onClick={() => setCreating((c) => !c)} className="btn btn-primary px-5 py-2.5">+ Add a business</button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setClaiming(true)} className="btn btn-ghost px-5 py-2.5">Claim an existing business</button>
+          <button onClick={() => setCreating((c) => !c)} className="btn btn-primary px-5 py-2.5">+ Add a business</button>
+        </div>
       </div>
+
+      {claiming && (
+        <ClaimModal
+          initialId={params.get("claim")}
+          initialName={params.get("claimName") ?? ""}
+          onClose={() => { setClaiming(false); if (params.get("claim")) { params.delete("claim"); params.delete("claimName"); setParams(params, { replace: true }); } }}
+        />
+      )}
 
       {submitted && (
         <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">
@@ -100,6 +118,103 @@ export function OwnerHome() {
             <ChevronRight className="h-5 w-5 shrink-0 text-muted" />
           </Link>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ClaimModal({ initialId, initialName, onClose }: { initialId: string | null; initialName: string; onClose: () => void }) {
+  const { refresh } = useOwnerAuth();
+  const [q, setQ] = useState(initialName);
+  const [results, setResults] = useState<ClaimableBusiness[]>([]);
+  const [selected, setSelected] = useState<ClaimableBusiness | null>(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  // Search unclaimed listings as the owner types.
+  useEffect(() => {
+    let alive = true;
+    const t = setTimeout(() => {
+      ownerApi.get<ClaimableBusiness[]>(`/api/owner/claimable?q=${encodeURIComponent(q.trim())}`)
+        .then((r) => { if (alive) { setResults(r); if (initialId) { const m = r.find((b) => String(b.id) === initialId); if (m) setSelected(m); } } })
+        .catch(() => {});
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  async function submit() {
+    if (!selected || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await ownerApi.post(`/api/owner/businesses/${selected.id}/claim`, { message });
+      await refresh();
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't submit the claim.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+      <div className="card pop-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-xl font-extrabold text-ink">Claim your business</h2>
+          <button onClick={onClose} aria-label="Close" className="text-muted hover:text-ink"><CloseIcon /></button>
+        </div>
+
+        {done ? (
+          <div className="mt-5 text-center">
+            <span className="text-4xl">🤝</span>
+            <p className="mt-3 font-display text-lg font-bold text-ink">Claim submitted</p>
+            <p className="mt-1 text-muted">We'll verify it and assign <span className="font-semibold text-ink">{selected?.name}</span> to your account. You'll see it here once approved.</p>
+            <button onClick={onClose} className="btn btn-primary mt-5 px-6 py-2.5">Done</button>
+          </div>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-muted">Find your existing listing on Aley and request ownership. An admin verifies claims before handing over the page.</p>
+            <div className="relative mt-4">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setSelected(null); }} placeholder="Search your business name…" className="input !pl-9" />
+            </div>
+
+            {!selected && (
+              <div className="mt-3 max-h-60 space-y-1.5 overflow-y-auto">
+                {results.map((b) => (
+                  <button key={b.id} onClick={() => setSelected(b)} className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:surface-2">
+                    <img src={b.logo ?? b.cover ?? ""} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover surface-2" />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-ink">{b.name}</p>
+                      <p className="truncate text-xs text-muted">{b.category?.name}{b.address ? ` · ${b.address}` : ""}</p>
+                    </div>
+                  </button>
+                ))}
+                {q.trim() && results.length === 0 && <p className="px-2 py-3 text-sm text-muted">No unclaimed business matches. It may already be claimed — or add it as a new business instead.</p>}
+              </div>
+            )}
+
+            {selected && (
+              <div className="mt-4">
+                <div className="flex items-center gap-3 rounded-xl border border-border p-3">
+                  <img src={selected.logo ?? selected.cover ?? ""} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover surface-2" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-ink">{selected.name}</p>
+                    <p className="truncate text-xs text-muted">{selected.category?.name}</p>
+                  </div>
+                  <button onClick={() => setSelected(null)} className="text-sm font-semibold text-brand">Change</button>
+                </div>
+                <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} placeholder="Anything to help us verify you own this business? (optional)" className="input mt-3" />
+                {error && <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{error}</p>}
+                <button onClick={submit} disabled={busy} className="btn btn-primary mt-3 w-full py-3 disabled:opacity-60">{busy ? "Submitting…" : "Submit claim"}</button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

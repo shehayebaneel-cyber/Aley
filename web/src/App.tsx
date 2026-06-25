@@ -21,6 +21,8 @@ import { AdminBusinesses } from "./pages/admin/AdminBusinesses";
 import { AdminBusinessEdit } from "./pages/admin/AdminBusinessEdit";
 import { AdminCategories } from "./pages/admin/AdminCategories";
 import { AdminCities } from "./pages/admin/AdminCities";
+import { AdminClaims } from "./pages/admin/AdminClaims";
+import { AdminNotifications } from "./pages/admin/AdminNotifications";
 import { AdminContent } from "./pages/admin/AdminContent";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminEventsOffers } from "./pages/admin/AdminEventsOffers";
@@ -84,6 +86,8 @@ export default function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="businesses" element={<AdminBusinesses />} />
           <Route path="businesses/:id" element={<AdminBusinessEdit />} />
+          <Route path="claims" element={<AdminClaims />} />
+          <Route path="notifications" element={<AdminNotifications />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="reviews" element={<AdminReviews />} />
           <Route path="projects" element={<AdminProjects />} />

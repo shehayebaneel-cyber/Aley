@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { prisma } from "../db";
 import { outBusiness, slugify, toJson } from "../lib/serialize";
+import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
 
 const ownerToken = (id: number) => signToken({ ownerId: id, role: "owner" });
@@ -87,7 +88,62 @@ ownerRouter.post("/businesses", async (req, res) => {
     },
     include: { category: true },
   });
+  const owner = await prisma.owner.findUnique({ where: { id: req.ownerId! } });
+  await notifyAdmins({
+    kind: "BUSINESS_SUBMITTED",
+    title: `New business awaiting review: ${business.name}`,
+    body: `${owner?.name ?? "An owner"} submitted "${business.name}" (${category.name}) for approval.`,
+    link: "/admin/businesses?status=pending",
+  });
   res.status(201).json(outBusiness(business));
+});
+
+// GET /api/owner/claimable?q= — existing unclaimed listings the owner can claim.
+ownerRouter.get("/claimable", async (req, res) => {
+  const q = String(req.query.q ?? "").trim();
+  const list = await prisma.business.findMany({
+    where: {
+      ownerId: null,
+      isClaimed: false,
+      ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { address: { contains: q, mode: "insensitive" } }] } : {}),
+    },
+    orderBy: { name: "asc" },
+    take: 20,
+    include: { category: true },
+  });
+  res.json(list.map((b) => ({ id: b.id, name: b.name, address: b.address, logo: b.logo, cover: b.cover, category: b.category })));
+});
+
+// GET /api/owner/claims — this owner's pending/decided claim requests.
+ownerRouter.get("/claims", async (req, res) => {
+  const claims = await prisma.businessClaim.findMany({
+    where: { ownerId: req.ownerId! },
+    orderBy: { createdAt: "desc" },
+    include: { business: { select: { name: true, slug: true } } },
+  });
+  res.json(claims);
+});
+
+// POST /api/owner/businesses/:id/claim — request ownership of an unclaimed listing.
+ownerRouter.post("/businesses/:id/claim", async (req, res) => {
+  const id = Number(req.params.id);
+  const business = await prisma.business.findUnique({ where: { id } });
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  if (business.isClaimed || business.ownerId) return res.status(400).json({ error: "This business is already claimed." });
+  const existing = await prisma.businessClaim.findFirst({ where: { businessId: id, ownerId: req.ownerId!, status: "PENDING" } });
+  if (existing) return res.status(200).json({ ok: true, claim: existing, message: "You already have a pending claim for this business." });
+
+  const claim = await prisma.businessClaim.create({
+    data: { businessId: id, ownerId: req.ownerId!, message: String(req.body.message ?? "").slice(0, 1000) },
+  });
+  const owner = await prisma.owner.findUnique({ where: { id: req.ownerId! } });
+  await notifyAdmins({
+    kind: "BUSINESS_CLAIM",
+    title: `Ownership claim: ${business.name}`,
+    body: `${owner?.name ?? "An owner"} (${owner?.email ?? ""}) is claiming "${business.name}".${claim.message ? ` Note: ${claim.message}` : ""}`,
+    link: "/admin/claims",
+  });
+  res.status(201).json({ ok: true, claim, message: "Claim submitted. We'll review it and assign the business to you once verified." });
 });
 
 // GET /api/owner/businesses/:id — full editable business.

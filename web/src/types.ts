@@ -215,6 +215,37 @@ export interface ProjectSummary {
   featured: Project[];
 }
 
+// ---- Admin notifications & ownership claims ----
+export interface AdminNotification {
+  id: number;
+  kind: string;
+  title: string;
+  body: string;
+  link: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface BusinessClaim {
+  id: number;
+  businessId: number;
+  ownerId: number;
+  message: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  business?: { id: number; name: string; slug: string; logo?: string | null; cover?: string | null; isClaimed?: boolean };
+  owner?: { id: number; name: string; email: string; phone: string };
+}
+
+export interface ClaimableBusiness {
+  id: number;
+  name: string;
+  address: string;
+  logo?: string | null;
+  cover?: string | null;
+  category?: Category | null;
+}
+
 // ---- Marketplace orders ----
 export interface OrderItem {
   id: number;

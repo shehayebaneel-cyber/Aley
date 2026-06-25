@@ -1,13 +1,16 @@
-import { Link, Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { GlobeIcon, MoonIcon, SunIcon } from "../../components/icons";
+import { useEffect, useState } from "react";
+import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { BellIcon, GlobeIcon, MoonIcon, SunIcon } from "../../components/icons";
 import { useAdminAuth } from "../../context/AdminAuthContext";
 import { useTheme } from "../../context/ThemeContext";
+import { adminApi } from "../../lib/api";
 
 const LINKS = [
   { to: "/admin", label: "Dashboard", end: true },
   { to: "/admin/content", label: "Site Content" },
   { to: "/admin/orders", label: "Orders" },
   { to: "/admin/businesses", label: "Businesses" },
+  { to: "/admin/claims", label: "Claims" },
   { to: "/admin/categories", label: "Categories" },
   { to: "/admin/reviews", label: "Reviews" },
   { to: "/admin/projects", label: "Projects" },
@@ -16,6 +19,24 @@ const LINKS = [
   { to: "/admin/marketplace", label: "Marketplace" },
   { to: "/admin/users", label: "Users & Owners" },
 ];
+
+function NotificationBell() {
+  const [unread, setUnread] = useState(0);
+  const location = useLocation();
+  useEffect(() => {
+    let alive = true;
+    const poll = () => adminApi.get<{ unread: number }>("/api/admin/notifications").then((d) => alive && setUnread(d.unread)).catch(() => {});
+    poll();
+    const t = setInterval(poll, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [location.pathname]);
+  return (
+    <Link to="/admin/notifications" aria-label="Notifications" className="btn btn-ghost relative h-9 w-9 !p-0">
+      <BellIcon className="h-5 w-5" />
+      {unread > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">{unread}</span>}
+    </Link>
+  );
+}
 
 export function AdminLayout() {
   const { isAuthed, logout } = useAdminAuth();
@@ -48,6 +69,7 @@ export function AdminLayout() {
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
           <span className="font-display font-extrabold text-ink md:hidden">Aley Admin</span>
           <div className="ml-auto flex items-center gap-2">
+            <NotificationBell />
             <button onClick={toggle} aria-label="Theme" className="btn btn-ghost h-9 w-9 !p-0">{theme === "dark" ? <SunIcon /> : <MoonIcon />}</button>
             <button onClick={() => { logout(); navigate("/admin/login"); }} className="btn btn-ghost px-3 py-2 text-sm md:hidden">Sign out</button>
           </div>

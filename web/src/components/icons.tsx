@@ -58,6 +58,12 @@ export const GlobeIcon = ({ className = "h-5 w-5" }: P) => (
     <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
   </svg>
 );
+export const BellIcon = ({ className = "h-5 w-5" }: P) => (
+  <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
 export const SunIcon = ({ className = "h-5 w-5" }: P) => (
   <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
     <circle cx="12" cy="12" r="4" />
