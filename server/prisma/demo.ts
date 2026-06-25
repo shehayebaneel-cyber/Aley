@@ -84,6 +84,19 @@ export const CATEGORIES: { slug: string; name: string; icon: string; color: stri
   { slug: "taxi", name: "Taxi Services", icon: "🚕", color: "#f59e0b" },
 ];
 
+// Main groups (ordered) and which categories belong to each.
+export const CATEGORY_GROUPS: { group: string; slugs: string[] }[] = [
+  { group: "Food & Drinks", slugs: ["restaurants", "lebanese", "fast-food", "pizza", "shawarma", "sushi", "coffee-shops", "bakeries", "roasteries", "sweets", "desserts", "ice-cream", "juice-bars"] },
+  { group: "Shopping", slugs: ["fashion", "shoe-stores", "accessories", "jewelry", "sports-stores", "electronics", "mobile-shops", "furniture", "home-decor", "hardware-stores", "florists", "bookstores", "gift-shops", "pet-shops", "supermarkets", "opticians"] },
+  { group: "Health & Beauty", slugs: ["beauty-salons", "barbers", "gyms", "pharmacies", "clinics", "dentists", "medical-labs", "veterinary"] },
+  { group: "Home & Auto", slugs: ["car-washes", "mechanics", "tire-shops", "gas-stations", "cleaning", "electricians", "plumbers", "construction", "interior-designers"] },
+  { group: "Services", slugs: ["real-estate", "banks", "insurance", "lawyers", "accounting", "printing-shops", "photography", "travel-agencies", "taxi"] },
+  { group: "Stay & Learn", slugs: ["hotels", "schools", "daycare"] },
+];
+export const GROUP_OF: Record<string, string> = Object.fromEntries(
+  CATEGORY_GROUPS.flatMap((g) => g.slugs.map((s) => [s, g.group]))
+);
+
 // ---- small PRNG-ish helpers (Math.random is fine in a seed script) ----
 const rand = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 const randInt = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));

@@ -39,6 +39,7 @@ model Category {
   id         Int        @id @default(autoincrement())
   slug       String     @unique
   name       String
+  group      String     @default("More") // parent group, e.g. "Food & Drinks"
   icon       String     @default("🏷️") // emoji or icon key
   color      String     @default("#0ea5a4")
   sortOrder  Int        @default(0)

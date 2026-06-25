@@ -13,6 +13,7 @@ businessesRouter.get("/", async (req, res) => {
 
   if (q.city) where.city = { is: { slug: q.city } };
   if (q.category) where.category = { is: { slug: q.category } };
+  else if (q.group) where.category = { is: { group: q.group } };
   if (q.featured === "true") where.isFeatured = true;
   if (q.delivery === "true") where.hasDelivery = true;
   if (q.reservations === "true") where.hasReservations = true;

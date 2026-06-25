@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { buildBusinesses, CATEGORIES, flickr, tagsFor } from "./demo";
+import { buildBusinesses, CATEGORIES, flickr, GROUP_OF, tagsFor } from "./demo";
 
 const prisma = new PrismaClient();
 
@@ -41,7 +41,7 @@ async function main() {
     ],
   });
 
-  await prisma.category.createMany({ data: CATEGORIES.map((c, i) => ({ slug: c.slug, name: c.name, icon: c.icon, color: c.color, sortOrder: i })) });
+  await prisma.category.createMany({ data: CATEGORIES.map((c, i) => ({ slug: c.slug, name: c.name, group: GROUP_OF[c.slug] ?? "More", icon: c.icon, color: c.color, sortOrder: i })) });
   const cats = await prisma.category.findMany();
   const catId = new Map(cats.map((c) => [c.slug, c.id]));
 

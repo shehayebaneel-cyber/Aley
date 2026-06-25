@@ -13,6 +13,7 @@ export interface Category {
   id: number;
   slug: string;
   name: string;
+  group?: string;
   icon: string;
   color: string;
   count?: number;
