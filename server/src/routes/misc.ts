@@ -48,7 +48,17 @@ offersRouter.get("/", async (req, res) => {
   const offers = await prisma.offer.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { business: { select: { slug: true, name: true, logo: true, cover: true } } },
+    include: {
+      business: {
+        select: {
+          slug: true,
+          name: true,
+          logo: true,
+          cover: true,
+          category: { select: { slug: true, name: true, group: true, icon: true, color: true } },
+        },
+      },
+    },
   });
   res.json(offers);
 });

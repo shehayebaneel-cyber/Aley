@@ -103,7 +103,13 @@ export interface Offer {
   image: string | null;
   startDate: string | null;
   endDate: string | null;
-  business?: { slug: string; name: string; logo?: string | null; cover?: string | null } | null;
+  business?: {
+    slug: string;
+    name: string;
+    logo?: string | null;
+    cover?: string | null;
+    category?: { slug: string; name: string; group: string; icon: string; color: string } | null;
+  } | null;
 }
 
 export interface MapPin {
