@@ -9,7 +9,6 @@ import { CartIcon, CloseIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, 
 const NAV = [
   { to: "/", label: "Home", end: true },
   { to: "/explore", label: "Explore" },
-  { to: "/categories", label: "Categories" },
   { to: "/events", label: "Events" },
   { to: "/offers", label: "Offers" },
   { to: "/projects", label: "Community" },

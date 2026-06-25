@@ -4,7 +4,6 @@ import { Layout } from "./components/Layout";
 import { About } from "./pages/About";
 import { BusinessProfile } from "./pages/BusinessProfile";
 import { Cart } from "./pages/Cart";
-import { Categories } from "./pages/Categories";
 import { Checkout } from "./pages/Checkout";
 import { Contact } from "./pages/Contact";
 import { MyOrders } from "./pages/MyOrders";
@@ -51,7 +50,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/explore" element={<Explore />} />
-          <Route path="/categories" element={<Categories />} />
+          {/* Categories merged into Explore's browse-by-category landing — keep old links working */}
+          <Route path="/categories" element={<Navigate to="/explore" replace />} />
           <Route path="/business/:slug" element={<BusinessProfile />} />
           <Route path="/events" element={<Events />} />
           <Route path="/offers" element={<Offers />} />

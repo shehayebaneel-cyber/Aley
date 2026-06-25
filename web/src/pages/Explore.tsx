@@ -44,6 +44,10 @@ export function Explore() {
   const activeCategory = params.get("category") ?? "";
   const activeGroup = params.get("group") ?? "";
 
+  // Idle = nothing chosen yet → show the visual "browse by category" tiles instead of results.
+  const FILTER_KEYS = ["category", "group", "q", "openNow", "delivery", "reservations", "minRating", "priceMax", "sort"];
+  const hasFilter = FILTER_KEYS.some((k) => params.get(k));
+
   // Group the categories in a fixed order.
   const grouped = useMemo(() => {
     const byGroup = new Map<string, Category[]>();
@@ -65,7 +69,7 @@ export function Explore() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <h1 className="font-display text-3xl font-extrabold text-ink">Explore Aley</h1>
-      <p className="mt-1 text-muted">{loading ? "Loading…" : `${businesses?.length ?? 0} places found`}</p>
+      <p className="mt-1 text-muted">{!hasFilter ? "Browse by category, or search and filter to find anything in Aley." : loading ? "Loading…" : `${businesses?.length ?? 0} places found`}</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[16rem_1fr]">
         {/* ---- Grouped category sidebar (desktop) ---- */}
@@ -139,9 +143,31 @@ export function Explore() {
             </select>
           </div>
 
-          {/* Results */}
+          {/* Idle: browse-by-category tiles. Otherwise: results. */}
           <div className="mt-6">
-            {loading ? (
+            {!hasFilter ? (
+              <div className="space-y-8">
+                {grouped.map(({ group, items }) => (
+                  <section key={group}>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="font-display text-lg font-extrabold text-ink">{group}</h2>
+                      <button onClick={() => choose({ group, category: null })} className="text-sm font-semibold text-brand hover:text-brand-dark">See all →</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {items.map((c) => (
+                        <button key={c.id} onClick={() => choose({ category: c.slug, group: null })} className="card card-hover group flex items-center gap-3 p-4 text-left">
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl transition group-hover:scale-110" style={{ background: `${c.color}1a` }}>{c.icon}</span>
+                          <div className="min-w-0">
+                            <p className="truncate font-display font-bold text-ink">{c.name}</p>
+                            <p className="text-sm text-muted">{c.count} {c.count === 1 ? "place" : "places"}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : loading ? (
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 9 }).map((_, i) => <div key={i} className="card h-72 animate-pulse" />)}</div>
             ) : businesses && businesses.length > 0 ? (
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{businesses.map((b) => <BusinessCard key={b.id} business={b} showActions />)}</div>

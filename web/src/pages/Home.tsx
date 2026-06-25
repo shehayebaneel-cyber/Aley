@@ -76,7 +76,7 @@ export function Home() {
 
       <div className="mx-auto max-w-7xl space-y-16 px-4 py-12">
         {/* Popular categories */}
-        <Section show={S.categories.show} title={S.categories.title!} subtitle={S.categories.subtitle} to="/categories">
+        <Section show={S.categories.show} title={S.categories.title!} subtitle={S.categories.subtitle} to="/explore">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {(data?.categories ?? []).map((c) => (
               <Link key={c.id} to={`/explore?category=${c.slug}`} className="card card-hover flex flex-col items-center gap-2 p-5 text-center">
