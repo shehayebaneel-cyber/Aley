@@ -90,8 +90,26 @@ const randInt = (a: number, b: number) => a + Math.floor(Math.random() * (b - a 
 const chance = (p: number) => Math.random() < p;
 const sample = <T>(a: T[], n: number): T[] => [...a].sort(() => Math.random() - 0.5).slice(0, n);
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const img = (seed: string, w = 800, h = 600) => `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}`;
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+// ---- Themed images: LoremFlickr (tag-matched photos) + UI-Avatars (logos) ----
+const hashNum = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 100000; };
+export const flickr = (seed: string, tags: string, w = 800, h = 600) => `https://loremflickr.com/${w}/${h}/${encodeURIComponent(tags)}?lock=${hashNum(seed)}`;
+export const avatar = (name: string, color = "0d9488") => `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${color}&color=fff&bold=true&size=256`;
+
+const slugColor = new Map(CATEGORIES.map((c) => [c.slug, c.color.replace("#", "")]));
+// Photo search tags per category, biased toward Aley / Mount Lebanon where it fits.
+const TAGS: Record<string, string> = {
+  "coffee-shops": "cafe,coffee,lebanon", restaurants: "restaurant,lebanese,food", "fast-food": "burger,fastfood", pizza: "pizza", shawarma: "shawarma,streetfood", sushi: "sushi,japanese", lebanese: "lebanese,mezze,food",
+  bakeries: "bakery,bread,pastry", roasteries: "coffee,nuts,roastery", sweets: "baklava,sweets,dessert", desserts: "dessert,cake", "ice-cream": "icecream,gelato", "juice-bars": "juice,smoothie,fruit",
+  hotels: "hotel,resort,mountain,lebanon", fashion: "fashion,boutique,clothing", "shoe-stores": "shoes,sneakers", accessories: "accessories,bags", "sports-stores": "sportswear,fitness", jewelry: "jewelry,gold,diamond",
+  "beauty-salons": "salon,beauty,spa", barbers: "barbershop,haircut", opticians: "eyewear,glasses", pharmacies: "pharmacy,medicine", clinics: "clinic,medical", dentists: "dentist,dental", "medical-labs": "laboratory,medical", veterinary: "veterinary,pet",
+  gyms: "gym,fitness", supermarkets: "supermarket,grocery", electronics: "electronics,gadgets", "mobile-shops": "smartphone,phone", furniture: "furniture,interior", "home-decor": "homedecor,interior", "hardware-stores": "hardware,tools",
+  florists: "flowers,florist,bouquet", bookstores: "books,bookstore,library", "gift-shops": "gift,giftshop", "pet-shops": "petshop,dog,cat", "car-washes": "carwash,car", mechanics: "garage,mechanic,car", "tire-shops": "tires,car", "gas-stations": "gasstation,fuel",
+  "real-estate": "house,realestate,mountain", banks: "bank,finance", insurance: "office,insurance", schools: "school,classroom", daycare: "kindergarten,kids", "travel-agencies": "travel,airplane,beach", photography: "camera,photography,studio",
+  "printing-shops": "printing,design", "interior-designers": "interior,design,architecture", construction: "construction,building", lawyers: "law,office", accounting: "accounting,office", cleaning: "cleaning,service", electricians: "electrician,tools", plumbers: "plumbing,tools", taxi: "taxi,car",
+};
+export const tagsFor = (slug: string) => TAGS[slug] ?? "shop,store,lebanon";
 
 const ALEY = { lat: 33.8056, lng: 35.6011 };
 const FIRST = ["Rami", "Lara", "Sami", "Nadia", "Georges", "Maya", "Tony", "Carine", "Joseph", "Hala", "Karim", "Dina", "Elie", "Rana", "Marc", "Yara", "Walid", "Nour", "Fadi", "Maya", "Ziad", "Christelle", "Bilal", "Joelle", "Hadi", "Tala", "Rabih", "Sara", "Nabil", "Lea"];
@@ -104,9 +122,9 @@ const STREETS = ["Main Road", "Bhamdoun Road", "Souk Street", "Boulevard", "Hill
 function jitter() {
   return { lat: round2(ALEY.lat + (Math.random() - 0.5) * 0.02) + Math.random() * 0.001, lng: round2(ALEY.lng + (Math.random() - 0.5) * 0.02) + Math.random() * 0.001 };
 }
-function gallery(slug: string) {
+function gallery(slug: string, tags: string) {
   const n = randInt(8, 15);
-  return Array.from({ length: n }, (_, i) => img(`${slug}-g${i}`, 900, 650));
+  return Array.from({ length: n }, (_, i) => flickr(`${slug}-g${i}`, tags, 900, 650));
 }
 function hours(open = "09:00", close = "22:00", closedDay = -1): HoursRow[] {
   return Array.from({ length: 7 }, (_, day) => ({ day, open, close, closed: day === closedDay }));
@@ -322,7 +340,7 @@ function buildOne(name: string, category: string, opts: { real?: boolean } = {})
   return {
     slug, name, category, tagline: rand(TAGLINES[kind] ?? ["Proudly serving Aley"]),
     description: descriptionFor(name, kind, catName),
-    logo: img(`${slug}-logo`, 200, 200), cover: img(`${slug}-cover`, 1200, 600), gallery: gallery(slug),
+    logo: avatar(name, slugColor.get(category) ?? "0d9488"), cover: flickr(`${slug}-cover`, tagsFor(category), 1200, 600), gallery: gallery(slug, tagsFor(category)),
     phone: phone(), whatsapp: phone(), instagram: ig, facebook: `https://facebook.com/${ig}`,
     website: chance(0.4) ? `https://${ig}.demo.aley.com` : "", email: `info@${ig}.demo.aley.com`,
     address: `${rand(STREETS)}, Aley`, lat, lng, hours: hours(open, close, kind === "service" && chance(0.5) ? 0 : -1),
