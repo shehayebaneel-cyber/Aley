@@ -28,6 +28,7 @@ import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminEventsOffers } from "./pages/admin/AdminEventsOffers";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
+import { AdminMarketplace } from "./pages/admin/AdminMarketplace";
 import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminProjects } from "./pages/admin/AdminProjects";
 import { AdminReviews } from "./pages/admin/AdminReviews";
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="projects" element={<AdminProjects />} />
           <Route path="events-offers" element={<AdminEventsOffers />} />
           <Route path="cities" element={<AdminCities />} />
+          <Route path="marketplace" element={<AdminMarketplace />} />
           <Route path="content" element={<AdminContent />} />
           <Route path="users" element={<AdminUsers />} />
         </Route>

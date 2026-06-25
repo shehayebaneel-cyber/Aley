@@ -71,6 +71,7 @@ export interface Business {
   isVerified: boolean;
   isPublished?: boolean;
   isClaimed?: boolean;
+  commissionRate?: number;
   rating: number;
   reviewCount: number;
   viewCount: number;

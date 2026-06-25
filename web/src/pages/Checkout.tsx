@@ -4,14 +4,13 @@ import { MapPicker } from "../components/MapPicker";
 import { useCart } from "../context/CartContext";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, currency, userApi } from "../lib/api";
-
-const DELIVERY_FEE = 3;
-const FREE_OVER = 30;
+import { useFetch } from "../lib/useFetch";
 
 export function Checkout() {
   const { groups, subtotal, count, clear } = useCart();
   const { user } = useUserAuth();
   const navigate = useNavigate();
+  const { data: cfg } = useFetch<{ deliveryFee: number; freeDeliveryThreshold: number }>("/api/marketplace/config");
   const [f, setF] = useState({
     customerName: user?.name ?? "", customerPhone: "", customerEmail: user?.email ?? "",
     fulfillment: "DELIVERY", address: "", note: "", paymentMethod: "CASH",
@@ -20,7 +19,8 @@ export function Checkout() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
-  const fee = f.fulfillment === "PICKUP" || subtotal >= FREE_OVER || subtotal === 0 ? 0 : DELIVERY_FEE;
+  const freeOver = cfg?.freeDeliveryThreshold ?? 30;
+  const fee = f.fulfillment === "PICKUP" || (freeOver > 0 && subtotal >= freeOver) || subtotal === 0 ? 0 : (cfg?.deliveryFee ?? 3);
 
   if (count === 0) return <div className="mx-auto max-w-md px-4 py-24 text-center"><p className="text-muted">Your cart is empty.</p><Link to="/explore" className="btn btn-primary mt-4 px-6 py-2.5">Browse</Link></div>;
 

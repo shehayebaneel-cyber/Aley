@@ -1,13 +1,10 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
+import { effectiveCommission, getMarketplaceSettings } from "../lib/marketplace";
 import { isOpenNow, parseArr, type HoursRow } from "../lib/serialize";
 
 export const ordersRouter = Router();
-
-// Marketplace settings (could move to admin settings later).
-const DELIVERY_FEE = 3;
-const FREE_DELIVERY_OVER = 30;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const genNumber = () => `ALY-${Date.now().toString(36).slice(-5).toUpperCase()}${Math.floor(Math.random() * 1296).toString(36).toUpperCase().padStart(2, "0")}`;
@@ -63,6 +60,8 @@ ordersRouter.post("/", optionalUser, async (req, res) => {
     return res.status(422).json({ error: `${closed.join(", ")} ${closed.length > 1 ? "are" : "is"} currently closed. Please remove ${closed.length > 1 ? "them" : "it"} or order during opening hours.`, closed: true });
   }
 
+  const settings = await getMarketplaceSettings();
+
   // Build per-business tickets with commission.
   const tickets = [];
   let itemsSubtotal = 0;
@@ -74,12 +73,12 @@ ordersRouter.post("/", optionalUser, async (req, res) => {
       return { name: STR(it.name, 120), price, quantity, lineTotal: round2(price * quantity) };
     });
     const subtotal = round2(items.reduce((s, it) => s + it.lineTotal, 0));
-    const commissionRate = business.commissionRate ?? 10;
+    const commissionRate = effectiveCommission(business.commissionRate, settings);
     itemsSubtotal += subtotal;
     tickets.push({ businessId: business.id, status: "PENDING", subtotal, commissionRate, commissionAmount: round2((subtotal * commissionRate) / 100), items });
   }
   itemsSubtotal = round2(itemsSubtotal);
-  const deliveryFee = fulfillment === "PICKUP" ? 0 : itemsSubtotal >= FREE_DELIVERY_OVER ? 0 : DELIVERY_FEE;
+  const deliveryFee = fulfillment === "PICKUP" ? 0 : settings.freeDeliveryThreshold > 0 && itemsSubtotal >= settings.freeDeliveryThreshold ? 0 : settings.deliveryFee;
   const paymentMethod = b.paymentMethod === "ONLINE" ? "ONLINE" : "CASH";
 
   const order = await prisma.order.create({

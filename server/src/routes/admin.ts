@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireAdmin } from "../auth";
 import { getContent, saveContent } from "../lib/content";
+import { getMarketplaceSettings, saveMarketplaceSettings } from "../lib/marketplace";
 import { prisma } from "../db";
 import { recomputeProject, recomputeRating } from "../lib/ratings";
 import { outBusiness, outProject, slugify, toJson } from "../lib/serialize";
@@ -82,6 +83,7 @@ adminRouter.patch("/businesses/:id", async (req, res) => {
   if ("lat" in b) data.lat = b.lat === null || b.lat === "" ? null : Number(b.lat);
   if ("lng" in b) data.lng = b.lng === null || b.lng === "" ? null : Number(b.lng);
   if ("priceRange" in b) data.priceRange = Math.max(1, Math.min(4, Number(b.priceRange) || 2));
+  if ("commissionRate" in b) data.commissionRate = Math.max(0, Math.min(100, Number(b.commissionRate) || 0));
   if ("categoryId" in b) data.categoryId = Number(b.categoryId);
   for (const key of ["gallery", "tags", "faqs", "products", "hours"]) if (key in b && Array.isArray(b[key])) data[key] = toJson(b[key] as unknown[]);
   const updated = await prisma.business.update({ where: { id }, data, include: { category: true } });
@@ -252,6 +254,10 @@ adminRouter.patch("/cities/:id", async (req, res) => {
 // ---- Site content (CMS) ----
 adminRouter.get("/content", async (_req, res) => res.json(await getContent()));
 adminRouter.put("/content", async (req, res) => res.json(await saveContent(req.body)));
+
+// ---- Marketplace settings (delivery fee, free threshold, default commission) ----
+adminRouter.get("/marketplace", async (_req, res) => res.json(await getMarketplaceSettings()));
+adminRouter.put("/marketplace", async (req, res) => res.json(await saveMarketplaceSettings(req.body)));
 
 // ---- Community Projects ----
 adminRouter.get("/projects", async (_req, res) => {

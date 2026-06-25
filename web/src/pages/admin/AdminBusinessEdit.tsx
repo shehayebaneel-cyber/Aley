@@ -78,7 +78,7 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
     phone: biz.phone, whatsapp: biz.whatsapp, instagram: biz.instagram, facebook: biz.facebook, website: biz.website, email: biz.email,
     address: biz.address, lat: biz.lat?.toString() ?? "", lng: biz.lng?.toString() ?? "",
     priceRange: biz.priceRange, hasDelivery: biz.hasDelivery, hasReservations: biz.hasReservations,
-    tags: biz.tags.join(", "), ownerName: biz.ownerName ?? "",
+    tags: biz.tags.join(", "), ownerName: biz.ownerName ?? "", commissionRate: biz.commissionRate ?? 10,
   });
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
   return (
@@ -104,6 +104,7 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
         <L label="Longitude"><input value={f.lng} onChange={(e) => set({ lng: e.target.value })} className={inp} /></L>
         <L label="Owner name (display)"><input value={f.ownerName} onChange={(e) => set({ ownerName: e.target.value })} className={inp} /></L>
       </div>
+      <L label="Commission % (0 = use marketplace default)"><input type="number" min={0} max={100} step="0.5" value={f.commissionRate} onChange={(e) => set({ commissionRate: Number(e.target.value) })} className={inp} /></L>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-ink">Price</span>
         {[1, 2, 3, 4].map((p) => <button key={p} type="button" onClick={() => set({ priceRange: p })} className={`chip ${f.priceRange === p ? "chip-active" : ""}`}>{"$".repeat(p)}</button>)}

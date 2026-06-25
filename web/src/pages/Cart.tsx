@@ -2,14 +2,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { CartIcon } from "../components/icons";
 import { useCart } from "../context/CartContext";
 import { currency } from "../lib/api";
-
-const DELIVERY_FEE = 3;
-const FREE_OVER = 30;
+import { useFetch } from "../lib/useFetch";
 
 export function Cart() {
   const { groups, subtotal, businessCount, count, setQty, remove, clear } = useCart();
   const navigate = useNavigate();
-  const fee = subtotal >= FREE_OVER || subtotal === 0 ? 0 : DELIVERY_FEE;
+  const { data: cfg } = useFetch<{ deliveryFee: number; freeDeliveryThreshold: number }>("/api/marketplace/config");
+  const deliveryFee = cfg?.deliveryFee ?? 3;
+  const freeOver = cfg?.freeDeliveryThreshold ?? 30;
+  const fee = (freeOver > 0 && subtotal >= freeOver) || subtotal === 0 ? 0 : deliveryFee;
 
   if (count === 0) {
     return (
@@ -67,7 +68,7 @@ export function Cart() {
             <div className="flex justify-between"><dt className="text-muted">Delivery (est.)</dt><dd className="font-semibold text-ink">{fee === 0 ? "Free" : currency(fee)}</dd></div>
             <div className="mt-2 flex justify-between border-t border-border pt-2 text-base"><dt className="font-bold text-ink">Total</dt><dd className="font-extrabold text-ink">{currency(subtotal + fee)}</dd></div>
           </dl>
-          {subtotal < FREE_OVER && <p className="mt-2 text-xs text-brand">Add {currency(FREE_OVER - subtotal)} more for free delivery.</p>}
+          {freeOver > 0 && subtotal < freeOver && <p className="mt-2 text-xs text-brand">Add {currency(freeOver - subtotal)} more for free delivery.</p>}
           <button onClick={() => navigate("/checkout")} className="btn btn-primary mt-4 w-full py-3">Continue to checkout</button>
           <p className="mt-2 text-center text-[11px] text-muted">Each business prepares its own part; one delivery brings it all.</p>
         </aside>

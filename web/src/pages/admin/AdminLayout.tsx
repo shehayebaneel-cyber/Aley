@@ -13,6 +13,7 @@ const LINKS = [
   { to: "/admin/projects", label: "Projects" },
   { to: "/admin/events-offers", label: "Events & Offers" },
   { to: "/admin/cities", label: "Cities" },
+  { to: "/admin/marketplace", label: "Marketplace" },
   { to: "/admin/users", label: "Users & Owners" },
 ];
 
