@@ -82,7 +82,8 @@ ownerRouter.post("/businesses", async (req, res) => {
     data: {
       slug, name, categoryId, cityId: aley!.id, ownerId: req.ownerId!,
       tagline: String(req.body.tagline ?? "").trim(),
-      isPublished: true, isClaimed: true,
+      // New owner submissions stay hidden until an admin reviews and approves them.
+      isPublished: false, isClaimed: true, reviewStatus: "PENDING",
     },
     include: { category: true },
   });

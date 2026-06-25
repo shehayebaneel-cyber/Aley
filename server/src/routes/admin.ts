@@ -15,9 +15,10 @@ const STR = (v: unknown, max = 200) => String(v ?? "").slice(0, max).trim();
 
 // GET /api/admin/dashboard — platform overview
 adminRouter.get("/dashboard", async (_req, res) => {
-  const [businesses, published, categories, pendingReviews, totalReviews, events, offers, users, owners, cities] = await Promise.all([
+  const [businesses, published, pendingBusinesses, categories, pendingReviews, totalReviews, events, offers, users, owners, cities] = await Promise.all([
     prisma.business.count(),
     prisma.business.count({ where: { isPublished: true } }),
+    prisma.business.count({ where: { reviewStatus: "PENDING" } }),
     prisma.category.count(),
     prisma.review.count({ where: { status: "PENDING" } }),
     prisma.review.count(),
@@ -30,7 +31,7 @@ adminRouter.get("/dashboard", async (_req, res) => {
   const recent = await prisma.business.findMany({ orderBy: { createdAt: "desc" }, take: 6, include: { category: true } });
   const topViewed = await prisma.business.findMany({ orderBy: { viewCount: "desc" }, take: 6, include: { category: true } });
   res.json({
-    stats: { businesses, published, unpublished: businesses - published, categories, pendingReviews, totalReviews, events, offers, users, owners, cities },
+    stats: { businesses, published, unpublished: businesses - published, pendingBusinesses, categories, pendingReviews, totalReviews, events, offers, users, owners, cities },
     recent: recent.map(outBusiness),
     topViewed: topViewed.map(outBusiness),
   });
@@ -44,6 +45,7 @@ adminRouter.get("/businesses", async (req, res) => {
   if (q.status === "published") where.isPublished = true;
   if (q.status === "unpublished") where.isPublished = false;
   if (q.status === "featured") where.isFeatured = true;
+  if (q.status === "pending") where.reviewStatus = "PENDING";
   const list = await prisma.business.findMany({ where, orderBy: { createdAt: "desc" }, include: { category: true, owner: { select: { name: true, email: true } } } });
   res.json(list.map((b) => ({ ...outBusiness(b), owner: b.owner })));
 });
@@ -93,6 +95,26 @@ adminRouter.patch("/businesses/:id", async (req, res) => {
 adminRouter.delete("/businesses/:id", async (req, res) => {
   await prisma.business.delete({ where: { id: Number(req.params.id) } });
   res.json({ ok: true });
+});
+
+// Approve an owner-submitted business → goes public.
+adminRouter.post("/businesses/:id/approve", async (req, res) => {
+  const updated = await prisma.business.update({
+    where: { id: Number(req.params.id) },
+    data: { reviewStatus: "APPROVED", isPublished: true },
+    include: { category: true },
+  });
+  res.json(outBusiness(updated));
+});
+
+// Reject an owner-submitted business → stays hidden.
+adminRouter.post("/businesses/:id/reject", async (req, res) => {
+  const updated = await prisma.business.update({
+    where: { id: Number(req.params.id) },
+    data: { reviewStatus: "REJECTED", isPublished: false },
+    include: { category: true },
+  });
+  res.json(outBusiness(updated));
 });
 
 // Create an offer/event for a specific business (admin).

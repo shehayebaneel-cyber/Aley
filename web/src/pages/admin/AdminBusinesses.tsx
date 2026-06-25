@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { VerifiedIcon } from "../../components/icons";
 import { adminApi } from "../../lib/api";
 import type { Business, Category } from "../../types";
@@ -9,8 +9,9 @@ type Row = Business & { owner?: { name: string; email: string } | null };
 export function AdminBusinesses() {
   const [rows, setRows] = useState<Row[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
 
   const load = () => {
     const p = new URLSearchParams();
@@ -31,6 +32,10 @@ export function AdminBusinesses() {
     await adminApi.patch(`/api/admin/businesses/${id}`, body);
     load();
   };
+  const decide = async (id: number, action: "approve" | "reject") => {
+    await adminApi.post(`/api/admin/businesses/${id}/${action}`, {});
+    load();
+  };
   const del = async (b: Row) => {
     if (!confirm(`Delete "${b.name}"? This removes its reviews, offers and events too.`)) return;
     await adminApi.delete(`/api/admin/businesses/${b.id}`);
@@ -39,6 +44,7 @@ export function AdminBusinesses() {
 
   const FILTERS = [
     { key: "", label: "All" },
+    { key: "pending", label: "Pending approval" },
     { key: "published", label: "Published" },
     { key: "unpublished", label: "Hidden" },
     { key: "featured", label: "Featured" },
@@ -56,12 +62,14 @@ export function AdminBusinesses() {
 
       <div className="mt-5 space-y-3">
         {rows.map((b) => (
-          <div key={b.id} className="card flex flex-wrap items-center gap-4 p-4">
+          <div key={b.id} className={`card flex flex-wrap items-center gap-4 p-4 ${b.reviewStatus === "PENDING" ? "!border-amber-400/60 ring-1 ring-amber-400/30" : ""}`}>
             <img src={b.logo ?? b.cover ?? ""} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover surface-2" />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1 font-semibold text-ink">
+              <p className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
                 <Link to={`/admin/businesses/${b.id}`} className="hover:text-brand">{b.name}</Link>
                 {b.isVerified && <VerifiedIcon className="h-4 w-4 text-brand" />}
+                {b.reviewStatus === "PENDING" && <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-bold text-amber-600">Pending approval</span>}
+                {b.reviewStatus === "REJECTED" && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-bold text-red-500">Rejected</span>}
               </p>
               <p className="text-xs text-muted">{b.category.icon} {b.category.name} · {b.owner ? `owner: ${b.owner.name}` : "unclaimed"} · {b.reviewCount} reviews</p>
             </div>
@@ -74,6 +82,12 @@ export function AdminBusinesses() {
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <div className="flex flex-wrap gap-2">
+              {b.reviewStatus === "PENDING" && (
+                <>
+                  <button onClick={() => decide(b.id, "approve")} className="chip !border-emerald-400 bg-emerald-500 text-white hover:!bg-emerald-600">✓ Approve</button>
+                  <button onClick={() => decide(b.id, "reject")} className="chip !border-red-300 text-red-500 hover:!bg-red-500 hover:text-white">Reject</button>
+                </>
+              )}
               <Link to={`/admin/businesses/${b.id}`} className="chip chip-active">Edit</Link>
               <Toggle on={!!b.isPublished} label="Published" onClick={() => patch(b.id, { isPublished: !b.isPublished })} />
               <Toggle on={b.isFeatured} label="Featured" onClick={() => patch(b.id, { isFeatured: !b.isFeatured })} />

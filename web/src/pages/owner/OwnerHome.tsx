@@ -13,6 +13,7 @@ export function OwnerHome() {
   const [form, setForm] = useState({ name: "", tagline: "", categoryId: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -25,6 +26,7 @@ export function OwnerHome() {
       await refresh();
       setCreating(false);
       setForm({ name: "", tagline: "", categoryId: 0 });
+      setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create.");
     } finally {
@@ -41,6 +43,17 @@ export function OwnerHome() {
         </div>
         <button onClick={() => setCreating((c) => !c)} className="btn btn-primary px-5 py-2.5">+ Add a business</button>
       </div>
+
+      {submitted && (
+        <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">
+          <span className="text-xl">🕓</span>
+          <div>
+            <p className="font-semibold text-ink">Submitted for review</p>
+            <p className="text-sm text-muted">Thanks! Our team will check your business and approve it before it goes public. You can keep editing it in the meantime.</p>
+          </div>
+          <button onClick={() => setSubmitted(false)} className="ml-auto text-sm font-semibold text-muted hover:text-ink">Dismiss</button>
+        </div>
+      )}
 
       {creating && (
         <form onSubmit={create} className="card mt-5 space-y-3 p-5">
@@ -71,7 +84,11 @@ export function OwnerHome() {
           <Link key={b.id} to={`/owner/b/${b.id}`} className="card card-hover flex items-center gap-4 p-4">
             <img src={b.logo ?? b.cover ?? ""} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover surface-2" />
             <div className="min-w-0 flex-1">
-              <p className="truncate font-display font-bold text-ink">{b.name}</p>
+              <p className="flex items-center gap-1.5 truncate font-display font-bold text-ink">
+                {b.name}
+                {b.reviewStatus === "PENDING" && <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-bold text-amber-600">Pending review</span>}
+                {b.reviewStatus === "REJECTED" && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-bold text-red-500">Not approved</span>}
+              </p>
               <p className="text-sm text-muted">{b.category?.icon} {b.category?.name}</p>
               <div className="mt-1 flex items-center gap-3 text-xs text-muted">
                 <span className="inline-flex items-center gap-1"><StarIcon className="h-3.5 w-3.5 text-amber-400" /> {b.rating > 0 ? b.rating.toFixed(1) : "New"}</span>

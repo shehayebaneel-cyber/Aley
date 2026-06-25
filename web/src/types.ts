@@ -72,6 +72,7 @@ export interface Business {
   isVerified: boolean;
   isPublished?: boolean;
   isClaimed?: boolean;
+  reviewStatus?: "APPROVED" | "PENDING" | "REJECTED";
   commissionRate?: number;
   rating: number;
   reviewCount: number;

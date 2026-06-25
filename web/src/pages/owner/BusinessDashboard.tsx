@@ -46,6 +46,25 @@ export function BusinessDashboard() {
       <h1 className="mt-2 font-display text-3xl font-extrabold text-ink">{biz.name}</h1>
       <p className="text-muted">{biz.category.icon} {biz.category.name} · {PRICE(biz.priceRange)}</p>
 
+      {biz.reviewStatus === "PENDING" && (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">
+          <span className="text-xl">🕓</span>
+          <div>
+            <p className="font-semibold text-ink">Awaiting approval</p>
+            <p className="text-sm text-muted">This business isn't public yet. Our team reviews new listings before they go live — you can keep editing it now and it'll appear once approved.</p>
+          </div>
+        </div>
+      )}
+      {biz.reviewStatus === "REJECTED" && (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-red-400/40 bg-red-500/10 p-4">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <p className="font-semibold text-ink">Not approved</p>
+            <p className="text-sm text-muted">This listing wasn't approved for publishing. Please review the details, make any needed changes, and contact us if you think this was a mistake.</p>
+          </div>
+        </div>
+      )}
+
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button

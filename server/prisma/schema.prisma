@@ -97,6 +97,9 @@ model Business {
   isFeatured  Boolean @default(false)
   isVerified  Boolean @default(false)
   isClaimed   Boolean @default(false)
+  // Owner-submitted listings wait for admin approval before going public.
+  // APPROVED (default for seeded/admin-created) | PENDING | REJECTED
+  reviewStatus String @default("APPROVED")
 
   // Cached review aggregates (kept in sync when a review is approved)
   rating      Float @default(0)
