@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { About } from "./pages/About";
 import { BusinessProfile } from "./pages/BusinessProfile";
@@ -12,7 +12,6 @@ import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { Explore } from "./pages/Explore";
 import { Home } from "./pages/Home";
-import { LoveAley } from "./pages/LoveAley";
 import { MapPage } from "./pages/MapPage";
 import { NotFound } from "./pages/NotFound";
 import { Offers } from "./pages/Offers";
@@ -59,7 +58,8 @@ export default function App() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:slug" element={<ProjectDetail />} />
-          <Route path="/love-aley" element={<LoveAley />} />
+          {/* Love Aley merged into Community Projects — keep old links working */}
+          <Route path="/love-aley" element={<Navigate to="/projects" replace />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/order/:number" element={<OrderTracking />} />

@@ -42,7 +42,7 @@ export function About() {
             <h3 className="font-display text-xl font-extrabold">Love your town?</h3>
             <p className="text-white/85">Support and shape the projects making Aley better.</p>
           </div>
-          <Link to="/love-aley" className="btn bg-white px-6 py-2.5 text-brand-dark">Love Aley ❤</Link>
+          <Link to="/projects" className="btn bg-white px-6 py-2.5 text-brand-dark">Love Aley ❤</Link>
         </div>
 
         <h2 className="mt-12 font-display text-2xl font-extrabold text-ink">Built to grow</h2>

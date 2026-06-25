@@ -106,7 +106,7 @@ export function Home() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link to="/projects" className="btn btn-primary px-5 py-2.5">Suggest a Project</Link>
-                <Link to="/love-aley" className="btn btn-ghost px-5 py-2.5">Love Aley ❤</Link>
+                <Link to="/projects" className="btn btn-ghost px-5 py-2.5">Love Aley ❤</Link>
               </div>
             </div>
 

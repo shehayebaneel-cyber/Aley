@@ -13,7 +13,6 @@ const NAV = [
   { to: "/events", label: "Events" },
   { to: "/offers", label: "Offers" },
   { to: "/projects", label: "Community" },
-  { to: "/love-aley", label: "Love Aley" },
   { to: "/map", label: "Map" },
   { to: "/about", label: "About" },
   { to: "/contact", label: "Contact" },
