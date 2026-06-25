@@ -199,20 +199,38 @@ ownerRouter.get("/businesses/:id/analytics", async (req, res) => {
   if (!business) return res.status(404).json({ error: "Business not found." });
   const reviews = await prisma.review.findMany({ where: { businessId: business.id, status: "APPROVED" } });
   const breakdown = [1, 2, 3, 4, 5].map((star) => ({ star, count: reviews.filter((r) => r.rating === star).length }));
-  const [offers, events, pendingReviews] = await Promise.all([
+  const [offers, events, pendingReviews, pendingReservations] = await Promise.all([
     prisma.offer.count({ where: { businessId: business.id } }),
     prisma.event.count({ where: { businessId: business.id } }),
     prisma.review.count({ where: { businessId: business.id, status: "PENDING" } }),
+    prisma.reservation.count({ where: { businessId: business.id, status: "PENDING" } }),
   ]);
   res.json({
     viewCount: business.viewCount,
     rating: business.rating,
     reviewCount: business.reviewCount,
     pendingReviews,
+    pendingReservations,
     offers,
     events,
     breakdown,
   });
+});
+
+// ---- Reservations ----
+ownerRouter.get("/businesses/:id/reservations", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const reservations = await prisma.reservation.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" } });
+  res.json(reservations);
+});
+ownerRouter.patch("/reservations/:id", async (req, res) => {
+  const r = await prisma.reservation.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!r || r.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Reservation not found." });
+  const status = String(req.body.status ?? "").toUpperCase();
+  if (!["PENDING", "CONFIRMED", "DECLINED", "CANCELLED"].includes(status)) return res.status(400).json({ error: "Invalid status." });
+  const updated = await prisma.reservation.update({ where: { id: r.id }, data: { status } });
+  res.json(updated);
 });
 
 // ---- Offers ----

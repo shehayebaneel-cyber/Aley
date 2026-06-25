@@ -237,6 +237,20 @@ export interface BusinessClaim {
   owner?: { id: number; name: string; email: string; phone: string };
 }
 
+export interface Reservation {
+  id: number;
+  businessId: number;
+  name: string;
+  phone: string;
+  email: string;
+  partySize: number;
+  date: string;
+  time: string;
+  note: string;
+  status: "PENDING" | "CONFIRMED" | "DECLINED" | "CANCELLED";
+  createdAt: string;
+}
+
 export interface ClaimableBusiness {
   id: number;
   name: string;

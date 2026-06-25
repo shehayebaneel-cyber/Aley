@@ -6,9 +6,9 @@ import { CheckIcon, GlobeIcon, StarIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Business, BusinessOrder, Category, EventItem, HoursRow, Offer, Review } from "../../types";
+import type { Business, BusinessOrder, Category, EventItem, HoursRow, Offer, Reservation, Review } from "../../types";
 
-const TABS = ["Overview", "Orders", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Orders", "Reservations", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -82,6 +82,7 @@ export function BusinessDashboard() {
       <div className="mt-6">
         {tab === "Overview" && <Overview biz={biz} />}
         {tab === "Orders" && <OrdersTab biz={biz} />}
+        {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
         {tab === "Hours" && <HoursTab biz={biz} save={save} />}
@@ -197,6 +198,67 @@ function OrdersTab({ biz }: { biz: Business }) {
                 {t.status === "PREPARING" && <input defaultValue={t.prepTime} onBlur={(e) => e.target.value !== t.prepTime && update(t.id, { prepTime: e.target.value })} placeholder="Prep time (e.g. 15 min)" className="rounded-xl border border-border bg-surface px-3 py-2 text-sm" />}
                 <button onClick={() => { if (confirm("Cancel this part of the order?")) update(t.id, { status: "CANCELLED" }); }} className="btn btn-ghost px-4 py-2 text-sm text-red-500">Cancel</button>
               </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---- Reservations (table bookings) ----
+const RES_STATUS: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: "Pending", cls: "bg-amber-400/20 text-amber-600" },
+  CONFIRMED: { label: "Confirmed", cls: "bg-emerald-500/15 text-emerald-600" },
+  DECLINED: { label: "Declined", cls: "bg-red-500/15 text-red-500" },
+  CANCELLED: { label: "Cancelled", cls: "surface-2 text-muted" },
+};
+function ReservationsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
+  const [list, setList] = useState<Reservation[] | null>(null);
+  const reload = () => ownerApi.get<Reservation[]>(`/api/owner/businesses/${biz.id}/reservations`).then(setList);
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [biz.id]);
+
+  async function setStatus(id: number, status: string) {
+    await ownerApi.patch(`/api/owner/reservations/${id}`, { status });
+    reload();
+  }
+
+  if (!biz.hasReservations) {
+    return (
+      <div className="card p-8 text-center">
+        <p className="font-semibold text-ink">Reservations are turned off.</p>
+        <p className="mt-1 text-muted">Enable “Accepts reservations” so visitors can request a table from your page.</p>
+        <button onClick={() => save({ hasReservations: true }).then(reload)} className="btn btn-primary mt-4 px-5 py-2.5">Enable reservations</button>
+      </div>
+    );
+  }
+
+  const pending = (list ?? []).filter((r) => r.status === "PENDING").length;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">Booking requests for {biz.name}.{pending > 0 ? ` ${pending} awaiting your response.` : ""} Confirm or decline — then call the guest to finalise.</p>
+      {list?.length === 0 && <div className="card p-10 text-center text-muted">No bookings yet.</div>}
+      {(list ?? []).map((r) => {
+        const st = RES_STATUS[r.status] ?? RES_STATUS.PENDING;
+        return (
+          <div key={r.id} className="card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-display font-bold text-ink">{r.name} · party of {r.partySize}</p>
+                <p className="text-xs text-muted">📅 {r.date} at {r.time} · <a href={`tel:${r.phone}`} className="text-brand">{r.phone}</a>{r.email ? ` · ${r.email}` : ""}</p>
+              </div>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>
+            </div>
+            {r.note && <p className="mt-1 text-xs text-muted">📝 {r.note}</p>}
+            {r.status === "PENDING" && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => setStatus(r.id, "CONFIRMED")} className="btn btn-primary px-4 py-2 text-sm">Confirm</button>
+                <button onClick={() => setStatus(r.id, "DECLINED")} className="btn btn-ghost px-4 py-2 text-sm text-red-500">Decline</button>
+              </div>
+            )}
+            {r.status === "CONFIRMED" && (
+              <button onClick={() => setStatus(r.id, "CANCELLED")} className="btn btn-ghost mt-3 px-4 py-2 text-sm text-red-500">Cancel booking</button>
             )}
           </div>
         );

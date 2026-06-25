@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
+import { notifyAdmins } from "../lib/notify";
 import { outBusiness, outCard } from "../lib/serialize";
 
 // Cities, categories, events, offers, reviews, and the homepage aggregate.
@@ -82,6 +83,36 @@ reviewsRouter.post("/", optionalUser, async (req, res) => {
   if (!business) return res.status(404).json({ error: "Business not found." });
   await prisma.review.create({ data: { businessId, rating, authorName, comment, status: "PENDING", userId: req.userId ?? null } });
   res.status(201).json({ ok: true, message: "Thanks! Your review will appear once approved." });
+});
+
+export const reservationsRouter = Router();
+// POST /api/reservations — visitor requests a table/booking; owner confirms later.
+reservationsRouter.post("/", optionalUser, async (req, res) => {
+  const businessId = Number(req.body.businessId);
+  const name = String(req.body.name ?? "").trim().slice(0, 80);
+  const phone = String(req.body.phone ?? "").trim().slice(0, 40);
+  const email = String(req.body.email ?? "").trim().slice(0, 120);
+  const partySize = Math.max(1, Math.min(30, Math.round(Number(req.body.partySize) || 0)));
+  const date = String(req.body.date ?? "").trim().slice(0, 20);
+  const time = String(req.body.time ?? "").trim().slice(0, 10);
+  const note = String(req.body.note ?? "").trim().slice(0, 500);
+  if (!businessId || !name || !phone || !partySize || !date || !time) {
+    return res.status(400).json({ error: "Name, phone, party size, date and time are required." });
+  }
+  const business = await prisma.business.findUnique({ where: { id: businessId } });
+  if (!business || !business.isPublished) return res.status(404).json({ error: "Business not found." });
+  if (!business.hasReservations) return res.status(400).json({ error: "This business doesn't take reservations." });
+
+  const reservation = await prisma.reservation.create({
+    data: { businessId, name, phone, email, partySize, date, time, note, userId: req.userId ?? null },
+  });
+  await notifyAdmins({
+    kind: "RESERVATION",
+    title: `New booking request: ${business.name}`,
+    body: `${name} · party of ${partySize} · ${date} ${time}${note ? ` · "${note}"` : ""} · ${phone}`,
+    link: "/admin/businesses",
+  });
+  res.status(201).json({ ok: true, reservation, message: "Request sent! The venue will confirm your booking shortly." });
 });
 
 // GET /api/home?city=aley — everything the homepage needs in one call.

@@ -118,6 +118,7 @@ model Business {
   favorites      Favorite[]
   businessOrders BusinessOrder[]
   claims         BusinessClaim[]
+  reservations   Reservation[]
 }
 
 // A business owner account (manages one or more businesses from a dashboard).
@@ -170,6 +171,26 @@ model User {
   createdAt    DateTime @default(now())
   reviews      Review[]
   favorites    Favorite[]
+  reservations Reservation[]
+}
+
+// A table/booking request a visitor makes to a business. The owner confirms or
+// declines it from their dashboard.
+model Reservation {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name       String
+  phone      String
+  email      String   @default("")
+  partySize  Int      @default(2)
+  date       String // "2026-07-01"
+  time       String // "20:00"
+  note       String   @default("")
+  status     String   @default("PENDING") // PENDING | CONFIRMED | DECLINED | CANCELLED
+  createdAt  DateTime @default(now())
 }
 
 model Favorite {

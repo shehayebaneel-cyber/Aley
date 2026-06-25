@@ -200,9 +200,9 @@ export function Layout() {
           <div>
             <h4 className="text-sm font-bold text-ink">Coming soon</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted">
-              <li>Beirut · Byblos · Batroun</li>
-              <li>Online ordering & booking</li>
-              <li>Jobs & community</li>
+              <li>More cities: Beirut · Byblos · Batroun</li>
+              <li>Jobs & classifieds</li>
+              <li>Loyalty & rewards</li>
             </ul>
             {contact.instagram && (
               <a href={`https://instagram.com/${contact.instagram}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-muted hover:text-brand">

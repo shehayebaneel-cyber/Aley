@@ -20,12 +20,14 @@ businessesRouter.get("/", async (req, res) => {
   if (q.priceMax) where.priceRange = { lte: Number(q.priceMax) };
   if (q.minRating) where.rating = { gte: Number(q.minRating) };
   if (q.q) {
+    const c = { contains: q.q, mode: "insensitive" as const };
     where.OR = [
-      { name: { contains: q.q } },
-      { tagline: { contains: q.q } },
-      { description: { contains: q.q } },
-      { tags: { contains: q.q } },
-      { category: { is: { name: { contains: q.q } } } },
+      { name: c },
+      { tagline: c },
+      { description: c },
+      { tags: c },
+      { products: c }, // menu items / dishes / services (JSON text)
+      { category: { is: { name: c } } },
     ];
   }
 

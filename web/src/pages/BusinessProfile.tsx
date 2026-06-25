@@ -5,12 +5,14 @@ import { FavoriteButton } from "../components/FavoriteButton";
 import { Stars } from "../components/Stars";
 import { useCart } from "../context/CartContext";
 import {
-  CalendarIcon, CheckIcon, ClockIcon, FacebookIcon, GlobeIcon, InstagramIcon,
+  CalendarIcon, CheckIcon, ClockIcon, CloseIcon, FacebookIcon, GlobeIcon, InstagramIcon,
   MapPinIcon, PhoneIcon, StarIcon, TagIcon, VerifiedIcon, WhatsAppIcon,
 } from "../components/icons";
+import { useUserAuth } from "../context/UserAuthContext";
 import { api, dayName, formatEventDate, PRICE, timeAgo } from "../lib/api";
 import { mapsLinkFromCoords, mapsLinkFromText } from "../lib/maps";
 import { useFetch } from "../lib/useFetch";
+import { useTitle } from "../lib/useTitle";
 import type { Business } from "../types";
 
 export function BusinessProfile() {
@@ -20,6 +22,8 @@ export function BusinessProfile() {
   const { data: related } = useFetch<Business[]>(slug ? `/api/businesses/${slug}/related` : null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
+  const [booking, setBooking] = useState(false);
+  useTitle(b?.name);
 
   if (loading) return <div className="mx-auto max-w-5xl px-4 py-16"><div className="card h-96 animate-pulse" /></div>;
   if (error || !b)
@@ -64,6 +68,7 @@ export function BusinessProfile() {
             <FavoriteButton businessId={b.id} className="!h-11 !w-11 border border-border !bg-surface" />
             {b.phone && <a href={`tel:${b.phone}`} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
             {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
+            {b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
             <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} target="_blank" rel="noreferrer" className="btn btn-primary px-4 py-2.5"><MapPinIcon className="h-4 w-4" /> Directions</a>
           </div>
         </div>
@@ -251,9 +256,15 @@ export function BusinessProfile() {
       <div className="h-20 sm:hidden" />
       <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-border bg-surface/95 p-3 backdrop-blur sm:hidden">
         {b.phone && <a href={`tel:${b.phone}`} className="btn btn-ghost flex-1 py-2.5 text-sm"><PhoneIcon className="h-4 w-4" /> Call</a>}
-        {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn flex-1 bg-emerald-500 py-2.5 text-sm text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
+        {b.hasReservations ? (
+          <button onClick={() => setBooking(true)} className="btn flex-1 bg-accent py-2.5 text-sm text-white"><CalendarIcon className="h-4 w-4" /> Book</button>
+        ) : wa ? (
+          <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn flex-1 bg-emerald-500 py-2.5 text-sm text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>
+        ) : null}
         <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} target="_blank" rel="noreferrer" className="btn btn-primary flex-1 py-2.5 text-sm"><MapPinIcon className="h-4 w-4" /> Directions</a>
       </div>
+
+      {booking && <BookingModal businessId={b.id} businessName={b.name} onClose={() => setBooking(false)} />}
 
       {/* Lightbox */}
       {lightbox && (
@@ -341,5 +352,79 @@ function Reviews({ business }: { business: Business }) {
         )}
       </div>
     </section>
+  );
+}
+
+function BookingModal({ businessId, businessName, onClose }: { businessId: number; businessName: string; onClose: () => void }) {
+  const { user } = useUserAuth();
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    name: user?.name ?? "",
+    phone: "",
+    email: user?.email ?? "",
+    partySize: 2,
+    date: today,
+    time: "20:00",
+    note: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState("");
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await api.post("/api/reservations", { businessId, ...form });
+      setDone(true);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Couldn't send the request.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+      <div className="card pop-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-xl font-extrabold text-ink">Book a table</h2>
+          <button onClick={onClose} aria-label="Close" className="text-muted hover:text-ink"><CloseIcon /></button>
+        </div>
+
+        {done ? (
+          <div className="mt-5 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"><CheckIcon className="h-7 w-7" /></span>
+            <p className="mt-3 font-display text-lg font-bold text-ink">Request sent!</p>
+            <p className="mt-1 text-muted">{businessName} will confirm your booking shortly{form.phone ? ` on ${form.phone}` : ""}.</p>
+            <button onClick={onClose} className="btn btn-primary mt-5 px-6 py-2.5">Done</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="mt-4 space-y-3">
+            <p className="text-sm text-muted">Request a table at <span className="font-semibold text-ink">{businessName}</span>. They'll confirm by phone.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm font-semibold text-ink">Date
+                <input type="date" required min={today} value={form.date} onChange={(e) => set({ date: e.target.value })} className="input mt-1" />
+              </label>
+              <label className="text-sm font-semibold text-ink">Time
+                <input type="time" required value={form.time} onChange={(e) => set({ time: e.target.value })} className="input mt-1" />
+              </label>
+            </div>
+            <label className="text-sm font-semibold text-ink">Party size
+              <input type="number" required min={1} max={30} value={form.partySize} onChange={(e) => set({ partySize: Number(e.target.value) })} className="input mt-1" />
+            </label>
+            <input required value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your name" className="input" />
+            <input required value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="Phone number" className="input" />
+            <input value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="Email (optional)" className="input" />
+            <textarea value={form.note} onChange={(e) => set({ note: e.target.value })} rows={2} placeholder="Any requests? (high chair, window seat…)" className="input" />
+            {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
+            <button type="submit" disabled={busy} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Sending…" : "Request booking"}</button>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }

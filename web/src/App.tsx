@@ -44,10 +44,35 @@ function ScrollToTop() {
   return null;
 }
 
+// Per-route browser/SEO title for static pages. Dynamic pages (business, project,
+// order) set their own title via useTitle once their data loads.
+const TITLES: Record<string, string> = {
+  "/explore": "Explore Aley",
+  "/events": "Events in Aley",
+  "/offers": "Offers & deals",
+  "/projects": "Community Projects",
+  "/map": "Map of Aley",
+  "/about": "About",
+  "/contact": "Contact",
+  "/cart": "Your cart",
+  "/checkout": "Checkout",
+  "/orders": "My orders",
+  "/saved": "Saved places",
+};
+function TitleManager() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (pathname === "/") document.title = "Aley — your city, online";
+    else if (TITLES[pathname]) document.title = `${TITLES[pathname]} · Aley`;
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <>
       <ScrollToTop />
+      <TitleManager />
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />

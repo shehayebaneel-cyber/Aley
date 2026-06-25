@@ -6,6 +6,7 @@ import type { AdminNotification } from "../../types";
 const KIND_ICON: Record<string, string> = {
   BUSINESS_SUBMITTED: "🏪",
   BUSINESS_CLAIM: "🤝",
+  RESERVATION: "📅",
 };
 
 function timeAgo(iso: string) {
