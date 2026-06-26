@@ -28,6 +28,7 @@ const tokenStore = (key: string) => ({
 const ownerStore = tokenStore("aley-owner-token");
 const userStore = tokenStore("aley-user-token");
 const adminStore = tokenStore("aley-admin-token");
+const driverStore = tokenStore("aley-driver-token");
 
 export const getOwnerToken = ownerStore.get;
 export const setOwnerToken = ownerStore.set;
@@ -35,6 +36,8 @@ export const getUserToken = userStore.get;
 export const setUserToken = userStore.set;
 export const getAdminToken = adminStore.get;
 export const setAdminToken = adminStore.set;
+export const getDriverToken = driverStore.get;
+export const setDriverToken = driverStore.set;
 
 function makeRequest(tokenGetter?: () => string | null) {
   return async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -76,6 +79,7 @@ export const api = makeApi();
 export const ownerApi = makeApi(getOwnerToken);
 export const userApi = makeApi(getUserToken);
 export const adminApi = makeApi(getAdminToken);
+export const driverApi = makeApi(getDriverToken);
 
 export const PRICE = (n: number) => "$".repeat(Math.max(1, Math.min(4, n)));
 export const currency = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -94,6 +98,25 @@ export const DELIVERY_STATUS: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Cancelled", cls: "bg-rose-400/20 text-rose-500" },
 };
 export const DELIVERY_STEPS = ["PENDING", "COLLECTING", "OUT_FOR_DELIVERY", "DELIVERED"];
+
+// Courier delivery service statuses.
+export const DELIVERY_REQUEST_STATUS: Record<string, { label: string; cls: string }> = {
+  REQUESTED: { label: "Request received", cls: "bg-slate-400/20 text-slate-500" },
+  ACCEPTED: { label: "Accepted", cls: "bg-sky-400/20 text-sky-600" },
+  HEADING_TO_PICKUP: { label: "Heading to pickup", cls: "bg-amber-400/20 text-amber-600" },
+  PICKED_UP: { label: "Picked up", cls: "bg-indigo-400/20 text-indigo-600" },
+  ON_THE_WAY: { label: "On the way to you", cls: "bg-brand/20 text-brand-dark" },
+  DELIVERED: { label: "Delivered", cls: "bg-emerald-500/20 text-emerald-600" },
+  CANCELLED: { label: "Cancelled", cls: "bg-rose-400/20 text-rose-500" },
+  REJECTED: { label: "Rejected", cls: "bg-rose-400/20 text-rose-500" },
+};
+export const DELIVERY_REQUEST_STEPS = ["REQUESTED", "ACCEPTED", "HEADING_TO_PICKUP", "PICKED_UP", "ON_THE_WAY", "DELIVERED"];
+export const DELIVERY_TYPE_LABEL: Record<string, string> = {
+  ALEY_TO_ALEY: "Aley → Aley",
+  OUTSIDE_TO_ALEY: "Outside → Aley",
+  ALEY_TO_OUTSIDE: "Aley → Outside",
+  CUSTOM: "Custom route",
+};
 
 export const PROJECT_STATUS: Record<string, { label: string; cls: string }> = {
   PROPOSED: { label: "Proposed", cls: "bg-slate-400/20 text-slate-500" },

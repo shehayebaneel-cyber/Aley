@@ -23,79 +23,212 @@ export interface BizSeed {
   reviews: ReviewSeed[]; offer?: OfferSeed; event?: EventSeed;
 }
 
-export const CATEGORIES: { slug: string; name: string; icon: string; color: string }[] = [
-  { slug: "coffee-shops", name: "Coffee Shops", icon: "☕", color: "#b45309" },
-  { slug: "restaurants", name: "Restaurants", icon: "🍽️", color: "#dc2626" },
-  { slug: "fast-food", name: "Fast Food", icon: "🍔", color: "#ea580c" },
-  { slug: "pizza", name: "Pizza", icon: "🍕", color: "#e11d48" },
-  { slug: "shawarma", name: "Shawarma", icon: "🌯", color: "#b91c1c" },
-  { slug: "sushi", name: "Sushi", icon: "🍣", color: "#db2777" },
-  { slug: "lebanese", name: "Lebanese Restaurants", icon: "🫓", color: "#c2410c" },
-  { slug: "bakeries", name: "Bakeries", icon: "🥐", color: "#d97706" },
-  { slug: "roasteries", name: "Roasteries & Nuts", icon: "🥜", color: "#92400e" },
-  { slug: "sweets", name: "Sweets & Candy", icon: "🍬", color: "#db2777" },
-  { slug: "desserts", name: "Desserts", icon: "🍰", color: "#e11d48" },
-  { slug: "ice-cream", name: "Ice Cream", icon: "🍦", color: "#f472b6" },
-  { slug: "juice-bars", name: "Juice Bars", icon: "🥤", color: "#16a34a" },
-  { slug: "hotels", name: "Hotels & Resorts", icon: "🏨", color: "#0ea5e9" },
-  { slug: "fashion", name: "Fashion", icon: "👗", color: "#db2777" },
-  { slug: "shoe-stores", name: "Shoe Stores", icon: "👟", color: "#7c3aed" },
-  { slug: "accessories", name: "Accessories", icon: "👜", color: "#a855f7" },
-  { slug: "sports-stores", name: "Sports Stores", icon: "🏀", color: "#ea580c" },
-  { slug: "jewelry", name: "Jewelry", icon: "💍", color: "#a855f7" },
-  { slug: "beauty-salons", name: "Beauty Salons", icon: "💅", color: "#ec4899" },
-  { slug: "barbers", name: "Barbers", icon: "💈", color: "#0ea5e9" },
-  { slug: "opticians", name: "Opticians", icon: "👓", color: "#0891b2" },
-  { slug: "pharmacies", name: "Pharmacies", icon: "💊", color: "#059669" },
-  { slug: "clinics", name: "Clinics", icon: "🩺", color: "#0d9488" },
-  { slug: "dentists", name: "Dentists", icon: "🦷", color: "#0284c7" },
-  { slug: "medical-labs", name: "Medical Labs", icon: "🧪", color: "#0e7490" },
-  { slug: "veterinary", name: "Veterinary Clinics", icon: "🐾", color: "#16a34a" },
-  { slug: "gyms", name: "Gyms", icon: "🏋️", color: "#ea580c" },
-  { slug: "supermarkets", name: "Supermarkets", icon: "🛒", color: "#16a34a" },
-  { slug: "electronics", name: "Electronics", icon: "📱", color: "#2563eb" },
-  { slug: "mobile-shops", name: "Mobile Shops", icon: "📲", color: "#1d4ed8" },
-  { slug: "furniture", name: "Furniture", icon: "🛋️", color: "#854d0e" },
-  { slug: "home-decor", name: "Home Decor", icon: "🪴", color: "#15803d" },
-  { slug: "hardware-stores", name: "Hardware Stores", icon: "🔩", color: "#57534e" },
-  { slug: "florists", name: "Florists", icon: "🌸", color: "#ec4899" },
-  { slug: "bookstores", name: "Bookstores", icon: "📚", color: "#7c3aed" },
-  { slug: "gift-shops", name: "Gift Shops", icon: "🎁", color: "#db2777" },
-  { slug: "pet-shops", name: "Pet Shops", icon: "🐶", color: "#d97706" },
-  { slug: "car-washes", name: "Car Washes", icon: "🚿", color: "#0ea5e9" },
-  { slug: "mechanics", name: "Mechanics", icon: "🔧", color: "#57534e" },
-  { slug: "tire-shops", name: "Tire Shops", icon: "🛞", color: "#404040" },
-  { slug: "gas-stations", name: "Gas Stations", icon: "⛽", color: "#dc2626" },
-  { slug: "real-estate", name: "Real Estate", icon: "🏠", color: "#0891b2" },
-  { slug: "banks", name: "Banks", icon: "🏦", color: "#1d4ed8" },
-  { slug: "insurance", name: "Insurance", icon: "🛡️", color: "#0369a1" },
-  { slug: "schools", name: "Schools", icon: "🎓", color: "#7c3aed" },
-  { slug: "daycare", name: "Daycare", icon: "🧸", color: "#f59e0b" },
-  { slug: "travel-agencies", name: "Travel Agencies", icon: "✈️", color: "#0284c7" },
-  { slug: "photography", name: "Photography Studios", icon: "📷", color: "#9333ea" },
-  { slug: "printing-shops", name: "Printing & Design", icon: "🖨️", color: "#4f46e5" },
-  { slug: "interior-designers", name: "Interior Designers", icon: "🎨", color: "#be185d" },
-  { slug: "construction", name: "Construction", icon: "🏗️", color: "#a16207" },
-  { slug: "lawyers", name: "Lawyers & Notaries", icon: "⚖️", color: "#1e40af" },
-  { slug: "accounting", name: "Accounting", icon: "🧾", color: "#0f766e" },
-  { slug: "cleaning", name: "Cleaning Services", icon: "🧼", color: "#0ea5e9" },
-  { slug: "electricians", name: "Electricians", icon: "⚡", color: "#ca8a04" },
-  { slug: "plumbers", name: "Plumbers", icon: "🚰", color: "#0891b2" },
-  { slug: "taxi", name: "Taxi Services", icon: "🚕", color: "#f59e0b" },
+// ---- Single source of truth for the whole taxonomy ----
+// Each category carries its high-level GROUP, its "kind" (drives products /
+// descriptions / amenities / photos) and a target count of generated demo
+// businesses. CATEGORIES / CATEGORY_GROUPS / GROUP_OF / KIND / COUNTS are all
+// derived from this so the taxonomy can never drift out of sync.
+// "kind" drives products, descriptions, amenities and photo pools.
+type Kind = "cafe" | "restaurant" | "roastery" | "sweets" | "bakery" | "icecream" | "juice" | "hotel" | "fashion" | "jewelry" | "shop" | "service" | "health" | "auto" | "edu";
+export interface CatDef { slug: string; name: string; icon: string; color: string; group: string; kind: Kind; count: number }
+export const CATS: CatDef[] = [
+  // 🍴 Food & Drinks
+  { slug: "coffee-shops", name: "Coffee Shops", icon: "☕", color: "#b45309", group: "Food & Drinks", kind: "cafe", count: 12 },
+  { slug: "restaurants", name: "Restaurants", icon: "🍽️", color: "#dc2626", group: "Food & Drinks", kind: "restaurant", count: 16 },
+  { slug: "lebanese", name: "Lebanese Restaurants", icon: "🫓", color: "#c2410c", group: "Food & Drinks", kind: "restaurant", count: 7 },
+  { slug: "fast-food", name: "Fast Food", icon: "🍔", color: "#ea580c", group: "Food & Drinks", kind: "restaurant", count: 8 },
+  { slug: "burgers", name: "Burgers", icon: "🍔", color: "#f97316", group: "Food & Drinks", kind: "restaurant", count: 5 },
+  { slug: "pizza", name: "Pizza", icon: "🍕", color: "#e11d48", group: "Food & Drinks", kind: "restaurant", count: 5 },
+  { slug: "shawarma", name: "Shawarma", icon: "🌯", color: "#b91c1c", group: "Food & Drinks", kind: "restaurant", count: 6 },
+  { slug: "sushi", name: "Sushi", icon: "🍣", color: "#db2777", group: "Food & Drinks", kind: "restaurant", count: 4 },
+  { slug: "breakfast-brunch", name: "Breakfast & Brunch", icon: "🍳", color: "#f59e0b", group: "Food & Drinks", kind: "cafe", count: 4 },
+  { slug: "bakeries", name: "Bakeries", icon: "🥐", color: "#d97706", group: "Food & Drinks", kind: "bakery", count: 7 },
+  { slug: "pastry-shops", name: "Pastry Shops", icon: "🧁", color: "#e11d48", group: "Food & Drinks", kind: "bakery", count: 4 },
+  { slug: "roasteries", name: "Roasteries & Nuts", icon: "🥜", color: "#92400e", group: "Food & Drinks", kind: "roastery", count: 4 },
+  { slug: "sweets", name: "Sweets & Chocolate", icon: "🍬", color: "#db2777", group: "Food & Drinks", kind: "sweets", count: 6 },
+  { slug: "desserts", name: "Desserts", icon: "🍰", color: "#e11d48", group: "Food & Drinks", kind: "sweets", count: 5 },
+  { slug: "ice-cream", name: "Ice Cream", icon: "🍦", color: "#f472b6", group: "Food & Drinks", kind: "icecream", count: 4 },
+  { slug: "juice-bars", name: "Juice Bars", icon: "🥤", color: "#16a34a", group: "Food & Drinks", kind: "juice", count: 5 },
+  { slug: "bubble-tea", name: "Bubble Tea", icon: "🧋", color: "#7c3aed", group: "Food & Drinks", kind: "juice", count: 3 },
+  { slug: "catering", name: "Catering", icon: "🍱", color: "#c2410c", group: "Food & Drinks", kind: "restaurant", count: 4 },
+  { slug: "butcher-shops", name: "Butcher Shops", icon: "🥩", color: "#b91c1c", group: "Food & Drinks", kind: "shop", count: 3 },
+  { slug: "fish-markets", name: "Fish Markets", icon: "🐟", color: "#0891b2", group: "Food & Drinks", kind: "shop", count: 3 },
+  { slug: "organic-food", name: "Organic Food", icon: "🥬", color: "#16a34a", group: "Food & Drinks", kind: "shop", count: 3 },
+  { slug: "wine-spirits", name: "Wine & Spirits", icon: "🍷", color: "#7e22ce", group: "Food & Drinks", kind: "shop", count: 3 },
+
+  // 🛍 Shopping
+  { slug: "fashion", name: "Fashion", icon: "👗", color: "#db2777", group: "Shopping", kind: "fashion", count: 10 },
+  { slug: "womens-fashion", name: "Women's Fashion", icon: "👚", color: "#db2777", group: "Shopping", kind: "fashion", count: 5 },
+  { slug: "mens-fashion", name: "Men's Fashion", icon: "👔", color: "#1e40af", group: "Shopping", kind: "fashion", count: 5 },
+  { slug: "childrens-clothing", name: "Children's Clothing", icon: "🧒", color: "#f59e0b", group: "Shopping", kind: "fashion", count: 4 },
+  { slug: "shoe-stores", name: "Shoes", icon: "👟", color: "#7c3aed", group: "Shopping", kind: "fashion", count: 5 },
+  { slug: "accessories", name: "Bags & Accessories", icon: "👜", color: "#a855f7", group: "Shopping", kind: "fashion", count: 4 },
+  { slug: "jewelry", name: "Jewelry & Watches", icon: "💍", color: "#a855f7", group: "Shopping", kind: "jewelry", count: 6 },
+  { slug: "cosmetics-perfumes", name: "Cosmetics & Perfumes", icon: "💄", color: "#ec4899", group: "Shopping", kind: "shop", count: 5 },
+  { slug: "supermarkets", name: "Supermarkets", icon: "🛒", color: "#16a34a", group: "Shopping", kind: "shop", count: 7 },
+  { slug: "convenience-stores", name: "Convenience Stores", icon: "🏪", color: "#16a34a", group: "Shopping", kind: "shop", count: 4 },
+  { slug: "electronics", name: "Electronics", icon: "📱", color: "#2563eb", group: "Shopping", kind: "shop", count: 6 },
+  { slug: "mobile-shops", name: "Mobile Shops", icon: "📲", color: "#1d4ed8", group: "Shopping", kind: "shop", count: 6 },
+  { slug: "computer-stores", name: "Computer Stores", icon: "💻", color: "#2563eb", group: "Shopping", kind: "shop", count: 4 },
+  { slug: "gaming-stores", name: "Gaming Stores", icon: "🎮", color: "#7c3aed", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "home-appliances", name: "Home Appliances", icon: "🔌", color: "#0ea5e9", group: "Shopping", kind: "shop", count: 4 },
+  { slug: "furniture", name: "Furniture", icon: "🛋️", color: "#854d0e", group: "Shopping", kind: "shop", count: 5 },
+  { slug: "home-decor", name: "Home Decor", icon: "🪴", color: "#15803d", group: "Shopping", kind: "shop", count: 4 },
+  { slug: "kitchen-supplies", name: "Kitchen Supplies", icon: "🍴", color: "#b45309", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "hardware-stores", name: "Hardware", icon: "🔩", color: "#57534e", group: "Shopping", kind: "shop", count: 5 },
+  { slug: "florists", name: "Florists", icon: "🌸", color: "#ec4899", group: "Shopping", kind: "shop", count: 4 },
+  { slug: "gift-shops", name: "Gift Shops", icon: "🎁", color: "#db2777", group: "Shopping", kind: "shop", count: 4 },
+  { slug: "bookstores", name: "Bookstores", icon: "📚", color: "#7c3aed", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "stationery", name: "Stationery", icon: "✏️", color: "#4f46e5", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "toy-stores", name: "Toy Stores", icon: "🧸", color: "#f59e0b", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "pet-shops", name: "Pet Shops", icon: "🐶", color: "#d97706", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "tobacco-vape", name: "Tobacco & Vape", icon: "🚬", color: "#57534e", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "art-supplies", name: "Art Supplies", icon: "🖌️", color: "#be185d", group: "Shopping", kind: "shop", count: 3 },
+  { slug: "sports-stores", name: "Sports Stores", icon: "🏀", color: "#ea580c", group: "Shopping", kind: "shop", count: 4 },
+
+  // 💄 Health & Beauty
+  { slug: "beauty-salons", name: "Beauty Salons", icon: "💇", color: "#ec4899", group: "Health & Beauty", kind: "service", count: 10 },
+  { slug: "barbers", name: "Barbers", icon: "💈", color: "#0ea5e9", group: "Health & Beauty", kind: "service", count: 8 },
+  { slug: "spas", name: "Spas", icon: "🧖", color: "#ec4899", group: "Health & Beauty", kind: "service", count: 4 },
+  { slug: "nail-salons", name: "Nail Salons", icon: "💅", color: "#db2777", group: "Health & Beauty", kind: "service", count: 4 },
+  { slug: "makeup-artists", name: "Makeup Artists", icon: "💋", color: "#db2777", group: "Health & Beauty", kind: "service", count: 3 },
+  { slug: "skincare-clinics", name: "Skincare Clinics", icon: "✨", color: "#14b8a6", group: "Health & Beauty", kind: "health", count: 3 },
+  { slug: "pharmacies", name: "Pharmacies", icon: "💊", color: "#059669", group: "Health & Beauty", kind: "shop", count: 8 },
+  { slug: "clinics", name: "Clinics", icon: "🩺", color: "#0d9488", group: "Health & Beauty", kind: "health", count: 7 },
+  { slug: "dentists", name: "Dentists", icon: "🦷", color: "#0284c7", group: "Health & Beauty", kind: "health", count: 6 },
+  { slug: "medical-centers", name: "Medical Centers", icon: "🏥", color: "#0d9488", group: "Health & Beauty", kind: "health", count: 4 },
+  { slug: "medical-labs", name: "Medical Laboratories", icon: "🧪", color: "#0e7490", group: "Health & Beauty", kind: "health", count: 4 },
+  { slug: "physiotherapy", name: "Physiotherapy", icon: "🤸", color: "#0e7490", group: "Health & Beauty", kind: "health", count: 3 },
+  { slug: "nutritionists", name: "Nutritionists", icon: "🥗", color: "#16a34a", group: "Health & Beauty", kind: "health", count: 3 },
+  { slug: "psychologists", name: "Psychologists", icon: "🧠", color: "#7c3aed", group: "Health & Beauty", kind: "health", count: 3 },
+  { slug: "gyms", name: "Gyms", icon: "🏋️", color: "#ea580c", group: "Health & Beauty", kind: "service", count: 5 },
+  { slug: "yoga-pilates", name: "Yoga & Pilates", icon: "🧘", color: "#14b8a6", group: "Health & Beauty", kind: "service", count: 3 },
+  { slug: "personal-trainers", name: "Personal Trainers", icon: "💪", color: "#ea580c", group: "Health & Beauty", kind: "service", count: 3 },
+  { slug: "veterinary", name: "Veterinary Clinics", icon: "🐾", color: "#16a34a", group: "Health & Beauty", kind: "health", count: 3 },
+  { slug: "opticians", name: "Optical Stores", icon: "👓", color: "#0891b2", group: "Health & Beauty", kind: "shop", count: 4 },
+
+  // 🚗 Automotive
+  { slug: "mechanics", name: "Mechanics", icon: "🔧", color: "#57534e", group: "Automotive", kind: "auto", count: 6 },
+  { slug: "car-washes", name: "Car Washes", icon: "🚿", color: "#0ea5e9", group: "Automotive", kind: "auto", count: 4 },
+  { slug: "tire-shops", name: "Tire Shops", icon: "🛞", color: "#404040", group: "Automotive", kind: "auto", count: 4 },
+  { slug: "battery-shops", name: "Battery Shops", icon: "🔋", color: "#404040", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "auto-parts", name: "Auto Parts", icon: "⚙️", color: "#57534e", group: "Automotive", kind: "auto", count: 4 },
+  { slug: "car-accessories", name: "Car Accessories", icon: "🚗", color: "#2563eb", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "car-detailing", name: "Car Detailing", icon: "🧽", color: "#0ea5e9", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "oil-change", name: "Oil Change", icon: "🛢️", color: "#92400e", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "gas-stations", name: "Fuel Stations", icon: "⛽", color: "#dc2626", group: "Automotive", kind: "auto", count: 4 },
+  { slug: "vehicle-inspection", name: "Vehicle Inspection", icon: "🔍", color: "#57534e", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "car-rentals", name: "Car Rentals", icon: "🚙", color: "#0284c7", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "towing-services", name: "Towing Services", icon: "🚛", color: "#dc2626", group: "Automotive", kind: "auto", count: 3 },
+  { slug: "taxi", name: "Taxi Services", icon: "🚕", color: "#f59e0b", group: "Automotive", kind: "service", count: 4 },
+
+  // 🏠 Home & Living
+  { slug: "construction", name: "Construction", icon: "🏗️", color: "#a16207", group: "Home & Living", kind: "service", count: 4 },
+  { slug: "contractors", name: "Contractors", icon: "👷", color: "#a16207", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "architects", name: "Architects", icon: "📐", color: "#1e40af", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "interior-designers", name: "Interior Designers", icon: "🎨", color: "#be185d", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "flooring", name: "Flooring", icon: "🪵", color: "#854d0e", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "kitchens", name: "Kitchens", icon: "🔪", color: "#b45309", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "curtains-blinds", name: "Curtains & Blinds", icon: "🪟", color: "#854d0e", group: "Home & Living", kind: "shop", count: 3 },
+  { slug: "plumbers", name: "Plumbing", icon: "🚰", color: "#0891b2", group: "Home & Living", kind: "service", count: 4 },
+  { slug: "electricians", name: "Electricians", icon: "⚡", color: "#ca8a04", group: "Home & Living", kind: "service", count: 4 },
+  { slug: "cleaning", name: "Cleaning Services", icon: "🧼", color: "#0ea5e9", group: "Home & Living", kind: "service", count: 4 },
+  { slug: "pest-control", name: "Pest Control", icon: "🐜", color: "#57534e", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "garden-centers", name: "Garden Centers", icon: "🌳", color: "#15803d", group: "Home & Living", kind: "shop", count: 3 },
+  { slug: "landscaping", name: "Landscaping", icon: "🌿", color: "#16a34a", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "swimming-pools", name: "Swimming Pools", icon: "🏊", color: "#0ea5e9", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "security-systems", name: "Security Systems", icon: "🔒", color: "#1e40af", group: "Home & Living", kind: "service", count: 3 },
+
+  // 💼 Professional Services
+  { slug: "real-estate", name: "Real Estate", icon: "🏠", color: "#0891b2", group: "Professional Services", kind: "service", count: 6 },
+  { slug: "banks", name: "Banks", icon: "🏦", color: "#1d4ed8", group: "Professional Services", kind: "service", count: 5 },
+  { slug: "insurance", name: "Insurance", icon: "🛡️", color: "#0369a1", group: "Professional Services", kind: "service", count: 4 },
+  { slug: "lawyers", name: "Lawyers & Notaries", icon: "⚖️", color: "#1e40af", group: "Professional Services", kind: "service", count: 5 },
+  { slug: "accounting", name: "Accounting", icon: "🧾", color: "#0f766e", group: "Professional Services", kind: "service", count: 4 },
+  { slug: "financial-advisors", name: "Financial Advisors", icon: "📈", color: "#0f766e", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "consultants", name: "Consultants", icon: "💼", color: "#1e40af", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "travel-agencies", name: "Travel Agencies", icon: "✈️", color: "#0284c7", group: "Professional Services", kind: "service", count: 4 },
+  { slug: "printing-shops", name: "Printing & Design", icon: "🖨️", color: "#4f46e5", group: "Professional Services", kind: "service", count: 4 },
+  { slug: "marketing-agencies", name: "Marketing Agencies", icon: "📣", color: "#db2777", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "web-design", name: "Web Design", icon: "🌐", color: "#2563eb", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "software-development", name: "Software Development", icon: "🖥️", color: "#4f46e5", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "photography", name: "Photography Studios", icon: "📷", color: "#9333ea", group: "Professional Services", kind: "service", count: 4 },
+  { slug: "videography", name: "Videography", icon: "🎥", color: "#9333ea", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "event-planning", name: "Event Planning", icon: "🎉", color: "#db2777", group: "Professional Services", kind: "service", count: 3 },
+  { slug: "translation-services", name: "Translation Services", icon: "🌍", color: "#0891b2", group: "Professional Services", kind: "service", count: 3 },
+
+  // 🏨 Stay & Tourism
+  { slug: "hotels", name: "Hotels & Resorts", icon: "🏨", color: "#0ea5e9", group: "Stay & Tourism", kind: "hotel", count: 5 },
+  { slug: "guest-houses", name: "Guest Houses", icon: "🏡", color: "#0ea5e9", group: "Stay & Tourism", kind: "hotel", count: 3 },
+  { slug: "apartments", name: "Apartments", icon: "🏢", color: "#0284c7", group: "Stay & Tourism", kind: "hotel", count: 3 },
+  { slug: "resorts", name: "Resorts", icon: "🌴", color: "#16a34a", group: "Stay & Tourism", kind: "hotel", count: 3 },
+  { slug: "airbnb-hosts", name: "Airbnb Hosts", icon: "🛏️", color: "#db2777", group: "Stay & Tourism", kind: "hotel", count: 3 },
+  { slug: "tourist-attractions", name: "Tourist Attractions", icon: "📸", color: "#9333ea", group: "Stay & Tourism", kind: "service", count: 3 },
+  { slug: "hiking-trails", name: "Hiking Trails", icon: "🥾", color: "#15803d", group: "Stay & Tourism", kind: "service", count: 3 },
+  { slug: "parks", name: "Parks", icon: "🏞️", color: "#16a34a", group: "Stay & Tourism", kind: "service", count: 2 },
+  { slug: "historical-sites", name: "Historical Sites", icon: "🏛️", color: "#a16207", group: "Stay & Tourism", kind: "service", count: 3 },
+  { slug: "museums", name: "Museums", icon: "🖼️", color: "#7c3aed", group: "Stay & Tourism", kind: "service", count: 2 },
+  { slug: "camping", name: "Camping", icon: "⛺", color: "#16a34a", group: "Stay & Tourism", kind: "service", count: 3 },
+  { slug: "tour-guides", name: "Tour Guides", icon: "🧭", color: "#0891b2", group: "Stay & Tourism", kind: "service", count: 3 },
+
+  // 🎓 Education
+  { slug: "schools", name: "Schools", icon: "🏫", color: "#7c3aed", group: "Education", kind: "edu", count: 5 },
+  { slug: "universities", name: "Universities", icon: "🎓", color: "#7c3aed", group: "Education", kind: "edu", count: 3 },
+  { slug: "daycare", name: "Daycare", icon: "🧸", color: "#f59e0b", group: "Education", kind: "edu", count: 4 },
+  { slug: "nurseries", name: "Nurseries", icon: "🍼", color: "#f59e0b", group: "Education", kind: "edu", count: 3 },
+  { slug: "tutors", name: "Tutors", icon: "📖", color: "#4f46e5", group: "Education", kind: "edu", count: 3 },
+  { slug: "language-centers", name: "Language Centers", icon: "🗣️", color: "#0891b2", group: "Education", kind: "edu", count: 3 },
+  { slug: "music-schools", name: "Music Schools", icon: "🎵", color: "#db2777", group: "Education", kind: "edu", count: 3 },
+  { slug: "dance-schools", name: "Dance Schools", icon: "💃", color: "#ec4899", group: "Education", kind: "edu", count: 3 },
+  { slug: "driving-schools", name: "Driving Schools", icon: "🚸", color: "#f59e0b", group: "Education", kind: "edu", count: 3 },
+  { slug: "training-centers", name: "Training Centers", icon: "📋", color: "#0f766e", group: "Education", kind: "edu", count: 3 },
+
+  // 🎭 Entertainment
+  { slug: "cinemas", name: "Cinemas", icon: "🎬", color: "#1e40af", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "escape-rooms", name: "Escape Rooms", icon: "🗝️", color: "#7c3aed", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "bowling", name: "Bowling", icon: "🎳", color: "#2563eb", group: "Entertainment", kind: "service", count: 2 },
+  { slug: "kids-play-areas", name: "Kids Play Areas", icon: "🎠", color: "#f59e0b", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "gaming-lounges", name: "Gaming Lounges", icon: "🕹️", color: "#7c3aed", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "pool-billiards", name: "Pool & Billiards", icon: "🎱", color: "#404040", group: "Entertainment", kind: "service", count: 2 },
+  { slug: "sports-clubs", name: "Sports Clubs", icon: "⚽", color: "#16a34a", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "event-venues", name: "Event Venues", icon: "🎪", color: "#db2777", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "wedding-venues", name: "Wedding Venues", icon: "💒", color: "#ec4899", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "nightlife", name: "Nightlife", icon: "🍸", color: "#7e22ce", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "live-music", name: "Live Music", icon: "🎤", color: "#db2777", group: "Entertainment", kind: "service", count: 3 },
+
+  // 📢 Community
+  { slug: "charity-organizations", name: "Charity Organizations", icon: "🤝", color: "#16a34a", group: "Community", kind: "service", count: 3 },
+  { slug: "volunteer", name: "Volunteer Opportunities", icon: "🙌", color: "#0d9488", group: "Community", kind: "service", count: 2 },
+  { slug: "community-centers", name: "Community Centers", icon: "🏘️", color: "#0891b2", group: "Community", kind: "service", count: 2 },
+  { slug: "cultural-associations", name: "Cultural Associations", icon: "🎭", color: "#7c3aed", group: "Community", kind: "service", count: 2 },
+
+  // 🚨 Essential Services (civic — populated from real listings only)
+  { slug: "hospitals", name: "Hospitals", icon: "🏥", color: "#dc2626", group: "Essential Services", kind: "health", count: 0 },
+  { slug: "emergency-clinics", name: "Emergency Clinics", icon: "🩹", color: "#dc2626", group: "Essential Services", kind: "health", count: 0 },
+  { slug: "ambulance", name: "Ambulance", icon: "🚑", color: "#dc2626", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "police", name: "Police", icon: "👮", color: "#1e40af", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "civil-defense", name: "Civil Defense", icon: "🚨", color: "#ea580c", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "fire-department", name: "Fire Department", icon: "🚒", color: "#dc2626", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "government-offices", name: "Government Offices", icon: "🏛️", color: "#57534e", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "municipality", name: "Municipality", icon: "🏛️", color: "#0f766e", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "utilities", name: "Utilities", icon: "💡", color: "#ca8a04", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "postal-services", name: "Postal Services", icon: "📮", color: "#dc2626", group: "Essential Services", kind: "service", count: 0 },
 ];
 
-// Main groups (ordered) and which categories belong to each.
-export const CATEGORY_GROUPS: { group: string; slugs: string[] }[] = [
-  { group: "Food & Drinks", slugs: ["restaurants", "lebanese", "fast-food", "pizza", "shawarma", "sushi", "coffee-shops", "bakeries", "roasteries", "sweets", "desserts", "ice-cream", "juice-bars"] },
-  { group: "Shopping", slugs: ["fashion", "shoe-stores", "accessories", "jewelry", "sports-stores", "electronics", "mobile-shops", "furniture", "home-decor", "hardware-stores", "florists", "bookstores", "gift-shops", "pet-shops", "supermarkets", "opticians"] },
-  { group: "Health & Beauty", slugs: ["beauty-salons", "barbers", "gyms", "pharmacies", "clinics", "dentists", "medical-labs", "veterinary"] },
-  { group: "Home & Auto", slugs: ["car-washes", "mechanics", "tire-shops", "gas-stations", "cleaning", "electricians", "plumbers", "construction", "interior-designers"] },
-  { group: "Services", slugs: ["real-estate", "banks", "insurance", "lawyers", "accounting", "printing-shops", "photography", "travel-agencies", "taxi"] },
-  { group: "Stay & Learn", slugs: ["hotels", "schools", "daycare"] },
-];
-export const GROUP_OF: Record<string, string> = Object.fromEntries(
-  CATEGORY_GROUPS.flatMap((g) => g.slugs.map((s) => [s, g.group]))
-);
+export const CATEGORIES: { slug: string; name: string; icon: string; color: string }[] =
+  CATS.map(({ slug, name, icon, color }) => ({ slug, name, icon, color }));
+
+// Main groups (ordered, first-seen) and which categories belong to each.
+export const CATEGORY_GROUPS: { group: string; slugs: string[] }[] = (() => {
+  const order: string[] = [];
+  const map = new Map<string, string[]>();
+  for (const c of CATS) {
+    if (!map.has(c.group)) { map.set(c.group, []); order.push(c.group); }
+    map.get(c.group)!.push(c.slug);
+  }
+  return order.map((g) => ({ group: g, slugs: map.get(g)! }));
+})();
+export const GROUP_OF: Record<string, string> = Object.fromEntries(CATS.map((c) => [c.slug, c.group]));
 
 // ---- small PRNG-ish helpers (Math.random is fine in a seed script) ----
 const rand = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
@@ -132,7 +265,11 @@ const PHOTOS: Record<string, string[]> = {
 };
 const unsplash = (id: string, w: number, h: number) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&h=${h}&q=70`;
 // A few categories look better with a specific pool than their generic "kind".
-const POOL_OVERRIDE: Record<string, string> = { "real-estate": "nature" };
+const POOL_OVERRIDE: Record<string, string> = {
+  "real-estate": "nature", "hiking-trails": "nature", parks: "nature", camping: "nature",
+  "tourist-attractions": "nature", "historical-sites": "nature", landscaping: "nature",
+  "garden-centers": "nature", resorts: "hotel", "guest-houses": "hotel", apartments: "hotel",
+};
 const poolFor = (slug: string): string[] => PHOTOS[POOL_OVERRIDE[slug] ?? KIND[slug] ?? "shop"] ?? PHOTOS.shop;
 // Deterministic single themed photo (business cover / offer / event).
 export const photo = (seed: string, categorySlug: string, w = 800, h = 600) =>
@@ -192,17 +329,7 @@ function makeReviews(category: string): { reviews: ReviewSeed[]; rating: number 
 }
 
 // ---- category → "kind" for products + descriptions ----
-type Kind = "cafe" | "restaurant" | "roastery" | "sweets" | "bakery" | "icecream" | "juice" | "hotel" | "fashion" | "jewelry" | "shop" | "service" | "health" | "auto" | "edu";
-const KIND: Record<string, Kind> = {
-  "coffee-shops": "cafe", restaurants: "restaurant", "fast-food": "restaurant", pizza: "restaurant", shawarma: "restaurant", sushi: "restaurant", lebanese: "restaurant",
-  bakeries: "bakery", roasteries: "roastery", sweets: "sweets", desserts: "sweets", "ice-cream": "icecream", "juice-bars": "juice",
-  hotels: "hotel", fashion: "fashion", "shoe-stores": "fashion", accessories: "fashion", "sports-stores": "shop", jewelry: "jewelry",
-  "beauty-salons": "service", barbers: "service", opticians: "shop", pharmacies: "shop", clinics: "health", dentists: "health", "medical-labs": "health", veterinary: "health",
-  gyms: "service", supermarkets: "shop", electronics: "shop", "mobile-shops": "shop", furniture: "shop", "home-decor": "shop", "hardware-stores": "shop",
-  florists: "shop", bookstores: "shop", "gift-shops": "shop", "pet-shops": "shop", "car-washes": "auto", mechanics: "auto", "tire-shops": "auto", "gas-stations": "auto",
-  "real-estate": "service", banks: "service", insurance: "service", schools: "edu", daycare: "edu", "travel-agencies": "service", photography: "service",
-  "printing-shops": "service", "interior-designers": "service", construction: "service", lawyers: "service", accounting: "service", cleaning: "service", electricians: "service", plumbers: "service", taxi: "service",
-};
+const KIND: Record<string, Kind> = Object.fromEntries(CATS.map((c) => [c.slug, c.kind]));
 
 const AMENITIES: Record<Kind, string[]> = {
   cafe: ["wifi", "outdoor seating", "study friendly", "specialty coffee", "breakfast", "desserts", "family friendly", "parking", "card payment", "delivery"],
@@ -416,6 +543,12 @@ const REALS: [string, string][] = [
   ["Raj Hotel Aley", "hotels"], ["Aley Suites", "hotels"], ["Golden Lili Resort & Spa", "hotels"], ["Cherry Blossom Resort", "hotels"],
   ["Aley Center", "supermarkets"], ["Merhi Trading Company", "electronics"], ["Computer Mania Aley", "electronics"],
   ["Vacancy Finders", "real-estate"], ["Maysan Graphic Design", "printing-shops"], ["Notary Public Nizar Bou Nassar", "lawyers"], ["Sidaco Gas Aley", "gas-stations"],
+  // Essential / civic services (real institutions in Aley).
+  ["Aley Governmental Hospital", "hospitals"], ["Aley Emergency Clinic", "emergency-clinics"],
+  ["Lebanese Red Cross - Aley", "ambulance"], ["Internal Security Forces - Aley", "police"],
+  ["Civil Defense - Aley", "civil-defense"], ["Fire Brigade - Aley", "fire-department"],
+  ["Aley Serail - Government Offices", "government-offices"], ["Municipality of Aley", "municipality"],
+  ["EDL - Aley Branch", "utilities"], ["LibanPost - Aley", "postal-services"],
 ];
 
 // Name pools for generated businesses (Lebanese-flavored, varied per category).
@@ -448,16 +581,7 @@ function genName(category: string, used: Set<string>): string {
 }
 
 // Per-category target counts for generated businesses (real ones add on top).
-const COUNTS: Record<string, number> = {
-  restaurants: 16, "coffee-shops": 12, "fast-food": 8, pizza: 5, shawarma: 6, sushi: 4, lebanese: 7,
-  bakeries: 7, roasteries: 4, sweets: 6, desserts: 5, "ice-cream": 4, "juice-bars": 5,
-  hotels: 5, fashion: 12, "shoe-stores": 5, accessories: 5, "sports-stores": 4, jewelry: 6,
-  "beauty-salons": 10, barbers: 8, opticians: 4, pharmacies: 8, clinics: 7, dentists: 6, "medical-labs": 4, veterinary: 3,
-  gyms: 5, supermarkets: 7, electronics: 6, "mobile-shops": 6, furniture: 5, "home-decor": 4, "hardware-stores": 5,
-  florists: 4, bookstores: 3, "gift-shops": 4, "pet-shops": 3, "car-washes": 4, mechanics: 6, "tire-shops": 4, "gas-stations": 4,
-  "real-estate": 6, banks: 5, insurance: 4, schools: 5, daycare: 4, "travel-agencies": 4, photography: 4,
-  "printing-shops": 4, "interior-designers": 3, construction: 4, lawyers: 5, accounting: 4, cleaning: 4, electricians: 4, plumbers: 4, taxi: 4,
-};
+const COUNTS: Record<string, number> = Object.fromEntries(CATS.map((c) => [c.slug, c.count]));
 
 export function buildBusinesses(): BizSeed[] {
   const out: BizSeed[] = [];

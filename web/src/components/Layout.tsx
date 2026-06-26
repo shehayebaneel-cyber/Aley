@@ -11,6 +11,7 @@ const NAV = [
   { to: "/explore", label: "Explore" },
   { to: "/events", label: "Events" },
   { to: "/offers", label: "Offers" },
+  { to: "/delivery", label: "Delivery" },
   { to: "/projects", label: "Community" },
   { to: "/map", label: "Map" },
   { to: "/about", label: "About" },
@@ -187,6 +188,8 @@ export function Layout() {
                   <Link to={n.to} className="hover:text-brand">{n.label}</Link>
                 </li>
               ))}
+              <li><Link to="/lost-found" className="hover:text-brand">Lost &amp; Found</Link></li>
+              <li><Link to="/notices" className="hover:text-brand">Public Notices</Link></li>
             </ul>
           </div>
           <div>
@@ -194,6 +197,7 @@ export function Layout() {
             <ul className="mt-3 space-y-2 text-sm text-muted">
               <li><Link to="/owner/login" className="hover:text-brand">List your business</Link></li>
               <li><Link to="/owner/login" className="font-semibold text-brand hover:text-brand-dark">Business login →</Link></li>
+              <li><Link to="/driver/login" className="font-semibold text-brand hover:text-brand-dark">Drive with us →</Link></li>
               <li><Link to="/about" className="hover:text-brand">About the platform</Link></li>
             </ul>
           </div>

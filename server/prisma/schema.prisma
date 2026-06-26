@@ -31,6 +31,9 @@ model City {
   offers     Offer[]
   projects   Project[]
   orders     Order[]
+  lostFound     LostFoundItem[]
+  announcements Announcement[]
+  deliveries    DeliveryRequest[]
 }
 
 // A business category (Coffee Shops, Restaurants, ...). Global across cities,
@@ -119,6 +122,7 @@ model Business {
   businessOrders BusinessOrder[]
   claims         BusinessClaim[]
   reservations   Reservation[]
+  analyticsEvents AnalyticsEvent[]
 }
 
 // A business owner account (manages one or more businesses from a dashboard).
@@ -402,6 +406,8 @@ model Order {
 
   // Delivery / driver progress across the whole order.
   deliveryStatus String @default("PENDING") // PENDING | COLLECTING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  driverId       Int? // delivery driver who accepted/was assigned this order
+  driver         Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
   driverName     String @default("")
   status         String @default("PLACED") // PLACED | COMPLETED | CANCELLED
 
@@ -435,4 +441,147 @@ model OrderItem {
   price           Float
   quantity        Int
   lineTotal       Float
+}
+
+// ---------------------------------------------------------------------------
+// Community board — Lost & Found posts + official Public Notices.
+// ---------------------------------------------------------------------------
+
+// A resident's "I lost…" / "I found…" post. Goes live immediately; admins can
+// hide abuse or mark it resolved once the item is reunited with its owner.
+model LostFoundItem {
+  id           Int      @id @default(autoincrement())
+  cityId       Int
+  city         City     @relation(fields: [cityId], references: [id])
+  userId       Int? // poster's visitor account, if logged in
+  type         String   @default("LOST") // LOST | FOUND
+  title        String
+  description  String   @default("")
+  category     String   @default("Other") // Phone, Keys, Wallet, Pet, Document, Jewelry, Bag, Other
+  location     String   @default("") // where it was lost / found
+  date         String   @default("") // "2026-06-26" (when), free-form string like Reservation
+  image        String?
+  contactName  String
+  contactPhone String   @default("")
+  contactEmail String   @default("")
+  status       String   @default("OPEN") // OPEN | RESOLVED
+  isPublished  Boolean  @default(true) // admin can hide
+  createdAt    DateTime @default(now())
+}
+
+// An official notice / announcement, published by the city/admin (municipality
+// updates, water/electricity, road works, emergencies, weather…). Read-only for
+// the public.
+model Announcement {
+  id          Int       @id @default(autoincrement())
+  cityId      Int
+  city        City      @relation(fields: [cityId], references: [id])
+  title       String
+  body        String    @default("")
+  // GENERAL | MUNICIPALITY | UTILITY | EMERGENCY | EVENT | ROADS | WEATHER | HEALTH
+  category    String    @default("GENERAL")
+  image       String?
+  link        String    @default("") // optional external link / source
+  isPinned    Boolean   @default(false)
+  isPublished Boolean   @default(true)
+  publishedAt DateTime  @default(now())
+  expiresAt   DateTime? // hidden automatically after this time
+  createdAt   DateTime  @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Delivery service — a general courier / pickup-and-drop-off service. Works for
+// listed shops AND for any manual address ("pick up from a shop in Beirut and
+// deliver to Aley"). Separate from marketplace Orders. Price is an estimate the
+// delivery team can finalise. Built to grow into online payment, driver
+// accounts, live tracking, commissions, scheduling and multi-stop later.
+// ---------------------------------------------------------------------------
+model DeliveryRequest {
+  id            Int      @id @default(autoincrement())
+  number        String   @unique
+  cityId        Int
+  city          City     @relation(fields: [cityId], references: [id])
+  customerId    Int? // visitor account, if logged in
+
+  // ALEY_TO_ALEY | OUTSIDE_TO_ALEY | ALEY_TO_OUTSIDE | CUSTOM
+  type          String   @default("ALEY_TO_ALEY")
+
+  // Pickup (point A)
+  pickupLabel   String
+  pickupPhone   String   @default("") // optional phone of the pickup place (shop), so the driver can call
+  pickupLat     Float?
+  pickupLng     Float?
+  pickupOutside Boolean  @default(false)
+
+  // Drop-off (point B)
+  dropoffLabel   String
+  dropoffLat     Float?
+  dropoffLng     Float?
+  dropoffOutside Boolean @default(false)
+
+  // What
+  itemDescription String @default("")
+  packageType     String @default("Parcel") // Document | Food | Parcel | Fragile | Groceries | Clothing | Electronics | Other
+  packageSize     String @default("MEDIUM") // SMALL | MEDIUM | LARGE
+  urgency         String @default("STANDARD") // STANDARD | EXPRESS
+  preferredTime   String @default("")
+  notes           String @default("")
+
+  // Contact
+  customerName  String
+  customerPhone String
+
+  businessId    Int? // linked listed shop, if the pickup is one (no FK — optional link)
+
+  // Pricing (estimate now; team confirms finalPrice)
+  distanceKm   Float  @default(0)
+  estimatedMin Float  @default(0)
+  estimatedMax Float  @default(0)
+  finalPrice   Float?
+
+  // Fulfilment
+  // REQUESTED | ACCEPTED | HEADING_TO_PICKUP | PICKED_UP | ON_THE_WAY | DELIVERED | CANCELLED | REJECTED
+  status      String   @default("REQUESTED")
+  driverId    Int? // assigned/accepting driver
+  driver      Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  driverName  String   @default("") // snapshot for quick display
+  driverPhone String   @default("")
+  driverNotes String   @default("") // notes the driver adds
+  proofImage  String? // proof-of-delivery photo
+
+  createdAt DateTime @default(now())
+}
+
+// Append-only interaction log powering the provider Analytics dashboard.
+// One row per tracked interaction; everything (cards, charts, leaderboards,
+// future conversion/ads/heatmap features) aggregates from here. Keep it lean.
+model AnalyticsEvent {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // PROFILE_VIEW | SEARCH_APPEARANCE | PHONE_VIEW | CALL | WHATSAPP | WEBSITE | DIRECTIONS
+  type       String
+  meta       String   @default("") // future: referrer, search term, category, etc.
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, type, createdAt])
+  @@index([type, createdAt])
+}
+
+// A delivery driver account. Drivers log in to their own dashboard to claim and
+// complete delivery requests. Admin-created accounts are ACTIVE; self-registered
+// ones wait for approval (PENDING) and can be SUSPENDED.
+model Driver {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String?  @unique
+  phone        String   @unique
+  passwordHash String
+  vehicle      String   @default("") // e.g. "Motorbike", "Car · ABC-123"
+  // 0 = use platform default; otherwise the platform's % commission on this driver.
+  commissionRate Float  @default(0)
+  status       String   @default("PENDING") // PENDING | ACTIVE | SUSPENDED
+  createdAt    DateTime @default(now())
+  deliveries   DeliveryRequest[]
+  orders       Order[]
 }

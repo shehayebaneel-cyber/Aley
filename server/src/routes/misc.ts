@@ -142,6 +142,17 @@ homeRouter.get("/", async (req, res) => {
     categories.filter((c) => (countMap.get(c.id) ?? 0) > 0).length,
   ]);
 
+  // Main categories = the high-level groups, aggregated across ALL categories.
+  const groupMap = new Map<string, { group: string; icon: string; color: string; count: number; categories: number }>();
+  for (const c of categories) {
+    const cnt = countMap.get(c.id) ?? 0;
+    if (cnt === 0) continue;
+    const g = c.group || "More";
+    const existing = groupMap.get(g);
+    if (existing) { existing.count += cnt; existing.categories += 1; }
+    else groupMap.set(g, { group: g, icon: c.icon, color: c.color, count: cnt, categories: 1 });
+  }
+
   res.json({
     city: cityRow,
     totalBusinesses,
@@ -152,5 +163,6 @@ homeRouter.get("/", async (req, res) => {
     offers,
     events,
     categories: categories.map((c) => ({ ...c, count: countMap.get(c.id) ?? 0 })).filter((c) => c.count > 0).slice(0, 12),
+    groups: [...groupMap.values()],
   });
 });

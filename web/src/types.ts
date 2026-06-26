@@ -19,6 +19,116 @@ export interface Category {
   count?: number;
 }
 
+export interface LostFoundItem {
+  id: number;
+  type: "LOST" | "FOUND";
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  date: string;
+  image: string | null;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  status: "OPEN" | "RESOLVED";
+  isPublished: boolean;
+  createdAt: string;
+}
+
+export interface Announcement {
+  id: number;
+  title: string;
+  body: string;
+  category: string;
+  image: string | null;
+  link: string;
+  isPinned: boolean;
+  isPublished: boolean;
+  publishedAt: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface DriverJob {
+  kind: "courier" | "order";
+  id: number;
+  number: string;
+  typeLabel: string;
+  statusKey: string;
+  next: { status: string; label: string } | null;
+  canAccept: boolean;
+  pickupLabel: string;
+  pickupPhone: string;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  pickupOutside: boolean;
+  dropoffLabel: string;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
+  dropoffOutside: boolean;
+  itemDescription: string;
+  packageType: string;
+  packageSize: string;
+  urgency: string;
+  preferredTime: string;
+  distanceKm: number;
+  amountLabel: string;
+  customerName: string;
+  customerPhone: string;
+  notes: string;
+  driverNotes: string;
+  proofImage: string | null;
+  supportsProof: boolean;
+  businesses: { name: string; address: string; phone: string; lat: number | null; lng: number | null }[];
+  items: { name: string; quantity: number }[];
+  createdAt: string;
+}
+
+export interface DeliveryEstimate {
+  distanceKm: number;
+  outsideCount: number;
+  pickupOutside: boolean;
+  dropoffOutside: boolean;
+  min: number;
+  max: number;
+  breakdown: { label: string; amount: number }[];
+}
+
+export interface DeliveryRequest {
+  id: number;
+  number: string;
+  type: string;
+  pickupLabel: string;
+  pickupPhone: string;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  pickupOutside: boolean;
+  dropoffLabel: string;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
+  dropoffOutside: boolean;
+  itemDescription: string;
+  packageType: string;
+  packageSize: string;
+  urgency: string;
+  preferredTime: string;
+  notes: string;
+  customerName: string;
+  customerPhone: string;
+  distanceKm: number;
+  estimatedMin: number;
+  estimatedMax: number;
+  finalPrice: number | null;
+  status: string;
+  driverId: number | null;
+  driverName: string;
+  driverPhone: string;
+  driverNotes: string;
+  proofImage: string | null;
+  createdAt: string;
+}
+
 export interface HoursRow {
   day: number;
   open: string;
@@ -314,4 +424,5 @@ export interface HomeData {
   offers: Offer[];
   events: EventItem[];
   categories: Category[];
+  groups: { group: string; icon: string; color: string; count: number; categories: number }[];
 }

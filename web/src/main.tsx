@@ -5,6 +5,7 @@ import App from "./App";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
 import { CartProvider } from "./context/CartContext";
 import { ContentProvider } from "./context/ContentContext";
+import { DriverAuthProvider } from "./context/DriverAuthContext";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { UserAuthProvider } from "./context/UserAuthContext";
@@ -18,9 +19,11 @@ createRoot(document.getElementById("root")!).render(
           <AdminAuthProvider>
             <UserAuthProvider>
               <OwnerAuthProvider>
-                <CartProvider>
-                  <App />
-                </CartProvider>
+                <DriverAuthProvider>
+                  <CartProvider>
+                    <App />
+                  </CartProvider>
+                </DriverAuthProvider>
               </OwnerAuthProvider>
             </UserAuthProvider>
           </AdminAuthProvider>

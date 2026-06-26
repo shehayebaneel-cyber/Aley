@@ -7,13 +7,18 @@ import { adminApi } from "../../lib/api";
 
 const LINKS = [
   { to: "/admin", label: "Dashboard", end: true },
+  { to: "/admin/analytics", label: "Analytics" },
   { to: "/admin/content", label: "Site Content" },
   { to: "/admin/orders", label: "Orders" },
+  { to: "/admin/delivery", label: "Delivery" },
+  { to: "/admin/drivers", label: "Drivers" },
   { to: "/admin/businesses", label: "Businesses" },
   { to: "/admin/claims", label: "Claims" },
   { to: "/admin/categories", label: "Categories" },
   { to: "/admin/reviews", label: "Reviews" },
   { to: "/admin/projects", label: "Projects" },
+  { to: "/admin/lost-found", label: "Lost & Found" },
+  { to: "/admin/announcements", label: "Public Notices" },
   { to: "/admin/events-offers", label: "Events & Offers" },
   { to: "/admin/cities", label: "Cities" },
   { to: "/admin/marketplace", label: "Marketplace" },

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { recordEvent, recordMany } from "../lib/analytics";
 import { prisma } from "../db";
 import { isOpenNow, outBusiness, outCard, parseArr, type HoursRow } from "../lib/serialize";
 
@@ -50,6 +51,12 @@ businessesRouter.get("/", async (req, res) => {
   let list = rows.map(outCard);
   if (q.openNow === "true") list = list.filter((b) => b.openNow);
 
+  // Record a "search appearance" for each shown business when this is a real
+  // search/browse (a query, category or group filter), capped to the visible page.
+  if (q.q || q.category || q.group) {
+    recordMany(list.slice(0, 24).map((b) => Number(b.id)), "SEARCH_APPEARANCE");
+  }
+
   res.json(list);
 });
 
@@ -67,8 +74,9 @@ businessesRouter.get("/:slug", async (req, res) => {
   });
   if (!business || !business.isPublished) return res.status(404).json({ error: "Business not found." });
 
-  // Fire-and-forget view count bump.
+  // Fire-and-forget view count bump + analytics event.
   prisma.business.update({ where: { id: business.id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+  recordEvent(business.id, "PROFILE_VIEW");
 
   res.json(outBusiness(business));
 });

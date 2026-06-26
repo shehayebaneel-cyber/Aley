@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
+import { businessMetrics, resolveRange } from "../lib/analytics";
 import { prisma } from "../db";
 import { outBusiness, slugify, toJson } from "../lib/serialize";
 import { notifyAdmins } from "../lib/notify";
@@ -215,6 +216,16 @@ ownerRouter.get("/businesses/:id/analytics", async (req, res) => {
     events,
     breakdown,
   });
+});
+
+// GET /api/owner/businesses/:id/metrics?period=&from=&to= — full analytics dashboard data.
+ownerRouter.get("/businesses/:id/metrics", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const q = req.query as Record<string, string>;
+  const range = resolveRange(q.period ?? "30d", q.from, q.to);
+  const data = await businessMetrics(business.id, range);
+  res.json({ period: q.period ?? "30d", range: { start: range.start, end: range.end }, ...data });
 });
 
 // ---- Reservations ----

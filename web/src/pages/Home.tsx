@@ -10,6 +10,23 @@ import type { HomeData, ProjectSummary } from "../types";
 
 const CITY = "aley";
 
+// The high-level "main categories" (groups) + display order and icons.
+const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
+const GROUP_META: Record<string, { icon: string; color: string }> = {
+  "Food & Drinks": { icon: "🍴", color: "#f97316" },
+  "Shopping": { icon: "🛍️", color: "#a855f7" },
+  "Health & Beauty": { icon: "💄", color: "#ec4899" },
+  "Automotive": { icon: "🚗", color: "#2563eb" },
+  "Home & Living": { icon: "🏠", color: "#0ea5e9" },
+  "Professional Services": { icon: "💼", color: "#14b8a6" },
+  "Stay & Tourism": { icon: "🏨", color: "#6366f1" },
+  "Education": { icon: "🎓", color: "#7c3aed" },
+  "Entertainment": { icon: "🎭", color: "#db2777" },
+  "Community": { icon: "📢", color: "#0d9488" },
+  "Essential Services": { icon: "🚨", color: "#dc2626" },
+  "More": { icon: "🏷️", color: "#64748b" },
+};
+
 export function Home() {
   const { data } = useFetch<HomeData>(`/api/home?city=${CITY}`);
   const { data: projects } = useFetch<ProjectSummary>(`/api/projects/summary?city=${CITY}`);
@@ -75,16 +92,26 @@ export function Home() {
       )}
 
       <div className="mx-auto max-w-7xl space-y-16 px-4 py-12">
-        {/* Popular categories */}
+        {/* Main categories (high-level groups) */}
         <Section show={S.categories.show} title={S.categories.title!} subtitle={S.categories.subtitle} to="/explore">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {(data?.categories ?? []).map((c) => (
-              <Link key={c.id} to={`/explore?category=${c.slug}`} className="card card-hover flex flex-col items-center gap-2 p-5 text-center">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl" style={{ background: `${c.color}1a` }}>{c.icon}</span>
-                <span className="text-sm font-semibold text-ink">{c.name}</span>
-                <span className="text-xs text-muted">{c.count} places</span>
-              </Link>
-            ))}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[...(data?.groups ?? [])]
+              .sort((a, b) => {
+                const ia = GROUP_ORDER.indexOf(a.group), ib = GROUP_ORDER.indexOf(b.group);
+                return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+              })
+              .map((g) => {
+                const meta = GROUP_META[g.group];
+                const icon = meta?.icon ?? g.icon;
+                const color = meta?.color ?? g.color;
+                return (
+                  <Link key={g.group} to={`/explore?group=${encodeURIComponent(g.group)}`} className="card card-hover flex flex-col items-center gap-2 p-5 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl" style={{ background: `${color}1a` }}>{icon}</span>
+                    <span className="text-sm font-semibold text-ink">{g.group}</span>
+                    <span className="text-xs text-muted">{g.count} places</span>
+                  </Link>
+                );
+              })}
           </div>
         </Section>
 

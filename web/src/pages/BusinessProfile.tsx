@@ -6,9 +6,10 @@ import { Stars } from "../components/Stars";
 import { useCart } from "../context/CartContext";
 import {
   CalendarIcon, CheckIcon, ClockIcon, CloseIcon, FacebookIcon, GlobeIcon, InstagramIcon,
-  MapPinIcon, PhoneIcon, StarIcon, TagIcon, VerifiedIcon, WhatsAppIcon,
+  MapPinIcon, PhoneIcon, StarIcon, TagIcon, TruckIcon, VerifiedIcon, WhatsAppIcon,
 } from "../components/icons";
 import { useUserAuth } from "../context/UserAuthContext";
+import { track } from "../lib/track";
 import { api, dayName, formatEventDate, PRICE, timeAgo } from "../lib/api";
 import { mapsLinkFromCoords, mapsLinkFromText } from "../lib/maps";
 import { useFetch } from "../lib/useFetch";
@@ -66,10 +67,11 @@ export function BusinessProfile() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <FavoriteButton businessId={b.id} className="!h-11 !w-11 border border-border !bg-surface" />
-            {b.phone && <a href={`tel:${b.phone}`} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
-            {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
+            {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
+            {wa && <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
             {b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
-            <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} target="_blank" rel="noreferrer" className="btn btn-primary px-4 py-2.5"><MapPinIcon className="h-4 w-4" /> Directions</a>
+            <Link to={`/delivery?pickup=${encodeURIComponent(`${b.name}, ${b.address}`)}${b.lat && b.lng ? `&plat=${b.lat}&plng=${b.lng}` : ""}&businessId=${b.id}`} className="btn btn-ghost px-4 py-2.5"><TruckIcon className="h-4 w-4" /> Request delivery</Link>
+            <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} onClick={() => track(b.id, "DIRECTIONS")} target="_blank" rel="noreferrer" className="btn btn-primary px-4 py-2.5"><MapPinIcon className="h-4 w-4" /> Directions</a>
           </div>
         </div>
 
@@ -220,14 +222,14 @@ export function BusinessProfile() {
               <ul className="mt-3 space-y-2.5 text-sm">
                 {b.ownerName && <li className="text-muted">👤 Owner: <span className="font-semibold text-ink">{b.ownerName}</span></li>}
                 {b.address && <li className="flex items-start gap-2 text-muted"><MapPinIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> {b.address}</li>}
-                {b.phone && <li><a href={`tel:${b.phone}`} className="flex items-center gap-2 text-muted hover:text-brand"><PhoneIcon className="h-4 w-4 text-brand" /> {b.phone}</a></li>}
-                {wa && <li><a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><WhatsAppIcon className="h-4 w-4 text-emerald-500" /> WhatsApp</a></li>}
+                {b.phone && <li><a href={`tel:${b.phone}`} onClick={() => track(b.id, "PHONE_VIEW")} className="flex items-center gap-2 text-muted hover:text-brand"><PhoneIcon className="h-4 w-4 text-brand" /> {b.phone}</a></li>}
+                {wa && <li><a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><WhatsAppIcon className="h-4 w-4 text-emerald-500" /> WhatsApp</a></li>}
                 {b.instagram && <li><a href={`https://instagram.com/${b.instagram}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><InstagramIcon className="h-4 w-4" /> @{b.instagram}</a></li>}
                 {b.facebook && <li><a href={b.facebook} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><FacebookIcon className="h-4 w-4" /> Facebook</a></li>}
-                {b.website && <li><a href={b.website} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><GlobeIcon className="h-4 w-4" /> Website</a></li>}
+                {b.website && <li><a href={b.website} onClick={() => track(b.id, "WEBSITE")} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-muted hover:text-brand"><GlobeIcon className="h-4 w-4" /> Website</a></li>}
               </ul>
               {b.lat && b.lng && (
-                <a href={mapsLinkFromCoords(b.lat, b.lng)} target="_blank" rel="noreferrer" className="btn btn-ghost mt-4 w-full py-2.5"><MapPinIcon className="h-4 w-4" /> View on map</a>
+                <a href={mapsLinkFromCoords(b.lat, b.lng)} onClick={() => track(b.id, "DIRECTIONS")} target="_blank" rel="noreferrer" className="btn btn-ghost mt-4 w-full py-2.5"><MapPinIcon className="h-4 w-4" /> View on map</a>
               )}
             </section>
 
@@ -255,13 +257,13 @@ export function BusinessProfile() {
       {/* Sticky mobile action bar (mini-website feel) */}
       <div className="h-20 sm:hidden" />
       <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-border bg-surface/95 p-3 backdrop-blur sm:hidden">
-        {b.phone && <a href={`tel:${b.phone}`} className="btn btn-ghost flex-1 py-2.5 text-sm"><PhoneIcon className="h-4 w-4" /> Call</a>}
+        {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost flex-1 py-2.5 text-sm"><PhoneIcon className="h-4 w-4" /> Call</a>}
         {b.hasReservations ? (
           <button onClick={() => setBooking(true)} className="btn flex-1 bg-accent py-2.5 text-sm text-white"><CalendarIcon className="h-4 w-4" /> Book</button>
         ) : wa ? (
-          <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn flex-1 bg-emerald-500 py-2.5 text-sm text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>
+          <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn flex-1 bg-emerald-500 py-2.5 text-sm text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>
         ) : null}
-        <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} target="_blank" rel="noreferrer" className="btn btn-primary flex-1 py-2.5 text-sm"><MapPinIcon className="h-4 w-4" /> Directions</a>
+        <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} onClick={() => track(b.id, "DIRECTIONS")} target="_blank" rel="noreferrer" className="btn btn-primary flex-1 py-2.5 text-sm"><MapPinIcon className="h-4 w-4" /> Directions</a>
       </div>
 
       {booking && <BookingModal businessId={b.id} businessName={b.name} onClose={() => setBooking(false)} />}

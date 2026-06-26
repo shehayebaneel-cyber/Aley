@@ -13,7 +13,7 @@ interface Cat {
   count: number;
 }
 
-const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Home & Auto", "Services", "Stay & Learn", "More"];
+const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
 
 export function AdminCategories() {
   const [cats, setCats] = useState<Cat[]>([]);

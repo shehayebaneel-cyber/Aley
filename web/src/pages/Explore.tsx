@@ -6,7 +6,14 @@ import { useFetch } from "../lib/useFetch";
 import type { Business, Category } from "../types";
 
 const CITY = "aley";
-const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Home & Auto", "Services", "Stay & Learn", "More"];
+const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
+// Emoji per group, shown in the sidebar / chips.
+const GROUP_ICON: Record<string, string> = {
+  "Food & Drinks": "🍴", "Shopping": "🛍️", "Health & Beauty": "💄", "Automotive": "🚗",
+  "Home & Living": "🏠", "Professional Services": "💼", "Stay & Tourism": "🏨", "Education": "🎓",
+  "Entertainment": "🎭", "Community": "📢", "Essential Services": "🚨", "More": "🏷️",
+};
+const groupIcon = (g: string) => GROUP_ICON[g] ?? "🏷️";
 
 const SORTS = [
   { key: "", label: "Recommended" },
@@ -81,7 +88,7 @@ export function Explore() {
             {grouped.map(({ group, items }) => (
               <div key={group}>
                 <div className={`flex items-center rounded-xl ${activeGroup === group ? "bg-brand-soft" : "hover:bg-surface-2"}`}>
-                  <button onClick={() => choose({ group, category: null })} className={`flex-1 px-3 py-2 text-left text-sm font-bold ${activeGroup === group ? "text-brand-dark" : "text-ink"}`}>{group}</button>
+                  <button onClick={() => choose({ group, category: null })} className={`flex flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-bold ${activeGroup === group ? "text-brand-dark" : "text-ink"}`}><span className="text-base leading-none">{groupIcon(group)}</span>{group}</button>
                   <button onClick={() => toggleGroup(group)} aria-label="Toggle" className="px-2 py-2 text-muted">
                     <ChevronRight className={`h-4 w-4 transition ${isOpen(group) ? "rotate-90" : ""}`} />
                   </button>
@@ -114,7 +121,7 @@ export function Explore() {
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               <button onClick={() => choose({ category: null, group: null })} className={`chip whitespace-nowrap ${!activeCategory && !activeGroup ? "chip-active" : ""}`}>All</button>
               {grouped.map(({ group }) => (
-                <button key={group} onClick={() => choose({ group, category: null })} className={`chip whitespace-nowrap ${activeGroup === group || activeCatGroup === group ? "chip-active" : ""}`}>{group}</button>
+                <button key={group} onClick={() => choose({ group, category: null })} className={`chip whitespace-nowrap ${activeGroup === group || activeCatGroup === group ? "chip-active" : ""}`}>{groupIcon(group)} {group}</button>
               ))}
             </div>
             {(activeGroup || activeCatGroup) && (

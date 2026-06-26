@@ -110,6 +110,28 @@ export function Projects() {
           </div>
         </section>
 
+        {/* ---- Community board ---- */}
+        <section>
+          <h2 className="font-display text-2xl font-extrabold text-ink">Community board</h2>
+          <p className="mt-1 text-muted">Help your neighbours and stay informed.</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Link to="/lost-found" className="card card-hover flex items-center gap-4 p-6">
+              <span className="text-4xl">🔎</span>
+              <div>
+                <p className="font-display text-lg font-bold text-ink">Lost &amp; Found</p>
+                <p className="mt-1 text-sm text-muted">Lost or found something in Aley? Post it and reconnect it with its owner.</p>
+              </div>
+            </Link>
+            <Link to="/notices" className="card card-hover flex items-center gap-4 p-6">
+              <span className="text-4xl">📢</span>
+              <div>
+                <p className="font-display text-lg font-bold text-ink">Public Notices</p>
+                <p className="mt-1 text-sm text-muted">Official updates: water &amp; electricity, road works, emergencies and events.</p>
+              </div>
+            </Link>
+          </div>
+        </section>
+
         {/* ---- Project browser ---- */}
         <section id="browse" className="scroll-mt-24">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">

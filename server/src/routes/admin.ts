@@ -1,7 +1,9 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireAdmin } from "../auth";
+import { platformMetrics, resolveRange } from "../lib/analytics";
 import { getContent, saveContent } from "../lib/content";
+import { DELIVERY_STATUSES as COURIER_STATUSES, driverEarnings, effectiveDriverCommission, getDeliverySettings, saveDeliverySettings } from "../lib/delivery";
 import { getMarketplaceSettings, saveMarketplaceSettings } from "../lib/marketplace";
 import { prisma } from "../db";
 import { recomputeProject, recomputeRating } from "../lib/ratings";
@@ -15,7 +17,7 @@ const STR = (v: unknown, max = 200) => String(v ?? "").slice(0, max).trim();
 
 // GET /api/admin/dashboard — platform overview
 adminRouter.get("/dashboard", async (_req, res) => {
-  const [businesses, published, pendingBusinesses, pendingClaims, categories, pendingReviews, totalReviews, events, offers, users, owners, cities] = await Promise.all([
+  const [businesses, published, pendingBusinesses, pendingClaims, categories, pendingReviews, totalReviews, events, offers, users, owners, cities, lostFoundOpen, announcements, pendingDeliveries, pendingDrivers] = await Promise.all([
     prisma.business.count(),
     prisma.business.count({ where: { isPublished: true } }),
     prisma.business.count({ where: { reviewStatus: "PENDING" } }),
@@ -28,11 +30,15 @@ adminRouter.get("/dashboard", async (_req, res) => {
     prisma.user.count(),
     prisma.owner.count(),
     prisma.city.count({ where: { isActive: true } }),
+    prisma.lostFoundItem.count({ where: { status: "OPEN", isPublished: true } }),
+    prisma.announcement.count({ where: { isPublished: true } }),
+    prisma.deliveryRequest.count({ where: { status: "REQUESTED" } }),
+    prisma.driver.count({ where: { status: "PENDING" } }),
   ]);
   const recent = await prisma.business.findMany({ orderBy: { createdAt: "desc" }, take: 6, include: { category: true } });
   const topViewed = await prisma.business.findMany({ orderBy: { viewCount: "desc" }, take: 6, include: { category: true } });
   res.json({
-    stats: { businesses, published, unpublished: businesses - published, pendingBusinesses, pendingClaims, categories, pendingReviews, totalReviews, events, offers, users, owners, cities },
+    stats: { businesses, published, unpublished: businesses - published, pendingBusinesses, pendingClaims, categories, pendingReviews, totalReviews, events, offers, users, owners, cities, lostFoundOpen, announcements, pendingDeliveries, pendingDrivers },
     recent: recent.map(outBusiness),
     topViewed: topViewed.map(outBusiness),
   });
@@ -333,6 +339,14 @@ adminRouter.patch("/cities/:id", async (req, res) => {
   res.json(await prisma.city.update({ where: { id: Number(req.params.id) }, data }));
 });
 
+// ---- Platform analytics + leaderboards ----
+adminRouter.get("/analytics", async (req, res) => {
+  const q = req.query as Record<string, string>;
+  const range = resolveRange(q.period ?? "30d", q.from, q.to);
+  const data = await platformMetrics(range);
+  res.json({ period: q.period ?? "30d", range: { start: range.start, end: range.end }, ...data });
+});
+
 // ---- Site content (CMS) ----
 adminRouter.get("/content", async (_req, res) => res.json(await getContent()));
 adminRouter.put("/content", async (req, res) => res.json(await saveContent(req.body)));
@@ -477,3 +491,194 @@ adminRouter.get("/owners", async (_req, res) => {
   const owners = await prisma.owner.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { _count: { select: { businesses: true } } } });
   res.json(owners.map((o) => ({ id: o.id, name: o.name, email: o.email, phone: o.phone, createdAt: o.createdAt, businesses: o._count.businesses })));
 });
+
+// ---- Lost & Found (moderation) ----
+adminRouter.get("/lost-found", async (req, res) => {
+  const q = req.query as Record<string, string>;
+  const where: Record<string, unknown> = {};
+  if (q.type === "LOST" || q.type === "FOUND") where.type = q.type;
+  if (q.status === "OPEN" || q.status === "RESOLVED") where.status = q.status;
+  if (q.published === "false") where.isPublished = false;
+  res.json(await prisma.lostFoundItem.findMany({ where, orderBy: { createdAt: "desc" }, take: 300 }));
+});
+adminRouter.patch("/lost-found/:id", async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("status" in b && ["OPEN", "RESOLVED"].includes(String(b.status))) data.status = b.status;
+  if ("isPublished" in b) data.isPublished = !!b.isPublished;
+  res.json(await prisma.lostFoundItem.update({ where: { id: Number(req.params.id) }, data }));
+});
+adminRouter.delete("/lost-found/:id", async (req, res) => {
+  await prisma.lostFoundItem.delete({ where: { id: Number(req.params.id) } });
+  res.json({ ok: true });
+});
+
+// ---- Public Notices / Announcements (full CRUD — official, admin-authored) ----
+const ANNOUNCEMENT_CATEGORIES = ["GENERAL", "MUNICIPALITY", "UTILITY", "EMERGENCY", "EVENT", "ROADS", "WEATHER", "HEALTH"];
+adminRouter.get("/announcements", async (_req, res) => {
+  res.json(await prisma.announcement.findMany({ orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }], take: 300 }));
+});
+adminRouter.post("/announcements", async (req, res) => {
+  const title = STR(req.body.title, 160);
+  if (!title) return res.status(400).json({ error: "Title is required." });
+  const category = ANNOUNCEMENT_CATEGORIES.includes(String(req.body.category)) ? String(req.body.category) : "GENERAL";
+  const aley = await prisma.city.findUnique({ where: { slug: "aley" } });
+  const item = await prisma.announcement.create({
+    data: {
+      cityId: aley!.id,
+      title,
+      body: STR(req.body.body, 5000),
+      category,
+      image: req.body.image ? STR(req.body.image, 500) : null,
+      link: STR(req.body.link, 500),
+      isPinned: !!req.body.isPinned,
+      isPublished: req.body.isPublished !== false,
+      expiresAt: req.body.expiresAt ? new Date(String(req.body.expiresAt)) : null,
+    },
+  });
+  res.status(201).json(item);
+});
+adminRouter.patch("/announcements/:id", async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("title" in b) data.title = STR(b.title, 160);
+  if ("body" in b) data.body = STR(b.body, 5000);
+  if ("category" in b && ANNOUNCEMENT_CATEGORIES.includes(String(b.category))) data.category = b.category;
+  if ("image" in b) data.image = b.image ? STR(b.image, 500) : null;
+  if ("link" in b) data.link = STR(b.link, 500);
+  if ("isPinned" in b) data.isPinned = !!b.isPinned;
+  if ("isPublished" in b) data.isPublished = !!b.isPublished;
+  if ("expiresAt" in b) data.expiresAt = b.expiresAt ? new Date(String(b.expiresAt)) : null;
+  res.json(await prisma.announcement.update({ where: { id: Number(req.params.id) }, data }));
+});
+adminRouter.delete("/announcements/:id", async (req, res) => {
+  await prisma.announcement.delete({ where: { id: Number(req.params.id) } });
+  res.json({ ok: true });
+});
+
+// ---- Delivery service (courier requests) ----
+adminRouter.get("/delivery", async (req, res) => {
+  const q = req.query as Record<string, string>;
+  const where: Record<string, unknown> = {};
+  if (q.status === "active") where.status = { in: ["REQUESTED", "ACCEPTED", "DRIVER_ASSIGNED", "PICKED_UP", "ON_THE_WAY"] };
+  else if (q.status) where.status = q.status;
+  if (q.type) where.type = q.type;
+  res.json(await prisma.deliveryRequest.findMany({ where, orderBy: { createdAt: "desc" }, take: 300 }));
+});
+
+adminRouter.get("/delivery/:id", async (req, res) => {
+  const r = await prisma.deliveryRequest.findUnique({ where: { id: Number(req.params.id) } });
+  if (!r) return res.status(404).json({ error: "Request not found." });
+  res.json(r);
+});
+
+adminRouter.patch("/delivery/:id", async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("status" in b && COURIER_STATUSES.includes(String(b.status))) data.status = b.status;
+  if ("driverName" in b) data.driverName = STR(b.driverName, 80);
+  if ("driverPhone" in b) data.driverPhone = STR(b.driverPhone, 40);
+  if ("finalPrice" in b) data.finalPrice = b.finalPrice === null || b.finalPrice === "" ? null : Math.max(0, Number(b.finalPrice) || 0);
+  // Manually assign / unassign a driver (snapshots the driver's name+phone).
+  if ("driverId" in b) {
+    if (b.driverId === null || b.driverId === "") {
+      data.driverId = null; data.driverName = ""; data.driverPhone = "";
+    } else {
+      const driver = await prisma.driver.findUnique({ where: { id: Number(b.driverId) } });
+      if (!driver) return res.status(400).json({ error: "Driver not found." });
+      data.driverId = driver.id; data.driverName = driver.name; data.driverPhone = driver.phone;
+      const current = await prisma.deliveryRequest.findUnique({ where: { id: Number(req.params.id) } });
+      if (current?.status === "REQUESTED" && !("status" in b)) data.status = "ACCEPTED";
+    }
+  }
+  res.json(await prisma.deliveryRequest.update({ where: { id: Number(req.params.id) }, data }));
+});
+
+// ---- Drivers (accounts + approval + earnings) ----
+adminRouter.get("/drivers", async (_req, res) => {
+  const [drivers, settings] = await Promise.all([
+    prisma.driver.findMany({ orderBy: { createdAt: "desc" }, include: { _count: { select: { deliveries: true } } } }),
+    getDeliverySettings(),
+  ]);
+  const [delivered, deliveredOrders] = await Promise.all([
+    prisma.deliveryRequest.findMany({ where: { status: "DELIVERED", driverId: { not: null } }, select: { driverId: true, finalPrice: true, estimatedMax: true } }),
+    prisma.order.findMany({ where: { deliveryStatus: "DELIVERED", driverId: { not: null } }, select: { driverId: true, deliveryFee: true } }),
+  ]);
+  const earn = new Map<number, { jobs: number; net: number }>();
+  for (const d of drivers) earn.set(d.id, { jobs: 0, net: 0 });
+  for (const job of delivered) {
+    const drv = drivers.find((x) => x.id === job.driverId);
+    if (!drv) continue;
+    const e = earn.get(drv.id)!;
+    e.jobs += 1;
+    e.net += driverEarnings(job.finalPrice ?? job.estimatedMax, effectiveDriverCommission(drv.commissionRate, settings)).net;
+  }
+  for (const job of deliveredOrders) {
+    const drv = drivers.find((x) => x.id === job.driverId);
+    if (!drv) continue;
+    const e = earn.get(drv.id)!;
+    e.jobs += 1;
+    e.net += driverEarnings(job.deliveryFee, effectiveDriverCommission(drv.commissionRate, settings)).net;
+  }
+  res.json(drivers.map((d) => ({
+    id: d.id, name: d.name, email: d.email, phone: d.phone, vehicle: d.vehicle, status: d.status,
+    commissionRate: d.commissionRate, createdAt: d.createdAt, deliveries: d._count.deliveries,
+    completed: earn.get(d.id)!.jobs, earnings: Math.round(earn.get(d.id)!.net * 100) / 100,
+  })));
+});
+
+adminRouter.post("/drivers", async (req, res) => {
+  const name = STR(req.body.name, 80);
+  const phone = STR(req.body.phone, 40);
+  const email = STR(req.body.email, 120).toLowerCase() || null;
+  const password = String(req.body.password ?? "");
+  if (!name || !phone || password.length < 6) return res.status(400).json({ error: "Name, phone, and a password (6+ chars) are required." });
+  if (await prisma.driver.findUnique({ where: { phone } })) return res.status(409).json({ error: "A driver with this phone already exists." });
+  if (email && (await prisma.driver.findUnique({ where: { email } }))) return res.status(409).json({ error: "A driver with this email already exists." });
+  const driver = await prisma.driver.create({
+    data: { name, phone, email, vehicle: STR(req.body.vehicle, 60), commissionRate: Math.max(0, Number(req.body.commissionRate) || 0), passwordHash: await bcrypt.hash(password, 10), status: "ACTIVE" },
+  });
+  res.status(201).json({ id: driver.id });
+});
+
+adminRouter.get("/drivers/:id", async (req, res) => {
+  const driver = await prisma.driver.findUnique({ where: { id: Number(req.params.id) } });
+  if (!driver) return res.status(404).json({ error: "Driver not found." });
+  const settings = await getDeliverySettings();
+  const [deliveries, orders] = await Promise.all([
+    prisma.deliveryRequest.findMany({ where: { driverId: driver.id }, orderBy: { createdAt: "desc" }, take: 200 }),
+    prisma.order.findMany({ where: { driverId: driver.id, deliveryStatus: "DELIVERED" }, select: { deliveryFee: true } }),
+  ]);
+  const commissionPct = effectiveDriverCommission(driver.commissionRate, settings);
+  const completed = deliveries.filter((d) => d.status === "DELIVERED");
+  const net = completed.reduce((s, d) => s + driverEarnings(d.finalPrice ?? d.estimatedMax, commissionPct).net, 0)
+    + orders.reduce((s, o) => s + driverEarnings(o.deliveryFee, commissionPct).net, 0);
+  res.json({
+    driver: { id: driver.id, name: driver.name, email: driver.email, phone: driver.phone, vehicle: driver.vehicle, status: driver.status, commissionRate: driver.commissionRate, createdAt: driver.createdAt },
+    earnings: { commissionPct, completed: completed.length + orders.length, net: Math.round(net * 100) / 100 },
+    deliveries,
+  });
+});
+
+adminRouter.patch("/drivers/:id", async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("status" in b && ["PENDING", "ACTIVE", "SUSPENDED"].includes(String(b.status))) data.status = b.status;
+  if ("name" in b) data.name = STR(b.name, 80);
+  if ("phone" in b) data.phone = STR(b.phone, 40);
+  if ("email" in b) data.email = STR(b.email, 120).toLowerCase() || null;
+  if ("vehicle" in b) data.vehicle = STR(b.vehicle, 60);
+  if ("commissionRate" in b) data.commissionRate = Math.max(0, Number(b.commissionRate) || 0);
+  if ("password" in b && String(b.password).length >= 6) data.passwordHash = await bcrypt.hash(String(b.password), 10);
+  const driver = await prisma.driver.update({ where: { id: Number(req.params.id) }, data });
+  res.json({ id: driver.id, status: driver.status });
+});
+
+adminRouter.delete("/drivers/:id", async (req, res) => {
+  await prisma.driver.delete({ where: { id: Number(req.params.id) } });
+  res.json({ ok: true });
+});
+
+// Delivery pricing settings
+adminRouter.get("/delivery-settings", async (_req, res) => res.json(await getDeliverySettings()));
+adminRouter.put("/delivery-settings", async (req, res) => res.json(await saveDeliverySettings(req.body)));

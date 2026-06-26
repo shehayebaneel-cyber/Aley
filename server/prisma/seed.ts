@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { DELIVERY_DEFAULTS, estimateDelivery } from "../src/lib/delivery";
 import { buildBusinesses, CATEGORIES, document, GROUP_OF, photo, scenery } from "./demo";
 
 const prisma = new PrismaClient();
@@ -23,6 +24,11 @@ async function main() {
   await prisma.review.deleteMany();
   await prisma.offer.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.lostFoundItem.deleteMany();
+  await prisma.announcement.deleteMany();
+  await prisma.deliveryRequest.deleteMany();
+  await prisma.driver.deleteMany();
+  await prisma.analyticsEvent.deleteMany();
   await prisma.business.deleteMany();
   await prisma.category.deleteMany();
   await prisma.owner.deleteMany();
@@ -118,9 +124,103 @@ async function main() {
     await prisma.project.update({ where: { id: project.id }, data: { amountRaised: ds.reduce((s, d) => s + d.amount, 0), contributorCount: ds.length } });
   }
 
+  // ---- Public Notices / Announcements (official) ----
+  const announcements = [
+    { category: "EMERGENCY", pinned: true, title: "Scheduled water cut — Saturday", body: "The Aley water authority will perform maintenance on the main line this Saturday from 8:00 AM to 4:00 PM. Affected areas: Old Aley, Souk Street, and the Upper Stairs. Please store water in advance.", expires: 6 },
+    { category: "ROADS", pinned: true, title: "Road works on Bhamdoun Road", body: "Repaving works are underway on Bhamdoun Road near the municipality. Expect delays between 9:00 AM and 3:00 PM until further notice. Use the Damascus Road as an alternative.", expires: 14 },
+    { category: "MUNICIPALITY", pinned: false, title: "Municipality office summer hours", body: "Starting July 1st, the Municipality of Aley will be open from 8:00 AM to 2:00 PM, Monday through Friday. Online services remain available at all times.", expires: 40 },
+    { category: "UTILITY", pinned: false, title: "Electricity rationing schedule update", body: "EDL has announced an updated rationing schedule for the Aley region. Power will be available on a 6-hours-on / 6-hours-off rotation this week.", expires: 7 },
+    { category: "EVENT", pinned: false, title: "Aley Summer Festival — call for vendors", body: "Local businesses and artisans are invited to register for the annual Aley Summer Festival. Booth registration is open at the municipality until July 10th.", expires: 18 },
+    { category: "WEATHER", pinned: false, title: "Heat advisory for the weekend", body: "Temperatures are expected to rise above seasonal averages this weekend. Residents are advised to stay hydrated and avoid prolonged sun exposure between noon and 4:00 PM.", expires: 4 },
+    { category: "HEALTH", pinned: false, title: "Free blood-pressure screening", body: "The Aley Governmental Hospital is offering free blood-pressure and diabetes screenings every Tuesday this month, 9:00 AM–12:00 PM. No appointment needed.", expires: 25 },
+  ];
+  for (let i = 0; i < announcements.length; i++) {
+    const a = announcements[i];
+    await prisma.announcement.create({
+      data: { cityId: aley.id, title: a.title, body: a.body, category: a.category, isPinned: a.pinned, publishedAt: days(-i), expiresAt: days(a.expires) },
+    });
+  }
+
+  // ---- Lost & Found (sample resident posts) ----
+  const lostFound = [
+    { type: "LOST", category: "Pet", title: "Lost grey cat near Souk Street", description: "Our grey tabby cat 'Ramo' went missing Tuesday evening around Souk Street. He's friendly, wearing a blue collar. Reward offered.", location: "Souk Street, Aley", contactName: "Lara H.", contactPhone: "+961 70 123 456" },
+    { type: "FOUND", category: "Keys", title: "Found a set of car keys", description: "Found a bunch of keys with a Toyota fob and a red keychain near the town square fountain. Describe to claim.", location: "Town Square, Aley", contactName: "Georges A.", contactPhone: "+961 71 987 654" },
+    { type: "LOST", category: "Phone", title: "Lost black iPhone in a taxi", description: "Left my black iPhone 13 in a service taxi going from Aley to Bhamdoun on Sunday afternoon. Please contact me, screen has a cracked corner.", location: "Aley → Bhamdoun", contactName: "Sami D.", contactPhone: "+961 76 222 333" },
+    { type: "FOUND", category: "Document", title: "Found ID card on Main Road", description: "Found a Lebanese ID card on the sidewalk near the pharmacy on Main Road. Handed details to be claimed — message me to arrange pickup.", location: "Main Road, Aley", contactName: "Maya S.", contactEmail: "maya.s@example.com" },
+    { type: "LOST", category: "Jewelry", title: "Lost gold bracelet", description: "Lost a thin gold bracelet with small charms, likely near the public garden. It has great sentimental value. Reward for its return.", location: "Public Garden, Aley", contactName: "Nadia F.", contactPhone: "+961 3 444 555" },
+    { type: "FOUND", category: "Bag", title: "Found a child's backpack", description: "A small blue child's backpack was left at the bus stop near the school. Contains some books — waiting to be claimed.", location: "School bus stop, Aley", contactName: "Karim T.", contactPhone: "+961 70 666 777", status: "RESOLVED" },
+  ];
+  for (let i = 0; i < lostFound.length; i++) {
+    const l = lostFound[i];
+    await prisma.lostFoundItem.create({
+      data: {
+        cityId: aley.id, type: l.type, category: l.category, title: l.title, description: l.description, location: l.location,
+        contactName: l.contactName, contactPhone: (l as { contactPhone?: string }).contactPhone ?? "", contactEmail: (l as { contactEmail?: string }).contactEmail ?? "",
+        status: (l as { status?: string }).status ?? "OPEN", date: "", image: photo(`lf-${i}`, "gift-shops", 600, 450), createdAt: days(-i),
+      },
+    });
+  }
+
+  // ---- Drivers (delivery service) ----
+  const demoDriver = await prisma.driver.create({ data: { name: "Elie Khoury", phone: "+961 71 222 333", email: "driver@aley.com", vehicle: "Motorbike", status: "ACTIVE", passwordHash: await bcrypt.hash("driver", 10) } });
+  const driver2 = await prisma.driver.create({ data: { name: "Rabih Nassar", phone: "+961 3 444 555", email: "rabih@aley.com", vehicle: "Car · ABC-123", status: "ACTIVE", passwordHash: await bcrypt.hash("driver", 10) } });
+  await prisma.driver.create({ data: { name: "Karim Daher", phone: "+961 76 777 888", email: "karim@aley.com", vehicle: "Motorbike", status: "PENDING", passwordHash: await bcrypt.hash("driver", 10) } });
+
+  // ---- Delivery requests (courier service) ----
+  const deliveries = [
+    { type: "ALEY_TO_ALEY", status: "ON_THE_WAY", pickup: "Bean Avenue, Souk Street", pickupPhone: "+961 5 555 010", drop: "Hilltop Avenue, Aley", item: "2 boxes of pastries", size: "MEDIUM", urgency: "STANDARD", name: "Lara H.", phone: "+961 70 123 456", driver: demoDriver },
+    { type: "OUTSIDE_TO_ALEY", status: "HEADING_TO_PICKUP", pickup: "Phone shop, Hamra, Beirut", pickupPhone: "+961 1 555 020", drop: "Main Road, Aley", item: "Sealed phone box (pickup + pay $120 to shop)", size: "SMALL", urgency: "EXPRESS", name: "Sami D.", phone: "+961 76 222 333", driver: driver2 },
+    { type: "ALEY_TO_OUTSIDE", status: "REQUESTED", pickup: "Aley Center supermarket", pickupPhone: "+961 5 555 030", drop: "Hazmieh, near the highway", item: "Grocery bags", size: "LARGE", urgency: "STANDARD", name: "Maya S.", phone: "+961 3 444 555", driver: null },
+    { type: "CUSTOM", status: "DELIVERED", pickup: "Pharmacy, Bhamdoun", pickupPhone: "", drop: "Old Aley Street", item: "Medication", size: "SMALL", urgency: "EXPRESS", name: "Georges A.", phone: "+961 71 987 654", driver: demoDriver },
+  ];
+  let dn = 0;
+  for (const d of deliveries) {
+    const est = estimateDelivery({ type: d.type, packageSize: d.size, urgency: d.urgency }, DELIVERY_DEFAULTS);
+    await prisma.deliveryRequest.create({
+      data: {
+        number: `DLV-SEED${++dn}`, cityId: aley.id, type: d.type,
+        pickupLabel: d.pickup, pickupPhone: d.pickupPhone, dropoffLabel: d.drop, pickupOutside: est.pickupOutside, dropoffOutside: est.dropoffOutside,
+        itemDescription: d.item, packageType: "Parcel", packageSize: d.size, urgency: d.urgency,
+        customerName: d.name, customerPhone: d.phone,
+        driverId: d.driver?.id ?? null, driverName: d.driver?.name ?? "", driverPhone: d.driver?.phone ?? "",
+        distanceKm: est.distanceKm, estimatedMin: est.min, estimatedMax: est.max,
+        finalPrice: d.status === "DELIVERED" ? est.max : null, status: d.status, createdAt: days(-dn),
+      },
+    });
+  }
+
+  // ---- Analytics events (powers the provider + admin dashboards) ----
+  // Seed ~45 days of realistic interactions for a subset of businesses so the
+  // dashboards, charts and leaderboards are populated out of the box.
+  const allBiz = await prisma.business.findMany({ select: { id: true, slug: true, isFeatured: true } });
+  const featured = allBiz.filter((b) => b.isFeatured);
+  const rest = allBiz.filter((b) => !b.isFeatured).slice(0, 45);
+  const subset = [...new Map([...featured, ...rest].map((b) => [b.id, b])).values()];
+  const DAYS = 45;
+  const HOURS = [9, 10, 11, 12, 12, 13, 14, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21]; // evening-weighted
+  const rpois = (m: number) => Math.max(0, Math.round(m * (0.6 + Math.random() * 0.8)));
+  const rbin = (n: number, p: number) => { let c = 0; for (let i = 0; i < n; i++) if (Math.random() < p) c++; return c; };
+  const evRows: { businessId: number; type: string; createdAt: Date }[] = [];
+  for (const b of subset) {
+    const pop = b.slug === "bean-avenue" ? 2.6 : 0.4 + Math.random() * 1.5;
+    for (let d = 0; d < DAYS; d++) {
+      const day = days(-d);
+      const dowBoost = day.getDay() === 6 ? 1.4 : day.getDay() === 5 || day.getDay() === 0 ? 1.2 : 1;
+      const at = () => { const t = new Date(day); t.setHours(HOURS[Math.floor(Math.random() * HOURS.length)], Math.floor(Math.random() * 60), 0, 0); return t; };
+      const appearances = rpois(pop * 11 * dowBoost);
+      const views = Math.min(appearances, rpois(pop * 3.5 * dowBoost));
+      for (let i = 0; i < appearances; i++) evRows.push({ businessId: b.id, type: "SEARCH_APPEARANCE", createdAt: at() });
+      for (let i = 0; i < views; i++) evRows.push({ businessId: b.id, type: "PROFILE_VIEW", createdAt: at() });
+      const clicks: [string, number][] = [["PHONE_VIEW", 0.18], ["CALL", 0.1], ["WHATSAPP", 0.16], ["WEBSITE", 0.05], ["DIRECTIONS", 0.12]];
+      for (const [type, p] of clicks) for (let i = 0; i < rbin(views, p); i++) evRows.push({ businessId: b.id, type, createdAt: at() });
+    }
+  }
+  for (let i = 0; i < evRows.length; i += 5000) await prisma.analyticsEvent.createMany({ data: evRows.slice(i, i + 5000) });
+
   const counts = { businesses: created.length, categories: cats.length, reviews: reviewRows.length, offers: offerRows.length, events: eventRows.length };
-  console.log(`✅ Seed complete: ${counts.businesses} businesses across ${counts.categories} categories, ${counts.reviews} reviews, ${counts.offers} offers, ${counts.events} events, 3 community projects.`);
+  console.log(`✅ Seed complete: ${counts.businesses} businesses across ${counts.categories} categories, ${counts.reviews} reviews, ${counts.offers} offers, ${counts.events} events, 3 community projects, ${announcements.length} notices, ${lostFound.length} lost & found posts, ${deliveries.length} delivery requests, 3 drivers, ${evRows.length} analytics events.`);
   console.log("   Demo owner login → owner@aley.com / owner");
+  console.log("   Demo driver login → driver@aley.com / driver");
 }
 
 main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());

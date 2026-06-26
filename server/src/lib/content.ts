@@ -20,7 +20,7 @@ export const DEFAULT_CONTENT = {
     badge: "",
     title: "Discover, Support & Experience Aley",
     subtitle: "Find local businesses, events, offers, places, and community projects — all in one platform built for Aley.",
-    image: "https://images.unsplash.com/photo-1444084316824-dc26d6657664?auto=format&fit=crop&w=1920&h=1080&q=70",
+    image: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1920&h=1080&q=70",
     searchPlaceholder: "Search cafés, restaurants, services…",
   },
   sections: {

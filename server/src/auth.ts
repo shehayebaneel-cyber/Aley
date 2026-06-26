@@ -13,6 +13,7 @@ declare global {
     interface Request {
       userId?: number;
       ownerId?: number;
+      driverId?: number;
     }
   }
 }
@@ -58,6 +59,20 @@ export function requireUser(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+/** Requires a valid driver token; sets req.driverId. */
+export function requireDriver(req: Request, res: Response, next: NextFunction) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "Please log in to your driver account." });
+  try {
+    const payload = jwt.verify(header.slice(7), SECRET) as { driverId?: number; role?: string };
+    if (payload.role !== "driver" || !payload.driverId) return res.status(403).json({ error: "Driver account required." });
+    req.driverId = payload.driverId;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Your session expired — please log in again." });
+  }
+}
+
 /** Attaches req.userId if a valid user token is present, but never blocks. */
 export function optionalUser(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
@@ -72,13 +87,13 @@ export function optionalUser(req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
-/** Accepts any valid signed token (owner or admin) — used for uploads. */
+/** Accepts any valid signed token (visitor, owner or admin) — used for uploads. */
 export function requireAnyAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "Please sign in." });
   try {
     const payload = jwt.verify(header.slice(7), SECRET) as { role?: string };
-    if (payload.role === "owner" || payload.role === "admin") return next();
+    if (["user", "owner", "admin", "driver"].includes(payload.role ?? "")) return next();
     return res.status(403).json({ error: "Not allowed." });
   } catch {
     return res.status(401).json({ error: "Your session expired." });

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { BarChart, StatCard } from "../../components/Charts";
 import { ImageField } from "../../components/ImageField";
 import { Stars } from "../../components/Stars";
 import { CheckIcon, GlobeIcon, StarIcon } from "../../components/icons";
@@ -8,7 +9,7 @@ import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, tim
 import { useFetch } from "../../lib/useFetch";
 import type { Business, BusinessOrder, Category, EventItem, HoursRow, Offer, Reservation, Review } from "../../types";
 
-const TABS = ["Overview", "Orders", "Reservations", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Analytics", "Orders", "Reservations", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -81,6 +82,7 @@ export function BusinessDashboard() {
 
       <div className="mt-6">
         {tab === "Overview" && <Overview biz={biz} />}
+        {tab === "Analytics" && <AnalyticsTab biz={biz} />}
         {tab === "Orders" && <OrdersTab biz={biz} />}
         {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
@@ -148,6 +150,114 @@ function Overview({ biz }: { biz: Business }) {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- Analytics dashboard ----
+interface Metric { value: number; prev: number; delta: number }
+interface Metrics {
+  business: { hasReservations: boolean; hasDelivery: boolean };
+  cards: {
+    profileViews: Metric; searchAppearances: Metric; ctr: number;
+    phoneViews: Metric; calls: Metric; whatsapp: Metric; website: Metric; directions: Metric;
+    interactions: Metric; favorites: Metric;
+    bookings: { requests: number; confirmed: number; cancelled: number };
+    orders: { received: number; completed: number; cancelled: number; revenue: number };
+    deliveries: number;
+    reviews: { total: number; newCount: number; avg: number; periodAvg: number };
+  };
+  series: { profileViews: { date: string; value: number }[]; interactions: { date: string; value: number }[]; searchAppearances: { date: string; value: number }[] };
+  insights: string[];
+}
+const PERIODS: { key: string; label: string }[] = [
+  { key: "today", label: "Today" }, { key: "yesterday", label: "Yesterday" }, { key: "7d", label: "Last 7 days" },
+  { key: "30d", label: "Last 30 days" }, { key: "90d", label: "Last 90 days" }, { key: "year", label: "This year" }, { key: "custom", label: "Custom" },
+];
+
+function AnalyticsTab({ biz }: { biz: Business }) {
+  const [period, setPeriod] = useState("30d");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [m, setM] = useState<Metrics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (period === "custom" && (!from || !to)) return;
+    setLoading(true);
+    const p = new URLSearchParams({ period });
+    if (period === "custom") { p.set("from", from); p.set("to", to); }
+    ownerApi.get<Metrics>(`/api/owner/businesses/${biz.id}/metrics?${p}`).then(setM).finally(() => setLoading(false));
+  }, [biz.id, period, from, to]);
+
+  const c = m?.cards;
+  return (
+    <div className="space-y-6">
+      {/* Time filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {PERIODS.map((p) => <button key={p.key} onClick={() => setPeriod(p.key)} className={`chip ${period === p.key ? "chip-active" : ""}`}>{p.label}</button>)}
+        {period === "custom" && (
+          <span className="flex items-center gap-2">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input !py-1.5 text-sm" />
+            <span className="text-muted">→</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input !py-1.5 text-sm" />
+          </span>
+        )}
+      </div>
+
+      {!c ? (
+        <div className="card h-40 animate-pulse" />
+      ) : (
+        <>
+          {/* Overview cards */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <StatCard label="Profile views" value={c.profileViews.value} delta={c.profileViews.delta} />
+            <StatCard label="Search appearances" value={c.searchAppearances.value} delta={c.searchAppearances.delta} />
+            <StatCard label="Click-through rate" value={`${c.ctr}%`} hint="views ÷ appearances" />
+            <StatCard label="Total interactions" value={c.interactions.value} delta={c.interactions.delta} />
+            <StatCard label="Phone views" value={c.phoneViews.value} delta={c.phoneViews.delta} />
+            <StatCard label="Call clicks" value={c.calls.value} delta={c.calls.delta} />
+            <StatCard label="WhatsApp clicks" value={c.whatsapp.value} delta={c.whatsapp.delta} />
+            <StatCard label="Directions" value={c.directions.value} delta={c.directions.delta} />
+            <StatCard label="Website clicks" value={c.website.value} delta={c.website.delta} />
+            <StatCard label="Favorites / saves" value={c.favorites.value} delta={c.favorites.delta} />
+            <StatCard label="Reviews" value={c.reviews.total} hint={c.reviews.newCount ? `+${c.reviews.newCount} this period` : "no new"} />
+            <StatCard label="Avg rating" value={c.reviews.avg > 0 ? c.reviews.avg.toFixed(1) : "New"} />
+            {biz.hasReservations && <StatCard label="Bookings" value={c.bookings.requests} hint={`${c.bookings.confirmed} confirmed`} />}
+            <StatCard label="Orders" value={c.orders.received} hint={`${c.orders.completed} completed`} />
+            <StatCard label="Revenue (orders)" value={currency(c.orders.revenue)} />
+            <StatCard label="Deliveries" value={c.deliveries} />
+          </div>
+
+          {/* Charts */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="card p-5"><h3 className="font-display font-bold text-ink">Daily profile views</h3><div className="mt-3"><BarChart data={m!.series.profileViews} /></div></div>
+            <div className="card p-5"><h3 className="font-display font-bold text-ink">Customer interactions</h3><div className="mt-3"><BarChart data={m!.series.interactions} color="#6366f1" /></div></div>
+            <div className="card p-5 lg:col-span-2"><h3 className="font-display font-bold text-ink">Search appearances</h3><div className="mt-3"><BarChart data={m!.series.searchAppearances} color="#f59e0b" /></div></div>
+          </div>
+
+          {/* Interaction summary + insights */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="card p-5">
+              <h3 className="font-display font-bold text-ink">Interaction summary</h3>
+              <dl className="mt-3 space-y-1.5 text-sm">
+                {[
+                  ["Search appearances", c.searchAppearances.value], ["Profile views", c.profileViews.value], ["Phone views", c.phoneViews.value],
+                  ["Call clicks", c.calls.value], ["WhatsApp clicks", c.whatsapp.value], ["Direction clicks", c.directions.value],
+                  ["Website clicks", c.website.value], ["Favorites", c.favorites.value], ["Bookings", c.bookings.requests], ["New reviews", c.reviews.newCount],
+                ].map(([l, v]) => <div key={l} className="flex justify-between border-b border-border/60 pb-1.5"><dt className="text-muted">{l}</dt><dd className="font-semibold text-ink">{v}</dd></div>)}
+              </dl>
+            </div>
+            <div className="card p-5">
+              <h3 className="font-display font-bold text-ink">💡 Insights</h3>
+              <ul className="mt-3 space-y-2 text-sm text-muted">
+                {m!.insights.map((i, idx) => <li key={idx} className="flex gap-2"><span className="text-brand">•</span> {i}</li>)}
+              </ul>
+            </div>
+          </div>
+          {loading && <p className="text-center text-xs text-muted">Updating…</p>}
+        </>
+      )}
     </div>
   );
 }

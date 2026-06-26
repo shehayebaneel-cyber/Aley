@@ -2,29 +2,38 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { About } from "./pages/About";
+import { Announcements } from "./pages/Announcements";
 import { BusinessProfile } from "./pages/BusinessProfile";
 import { Cart } from "./pages/Cart";
 import { Checkout } from "./pages/Checkout";
 import { Contact } from "./pages/Contact";
+import { Delivery } from "./pages/Delivery";
+import { DeliveryTracking } from "./pages/DeliveryTracking";
 import { MyOrders } from "./pages/MyOrders";
 import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { Explore } from "./pages/Explore";
 import { Home } from "./pages/Home";
+import { LostFound } from "./pages/LostFound";
 import { MapPage } from "./pages/MapPage";
 import { NotFound } from "./pages/NotFound";
 import { Offers } from "./pages/Offers";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { Projects } from "./pages/Projects";
 import { Saved } from "./pages/Saved";
+import { AdminAnalytics } from "./pages/admin/AdminAnalytics";
+import { AdminAnnouncements } from "./pages/admin/AdminAnnouncements";
 import { AdminBusinesses } from "./pages/admin/AdminBusinesses";
 import { AdminBusinessEdit } from "./pages/admin/AdminBusinessEdit";
 import { AdminCategories } from "./pages/admin/AdminCategories";
+import { AdminLostFound } from "./pages/admin/AdminLostFound";
 import { AdminCities } from "./pages/admin/AdminCities";
 import { AdminClaims } from "./pages/admin/AdminClaims";
 import { AdminNotifications } from "./pages/admin/AdminNotifications";
 import { AdminContent } from "./pages/admin/AdminContent";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
+import { AdminDelivery } from "./pages/admin/AdminDelivery";
+import { AdminDrivers } from "./pages/admin/AdminDrivers";
 import { AdminEventsOffers } from "./pages/admin/AdminEventsOffers";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
@@ -37,6 +46,9 @@ import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
 import { OwnerHome } from "./pages/owner/OwnerHome";
 import { OwnerLayout } from "./pages/owner/OwnerLayout";
 import { OwnerLogin } from "./pages/owner/OwnerLogin";
+import { DriverHome } from "./pages/driver/DriverHome";
+import { DriverLayout } from "./pages/driver/DriverLayout";
+import { DriverLogin } from "./pages/driver/DriverLogin";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -51,6 +63,9 @@ const TITLES: Record<string, string> = {
   "/events": "Events in Aley",
   "/offers": "Offers & deals",
   "/projects": "Community Projects",
+  "/lost-found": "Lost & Found",
+  "/notices": "Public Notices",
+  "/delivery": "Delivery Service",
   "/map": "Map of Aley",
   "/about": "About",
   "/contact": "Contact",
@@ -85,6 +100,10 @@ export default function App() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:slug" element={<ProjectDetail />} />
+          <Route path="/lost-found" element={<LostFound />} />
+          <Route path="/notices" element={<Announcements />} />
+          <Route path="/delivery" element={<Delivery />} />
+          <Route path="/delivery/track/:number" element={<DeliveryTracking />} />
           {/* Love Aley merged into Community Projects — keep old links working */}
           <Route path="/love-aley" element={<Navigate to="/projects" replace />} />
           <Route path="/cart" element={<Cart />} />
@@ -104,10 +123,17 @@ export default function App() {
           <Route path="b/:id" element={<BusinessDashboard />} />
         </Route>
 
+        {/* Driver app (own chrome) */}
+        <Route path="/driver/login" element={<DriverLogin />} />
+        <Route path="/driver" element={<DriverLayout />}>
+          <Route index element={<DriverHome />} />
+        </Route>
+
         {/* Admin panel */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
+          <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="businesses" element={<AdminBusinesses />} />
           <Route path="businesses/:id" element={<AdminBusinessEdit />} />
@@ -116,6 +142,10 @@ export default function App() {
           <Route path="categories" element={<AdminCategories />} />
           <Route path="reviews" element={<AdminReviews />} />
           <Route path="projects" element={<AdminProjects />} />
+          <Route path="lost-found" element={<AdminLostFound />} />
+          <Route path="announcements" element={<AdminAnnouncements />} />
+          <Route path="delivery" element={<AdminDelivery />} />
+          <Route path="drivers" element={<AdminDrivers />} />
           <Route path="events-offers" element={<AdminEventsOffers />} />
           <Route path="cities" element={<AdminCities />} />
           <Route path="marketplace" element={<AdminMarketplace />} />
