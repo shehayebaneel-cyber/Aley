@@ -1,11 +1,13 @@
 import { Link, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { GlobeIcon, MoonIcon, SunIcon } from "../../components/icons";
 import { useDriverAuth } from "../../context/DriverAuthContext";
+import { useLang } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
 
 export function DriverLayout() {
   const { driver, loading, logout } = useDriverAuth();
   const { theme, toggle } = useTheme();
+  const { t, toggle: toggleLang } = useLang();
   const navigate = useNavigate();
 
   if (loading) return <div className="flex min-h-screen items-center justify-center text-muted">Loading…</div>;
@@ -20,10 +22,11 @@ export function DriverLayout() {
             <span className="font-display font-extrabold text-ink">Aley <span className="text-brand">Drivers</span></span>
           </Link>
           <div className="ml-auto flex items-center gap-2">
-            <Link to="/" className="btn btn-ghost hidden px-3 py-2 text-sm sm:inline-flex"><GlobeIcon className="h-4 w-4" /> Site</Link>
+            <Link to="/" className="btn btn-ghost hidden px-3 py-2 text-sm sm:inline-flex"><GlobeIcon className="h-4 w-4" /> {t("dash.site")}</Link>
+            <button onClick={toggleLang} className="btn btn-ghost px-3 py-2 text-sm"><GlobeIcon className="h-4 w-4" /> {t("lang.switch")}</button>
             <button onClick={toggle} aria-label="Theme" className="btn btn-ghost h-9 w-9 !p-0">{theme === "dark" ? <SunIcon /> : <MoonIcon />}</button>
             <span className="hidden text-sm font-semibold text-ink sm:inline">{driver.name}</span>
-            <button onClick={() => { logout(); navigate("/driver/login"); }} className="btn btn-ghost px-4 py-2 text-sm">Log out</button>
+            <button onClick={() => { logout(); navigate("/driver/login"); }} className="btn btn-ghost px-4 py-2 text-sm">{t("dash.logout")}</button>
           </div>
         </div>
       </header>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BusinessCard } from "../components/BusinessCard";
 import { ChevronRight, SearchIcon } from "../components/icons";
+import { useLang } from "../context/LanguageContext";
 import { useFetch } from "../lib/useFetch";
 import type { Business, Category } from "../types";
 
@@ -16,14 +17,15 @@ const GROUP_ICON: Record<string, string> = {
 const groupIcon = (g: string) => GROUP_ICON[g] ?? "🏷️";
 
 const SORTS = [
-  { key: "", label: "Recommended" },
-  { key: "rating", label: "Top rated" },
-  { key: "reviews", label: "Most reviewed" },
-  { key: "newest", label: "Newest" },
-  { key: "name", label: "A–Z" },
+  { key: "", tk: "sort.recommended" },
+  { key: "rating", tk: "sort.topRated" },
+  { key: "reviews", tk: "sort.mostReviewed" },
+  { key: "newest", tk: "sort.newest" },
+  { key: "name", tk: "sort.az" },
 ];
 
 export function Explore() {
+  const { t } = useLang();
   const [params, setParams] = useSearchParams();
   const { data: categories } = useFetch<Category[]>(`/api/categories?city=${CITY}`);
   const cats = categories ?? [];
@@ -75,15 +77,15 @@ export function Explore() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="font-display text-3xl font-extrabold text-ink">Explore Aley</h1>
-      <p className="mt-1 text-muted">{!hasFilter ? "Browse by category, or search and filter to find anything in Aley." : loading ? "Loading…" : `${businesses?.length ?? 0} places found`}</p>
+      <h1 className="font-display text-3xl font-extrabold text-ink">{t("explore.title")}</h1>
+      <p className="mt-1 text-muted">{!hasFilter ? t("explore.browse") : loading ? t("explore.loading") : t("explore.placesFound", { n: businesses?.length ?? 0 })}</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[16rem_1fr]">
         {/* ---- Grouped category sidebar (desktop) ---- */}
         <aside className="hidden lg:block">
           <div className="sticky top-24 max-h-[78vh] space-y-1 overflow-y-auto pr-1">
             <button onClick={() => choose({ category: null, group: null })} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold ${!activeCategory && !activeGroup ? "bg-brand-soft text-brand-dark" : "text-ink hover:bg-surface-2"}`}>
-              🗂️ All categories
+              🗂️ {t("explore.allCategories")}
             </button>
             {grouped.map(({ group, items }) => (
               <div key={group}>
@@ -113,13 +115,13 @@ export function Explore() {
         <div>
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input defaultValue={params.get("q") ?? ""} onChange={(e) => set("q", e.target.value)} placeholder="Search businesses, food, services…" className="input !pl-9" />
+            <input defaultValue={params.get("q") ?? ""} onChange={(e) => set("q", e.target.value)} placeholder={t("common.searchPlaceholder")} className="input !pl-9" />
           </div>
 
           {/* Mobile: group chips, then sub-categories of the active group */}
           <div className="lg:hidden">
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              <button onClick={() => choose({ category: null, group: null })} className={`chip whitespace-nowrap ${!activeCategory && !activeGroup ? "chip-active" : ""}`}>All</button>
+              <button onClick={() => choose({ category: null, group: null })} className={`chip whitespace-nowrap ${!activeCategory && !activeGroup ? "chip-active" : ""}`}>{t("explore.all")}</button>
               {grouped.map(({ group }) => (
                 <button key={group} onClick={() => choose({ group, category: null })} className={`chip whitespace-nowrap ${activeGroup === group || activeCatGroup === group ? "chip-active" : ""}`}>{groupIcon(group)} {group}</button>
               ))}
@@ -135,18 +137,18 @@ export function Explore() {
 
           {/* Filters + sort */}
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button onClick={() => toggle("openNow")} className={`chip ${params.get("openNow") === "true" ? "chip-active" : ""}`}>Open now</button>
-            <button onClick={() => toggle("delivery")} className={`chip ${params.get("delivery") === "true" ? "chip-active" : ""}`}>Delivery</button>
-            <button onClick={() => toggle("reservations")} className={`chip ${params.get("reservations") === "true" ? "chip-active" : ""}`}>Reservations</button>
-            <button onClick={() => set("minRating", params.get("minRating") === "4" ? "" : "4")} className={`chip ${params.get("minRating") === "4" ? "chip-active" : ""}`}>4★ & up</button>
+            <button onClick={() => toggle("openNow")} className={`chip ${params.get("openNow") === "true" ? "chip-active" : ""}`}>{t("filter.openNow")}</button>
+            <button onClick={() => toggle("delivery")} className={`chip ${params.get("delivery") === "true" ? "chip-active" : ""}`}>{t("filter.delivery")}</button>
+            <button onClick={() => toggle("reservations")} className={`chip ${params.get("reservations") === "true" ? "chip-active" : ""}`}>{t("filter.reservations")}</button>
+            <button onClick={() => set("minRating", params.get("minRating") === "4" ? "" : "4")} className={`chip ${params.get("minRating") === "4" ? "chip-active" : ""}`}>{t("filter.rating4")}</button>
             <select value={params.get("priceMax") ?? ""} onChange={(e) => set("priceMax", e.target.value)} className="chip cursor-pointer">
-              <option value="">Any price</option>
-              <option value="1">$</option>
-              <option value="2">$$ & under</option>
-              <option value="3">$$$ & under</option>
+              <option value="">{t("price.any")}</option>
+              <option value="1">{t("price.1")}</option>
+              <option value="2">{t("price.2")}</option>
+              <option value="3">{t("price.3")}</option>
             </select>
             <select value={params.get("sort") ?? ""} onChange={(e) => set("sort", e.target.value)} className="chip ml-auto cursor-pointer">
-              {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              {SORTS.map((s) => <option key={s.key} value={s.key}>{t(s.tk)}</option>)}
             </select>
           </div>
 
@@ -158,7 +160,7 @@ export function Explore() {
                   <section key={group}>
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="font-display text-lg font-extrabold text-ink">{group}</h2>
-                      <button onClick={() => choose({ group, category: null })} className="text-sm font-semibold text-brand hover:text-brand-dark">See all →</button>
+                      <button onClick={() => choose({ group, category: null })} className="text-sm font-semibold text-brand hover:text-brand-dark">{t("explore.seeAll")}</button>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {items.map((c) => (
@@ -166,7 +168,7 @@ export function Explore() {
                           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl transition group-hover:scale-110" style={{ background: `${c.color}1a` }}>{c.icon}</span>
                           <div className="min-w-0">
                             <p className="truncate font-display font-bold text-ink">{c.name}</p>
-                            <p className="text-sm text-muted">{c.count} {c.count === 1 ? "place" : "places"}</p>
+                            <p className="text-sm text-muted">{c.count} {t(c.count === 1 ? "explore.place" : "explore.places")}</p>
                           </div>
                         </button>
                       ))}
@@ -180,8 +182,8 @@ export function Explore() {
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{businesses.map((b) => <BusinessCard key={b.id} business={b} showActions />)}</div>
             ) : (
               <div className="card p-16 text-center">
-                <p className="text-lg font-semibold text-ink">No places match your filters.</p>
-                <p className="mt-1 text-muted">Try clearing a filter or searching something else.</p>
+                <p className="text-lg font-semibold text-ink">{t("explore.noResults")}</p>
+                <p className="mt-1 text-muted">{t("explore.noResultsHint")}</p>
               </div>
             )}
           </div>

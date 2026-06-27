@@ -1,12 +1,11 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BusinessCard } from "../components/BusinessCard";
-import { ProgressBar, ProjectCard } from "../components/ProjectCard";
-import { CalendarIcon, ChevronRight, HandHeartIcon, MapPinIcon, SearchIcon, TagIcon, UsersIcon } from "../components/icons";
+import { CalendarIcon, ChevronRight, MapPinIcon, SearchIcon, TagIcon } from "../components/icons";
 import { useContent } from "../context/ContentContext";
-import { currency, formatEventDate } from "../lib/api";
+import { formatEventDate } from "../lib/api";
 import { useFetch } from "../lib/useFetch";
-import type { HomeData, ProjectSummary } from "../types";
+import type { HomeData } from "../types";
 
 const CITY = "aley";
 
@@ -29,7 +28,6 @@ const GROUP_META: Record<string, { icon: string; color: string }> = {
 
 export function Home() {
   const { data } = useFetch<HomeData>(`/api/home?city=${CITY}`);
-  const { data: projects } = useFetch<ProjectSummary>(`/api/projects/summary?city=${CITY}`);
   const c = useContent();
   const S = c.sections;
   const navigate = useNavigate();
@@ -39,8 +37,6 @@ export function Home() {
     e.preventDefault();
     navigate(`/explore?q=${encodeURIComponent(q.trim())}`);
   };
-
-  const mainProject = projects?.featured.find((p) => p.status !== "COMPLETED") ?? projects?.featured[0];
 
   return (
     <div>
@@ -80,13 +76,11 @@ export function Home() {
       {/* ---- Trust stats ---- */}
       {S.stats.show && (
       <section className="border-b border-border bg-surface">
-        <div className="mx-auto grid max-w-7xl grid-cols-3 gap-4 px-4 py-8 sm:grid-cols-6">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 py-8 sm:grid-cols-4">
           <Stat value={data?.stats?.businesses} label="Businesses" />
           <Stat value={data?.stats?.categories} label="Categories" />
           <Stat value={data?.stats?.events} label="Events" />
-          <Stat value={projects ? projects.active + projects.completed : undefined} label="Projects" />
-          <Stat value={projects ? currency(projects.totalRaised) : undefined} label="Raised" />
-          <Stat value={projects?.contributors} label="Contributors" />
+          <Stat value={data?.stats?.offers} label="Offers" />
         </div>
       </section>
       )}
@@ -120,57 +114,6 @@ export function Home() {
           <Section show={S.featured.show} title={S.featured.title!} subtitle={S.featured.subtitle} to="/explore?featured=true">
             <Grid>{data.featured.map((b) => <BusinessCard key={b.id} business={b} showActions />)}</Grid>
           </Section>
-        )}
-
-        {/* Help Build Aley — community projects, moved high */}
-        {S.community.show && projects && (mainProject || projects.active > 0) && (
-          <section className="overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-brand/12 via-surface to-emerald-400/10 p-6 sm:p-8">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <span className="chip !border-brand/30 !bg-brand-soft !text-brand-dark"><HandHeartIcon className="h-4 w-4" /> Community</span>
-                <h2 className="mt-3 font-display text-2xl font-extrabold text-ink sm:text-3xl">{S.community.title}</h2>
-                <p className="mt-1 text-muted">{S.community.subtitle}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link to="/projects" className="btn btn-primary px-5 py-2.5">Suggest a Project</Link>
-                <Link to="/projects" className="btn btn-ghost px-5 py-2.5">Love Aley ❤</Link>
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3 text-sm">
-              <Pill value={currency(projects.totalRaised)} label="raised" />
-              <Pill value={projects.active} label="active" />
-              <Pill value={projects.completed} label="completed" />
-              <Pill value={projects.contributors} label="contributors" />
-            </div>
-
-            <div className="mt-6 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-              {/* Main active project spotlight */}
-              {mainProject && (
-                <div className="card overflow-hidden">
-                  <div className="grid sm:grid-cols-2">
-                    <div className="relative aspect-video sm:aspect-auto">
-                      <img src={mainProject.proposedPhotos[0] ?? mainProject.progressPhotos[0] ?? mainProject.beforePhotos[0] ?? ""} alt="" className="h-full w-full object-cover" />
-                    </div>
-                    <div className="p-5">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-brand">Spotlight project</span>
-                      <h3 className="mt-1 font-display text-lg font-bold text-ink">{mainProject.title}</h3>
-                      <p className="mt-1 line-clamp-2 text-sm text-muted">{mainProject.description}</p>
-                      <div className="mt-3"><ProgressBar raised={mainProject.amountRaised} goal={mainProject.fundingGoal} /></div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Link to={`/projects/${mainProject.slug}`} className="btn btn-primary px-4 py-2 text-sm"><HandHeartIcon className="h-4 w-4" /> Donate</Link>
-                        <Link to={`/projects/${mainProject.slug}`} className="btn btn-ghost px-4 py-2 text-sm">View expenses</Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {/* Other featured projects */}
-              <div className="grid gap-4">
-                {projects.featured.filter((p) => p.id !== mainProject?.id).slice(0, 2).map((p) => <ProjectCard key={p.id} project={p} />)}
-              </div>
-            </div>
-          </section>
         )}
 
         {/* Hidden Gems */}
@@ -247,10 +190,6 @@ function Stat({ value, label }: { value: string | number | undefined; label: str
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
     </div>
   );
-}
-
-function Pill({ value, label }: { value: string | number; label: string }) {
-  return <span className="rounded-full bg-surface px-4 py-2 shadow-sm"><b className="text-ink">{value}</b> <span className="text-muted">{label}</span></span>;
 }
 
 function Section({ title, subtitle, to, show = true, children }: { title: string; subtitle?: string; to?: string; show?: boolean; children: React.ReactNode }) {

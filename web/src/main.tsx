@@ -6,6 +6,7 @@ import { AdminAuthProvider } from "./context/AdminAuthContext";
 import { CartProvider } from "./context/CartContext";
 import { ContentProvider } from "./context/ContentContext";
 import { DriverAuthProvider } from "./context/DriverAuthContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { UserAuthProvider } from "./context/UserAuthContext";
@@ -14,6 +15,7 @@ import "./index.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
+      <LanguageProvider>
       <BrowserRouter>
         <ContentProvider>
           <AdminAuthProvider>
@@ -29,6 +31,7 @@ createRoot(document.getElementById("root")!).render(
           </AdminAuthProvider>
         </ContentProvider>
       </BrowserRouter>
+      </LanguageProvider>
     </ThemeProvider>
   </StrictMode>
 );

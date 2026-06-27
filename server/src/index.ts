@@ -2,6 +2,7 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { signToken } from "./auth";
+import { prisma } from "./db";
 import { adminRouter } from "./routes/admin";
 import { aiRouter } from "./routes/ai";
 import { businessesRouter } from "./routes/businesses";
@@ -69,6 +70,10 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 const port = Number(process.env.PORT) || 4100;
 app.listen(port, () => console.log(`Aley Platform API running on http://localhost:${port}`));
+
+// Keep the serverless DB (Neon) warm so it doesn't auto-suspend and force a
+// slow cold-start on the next page load. Cheap heartbeat every ~4 minutes.
+setInterval(() => { prisma.$queryRaw`SELECT 1`.catch(() => {}); }, 240_000);
 
 process.on("unhandledRejection", (e) => console.error("Unhandled rejection:", e));
 process.on("uncaughtException", (e) => console.error("Uncaught exception:", e));

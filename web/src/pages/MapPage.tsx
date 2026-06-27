@@ -12,13 +12,20 @@ const hasTag = (p: MapPin, ...terms: string[]) => (p.tags ?? []).some((t) => ter
 
 const FILTERS: { key: string; label: string; test: (p: MapPin) => boolean }[] = [
   { key: "open", label: "🟢 Open now", test: (p) => p.openNow },
-  { key: "coffee", label: "☕ Coffee", test: (p) => /coffee/i.test(p.category.name) },
-  { key: "restaurants", label: "🍽️ Restaurants", test: (p) => /restaurant/i.test(p.category.name) },
+  { key: "delivery", label: "🛵 Delivery", test: (p) => p.hasDelivery },
+  { key: "reservations", label: "📅 Reservations", test: (p) => p.hasReservations },
+  { key: "rating", label: "⭐ 4.5+", test: (p) => p.rating >= 4.5 },
   { key: "parking", label: "🅿️ Parking", test: (p) => hasTag(p, "parking") },
   { key: "study", label: "📚 Study friendly", test: (p) => hasTag(p, "study", "wifi") },
   { key: "outdoor", label: "🌿 Outdoor seating", test: (p) => hasTag(p, "outdoor", "terrace") },
   { key: "family", label: "👨‍👩‍👧 Family friendly", test: (p) => hasTag(p, "family") },
-  { key: "delivery", label: "🛵 Delivery", test: (p) => p.hasDelivery },
+];
+
+// Top-level category groups (match the platform taxonomy).
+const GROUPS: [string, string][] = [
+  ["Food & Drinks", "🍴"], ["Shopping", "🛍️"], ["Health & Beauty", "💄"], ["Automotive", "🚗"],
+  ["Home & Living", "🏠"], ["Professional Services", "💼"], ["Stay & Tourism", "🏨"], ["Education", "🎓"],
+  ["Entertainment", "🎭"], ["Community", "📢"], ["Essential Services", "🚨"],
 ];
 
 export function MapPage() {
@@ -28,12 +35,17 @@ export function MapPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(hasMapsKey() ? "loading" : "unavailable");
   const [selected, setSelected] = useState<MapPin | null>(null);
   const [active, setActive] = useState<Set<string>>(new Set());
+  const [group, setGroup] = useState("");
+  const [priceMax, setPriceMax] = useState(0);
 
   const filtered = useMemo(() => {
-    const list = pins ?? [];
-    if (active.size === 0) return list;
-    return list.filter((p) => [...active].every((k) => FILTERS.find((f) => f.key === k)!.test(p)));
-  }, [pins, active]);
+    let list = pins ?? [];
+    if (group) list = list.filter((p) => p.category.group === group);
+    if (priceMax) list = list.filter((p) => p.priceRange <= priceMax);
+    if (active.size) list = list.filter((p) => [...active].every((k) => FILTERS.find((f) => f.key === k)!.test(p)));
+    return list;
+  }, [pins, group, priceMax, active]);
+  const anyFilter = group !== "" || priceMax !== 0 || active.size > 0;
 
   useEffect(() => {
     if (!hasMapsKey()) return;
@@ -52,11 +64,17 @@ export function MapPage() {
   useEffect(() => {
     if (status !== "ready" || !mapRef.current || !window.google) return;
     const maps = window.google.maps;
+    const bounds = new maps.LatLngBounds();
     const markers = filtered.map((p) => {
-      const marker = new maps.Marker({ position: { lat: p.lat, lng: p.lng }, map: mapRef.current, title: p.name, label: { text: p.category.icon, fontSize: "16px" } });
-      marker.addListener("click", () => { setSelected(p); mapRef.current.panTo({ lat: p.lat, lng: p.lng }); });
+      const pos = { lat: p.lat, lng: p.lng };
+      const marker = new maps.Marker({ position: pos, map: mapRef.current, title: p.name, label: { text: p.category.icon, fontSize: "16px" } });
+      marker.addListener("click", () => { setSelected(p); mapRef.current.panTo(pos); });
+      bounds.extend(pos);
       return marker;
     });
+    // Zoom to fit the filtered results (avoid over-zoom on a single pin).
+    if (filtered.length === 1) { mapRef.current.setCenter({ lat: filtered[0].lat, lng: filtered[0].lng }); mapRef.current.setZoom(15); }
+    else if (filtered.length > 1) mapRef.current.fitBounds(bounds, 60);
     return () => markers.forEach((m) => m.setMap(null));
   }, [status, filtered]);
 
@@ -67,9 +85,24 @@ export function MapPage() {
       <h1 className="font-display text-3xl font-extrabold text-ink">Map of Aley</h1>
       <p className="mt-1 text-muted">{filtered.length} of {pins?.length ?? 0} businesses · tap a pin for details.</p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      {/* Category groups */}
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <button onClick={() => setGroup("")} className={`chip whitespace-nowrap ${!group ? "chip-active" : ""}`}>All categories</button>
+        {GROUPS.map(([g, icon]) => (
+          <button key={g} onClick={() => setGroup(group === g ? "" : g)} className={`chip whitespace-nowrap ${group === g ? "chip-active" : ""}`}>{icon} {g}</button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => <button key={f.key} onClick={() => toggle(f.key)} className={`chip ${active.has(f.key) ? "chip-active" : ""}`}>{f.label}</button>)}
-        {active.size > 0 && <button onClick={() => setActive(new Set())} className="chip text-muted">Clear</button>}
+        <select value={priceMax || ""} onChange={(e) => setPriceMax(Number(e.target.value) || 0)} className="chip cursor-pointer">
+          <option value="">Any price</option>
+          <option value="1">$</option>
+          <option value="2">$$ & under</option>
+          <option value="3">$$$ & under</option>
+        </select>
+        {anyFilter && <button onClick={() => { setGroup(""); setPriceMax(0); setActive(new Set()); }} className="chip font-semibold text-muted">Clear all</button>}
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">

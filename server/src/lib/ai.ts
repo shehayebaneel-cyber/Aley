@@ -84,10 +84,6 @@ async function listOffers() {
   const offers = await prisma.offer.findMany({ where: { isActive: true, city: { is: { slug: CITY } } }, orderBy: { createdAt: "desc" }, take: 15, include: { business: { select: { name: true, slug: true } } } });
   return offers.map((o) => ({ title: o.title, description: o.description, type: o.type, business: o.business?.name, slug: o.business?.slug }));
 }
-async function listProjects() {
-  const projects = await prisma.project.findMany({ where: { isPublished: true, city: { is: { slug: CITY } } }, orderBy: { isFeatured: "desc" }, take: 12 });
-  return projects.map((p) => ({ title: p.title, slug: p.slug, status: p.status, raised: p.amountRaised, goal: p.fundingGoal, contributors: p.contributorCount }));
-}
 async function listAnnouncements() {
   const items = await prisma.announcement.findMany({ where: { isPublished: true, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }], city: { is: { slug: CITY } } }, orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }], take: 12 });
   return items.map((a) => ({ title: a.title, category: a.category, body: a.body.slice(0, 240), pinned: a.isPinned }));
@@ -144,7 +140,6 @@ function toolsFor(ctx: AiContext) {
   return [SEARCH_TOOL, GET_BUSINESS_TOOL,
     SIMPLE("list_events", "List upcoming events in Aley."),
     SIMPLE("list_offers", "List current offers/deals in Aley."),
-    SIMPLE("list_projects", "List community projects (civic crowdfunding) in Aley."),
     SIMPLE("list_announcements", "List official public notices (municipality, utilities, road works, emergencies, weather, health)."),
     DELIVERY_TOOL];
 }
@@ -155,7 +150,6 @@ async function executeTool(name: string, input: Record<string, unknown>, ctx: Ai
     case "get_business": return getBusiness(String(input.slug));
     case "list_events": return listEvents();
     case "list_offers": return listOffers();
-    case "list_projects": return listProjects();
     case "list_announcements": return listAnnouncements();
     case "delivery_estimate": return deliveryEstimate(input);
     case "get_business_profile": return c.businessId ? getBusinessProfileById(c.businessId) : { error: "no business" };
@@ -201,7 +195,7 @@ You are the ADMIN co-pilot for the whole platform.
   return `${base}
 You help VISITORS discover Aley: find and compare businesses/services, recommend places, surface offers and events, explain the town, and guide community/delivery/booking actions.
 - To recommend, call search_businesses (and get_business for detail). Rank by relevance, rating, number of reviews and whether it's open now; explain your pick in one line.
-- For "what's happening" use list_events; for deals list_offers; community list_projects; "road closures/announcements" list_announcements.
+- For "what's happening" use list_events; for deals list_offers; "road closures/announcements" list_announcements.
 - For delivery ("deliver X from A to B", "pick up a package") gather what/where, call delivery_estimate, give the price range, and share the prefilled [Request delivery](/delivery?...) link.
 - For booking a table/appointment, point to the business page where they can book.`;
 }

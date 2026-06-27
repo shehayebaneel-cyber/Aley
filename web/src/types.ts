@@ -233,7 +233,7 @@ export interface MapPin {
   lat: number;
   lng: number;
   openNow: boolean;
-  category: { name: string; icon: string; color: string };
+  category: { name: string; slug: string; icon: string; color: string; group: string };
   tags: string[];
   hasDelivery: boolean;
   hasReservations: boolean;

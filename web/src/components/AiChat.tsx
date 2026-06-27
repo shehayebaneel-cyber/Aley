@@ -1,5 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLang } from "../context/LanguageContext";
 
 export interface AiMessage { role: "user" | "assistant"; content: string }
 
@@ -54,6 +55,7 @@ export function AiChat({
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const { t } = useLang();
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
 
@@ -94,12 +96,12 @@ export function AiChat({
             </div>
           </div>
         ))}
-        {busy && <div className="flex justify-start"><div className="rounded-2xl rounded-tl-sm bg-surface-2 p-3 text-sm text-muted">Aley AI is thinking…</div></div>}
+        {busy && <div className="flex justify-start"><div className="rounded-2xl rounded-tl-sm bg-surface-2 p-3 text-sm text-muted">{t("ai.thinking")}</div></div>}
         <div ref={endRef} />
       </div>
       <form onSubmit={(e: FormEvent) => { e.preventDefault(); submit(input); }} className="mt-2 flex items-center gap-2 border-t border-border p-2">
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask Aley AI…" className="input !py-2.5" autoFocus={!compact} />
-        <button type="submit" disabled={busy || !input.trim()} className="btn btn-primary shrink-0 px-4 py-2.5 disabled:opacity-50">Send</button>
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t("ai.placeholder")} className="input !py-2.5" autoFocus={!compact} />
+        <button type="submit" disabled={busy || !input.trim()} className="btn btn-primary shrink-0 px-4 py-2.5 disabled:opacity-50">{t("common.send")}</button>
       </form>
     </div>
   );

@@ -178,3 +178,13 @@ h1, h2, h3, h4 {
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9999px; }
+
+/* ---- Arabic / RTL support ---- */
+/* A clean Arabic font stack kicks in when the document is in Arabic. */
+html[lang="ar"] body {
+  font-family: "Noto Kufi Arabic", "Cairo", "Segoe UI", "Tahoma", system-ui, sans-serif;
+}
+/* In RTL, keep the floating AI assistant button/panel on the left so it doesn't
+   collide with right-aligned content. */
+html[dir="rtl"] .ai-fab { right: auto; left: 1rem; }
+html[dir="rtl"] .ai-panel { right: auto; left: 1rem; }

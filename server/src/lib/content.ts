@@ -20,7 +20,7 @@ export const DEFAULT_CONTENT = {
     badge: "",
     title: "Discover, Support & Experience Aley",
     subtitle: "Find local businesses, events, offers, places, and community projects — all in one platform built for Aley.",
-    image: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1920&h=1080&q=70",
+    image: "https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?auto=format&fit=crop&w=1920&h=1080&q=70",
     searchPlaceholder: "Search cafés, restaurants, services…",
   },
   sections: {
@@ -36,7 +36,7 @@ export const DEFAULT_CONTENT = {
         { title: "Quiet cafés to study", sub: "Wi-Fi, plugs & calm corners", to: "/explore?category=coffee-shops", img: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&h=450&q=70" },
         { title: "Best breakfast spots", sub: "Start your morning right", to: "/explore?q=breakfast", img: "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=600&h=450&q=70" },
         { title: "Family-friendly places", sub: "Fun for everyone", to: "/explore?q=family", img: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=600&h=450&q=70" },
-        { title: "Sunset views", sub: "Golden hour over the mountains", to: "/explore?q=view", img: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=600&h=450&q=70" },
+        { title: "Sunset views", sub: "Golden hour over the mountains", to: "/explore?q=view", img: "https://images.unsplash.com/photo-1458668383970-8ddd3927deed?auto=format&fit=crop&w=600&h=450&q=70" },
         { title: "Local favorites", sub: "Most-loved by Aley", to: "/explore?sort=reviews", img: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&h=450&q=70" },
         { title: "Late-night eats", sub: "Open when you need them", to: "/explore?openNow=true&category=restaurants", img: "https://images.unsplash.com/photo-1517244683847-7456b63c5969?auto=format&fit=crop&w=600&h=450&q=70" },
       ],
@@ -48,12 +48,12 @@ export const DEFAULT_CONTENT = {
   about: {
     title: "Why We Built This",
     body: "Aley deserves one digital home where residents, visitors, and businesses can connect. This platform was created to support local businesses, promote community projects, and make discovering Aley easier, faster, and more beautiful.",
-    image: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1600&h=700&q=70",
+    image: "https://images.unsplash.com/photo-1454496522488-7a8e488e8606?auto=format&fit=crop&w=1600&h=700&q=70",
   },
   loveAley: {
     title: "Love Aley ❤",
     subtitle: "Your town, your impact. Support community projects, volunteer, vote on ideas, and help make Aley more beautiful — transparently.",
-    image: "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1600&h=700&q=70",
+    image: "https://images.unsplash.com/photo-1472791108553-c9405341e398?auto=format&fit=crop&w=1600&h=700&q=70",
   },
 };
 

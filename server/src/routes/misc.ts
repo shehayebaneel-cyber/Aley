@@ -6,6 +6,15 @@ import { outBusiness, outCard } from "../lib/serialize";
 
 // Cities, categories, events, offers, reviews, and the homepage aggregate.
 
+// Tiny in-memory response cache (per process). Cuts repeated DB work and hides
+// serverless (Neon) cold-starts. Short TTL so admin edits show up quickly.
+const _cache = new Map<string, { at: number; data: unknown }>();
+function cached<T>(key: string, ttlMs: number, make: () => Promise<T>): Promise<T> {
+  const hit = _cache.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return Promise.resolve(hit.data as T);
+  return make().then((data) => { _cache.set(key, { at: Date.now(), data }); return data; });
+}
+
 export const citiesRouter = Router();
 citiesRouter.get("/", async (_req, res) => {
   const cities = await prisma.city.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
@@ -15,15 +24,18 @@ citiesRouter.get("/", async (_req, res) => {
 export const categoriesRouter = Router();
 categoriesRouter.get("/", async (req, res) => {
   const city = String(req.query.city ?? "");
-  const categories = await prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
-  // Attach a per-city business count so the UI can show "12 places".
-  const counts = await prisma.business.groupBy({
-    by: ["categoryId"],
-    where: { isPublished: true, ...(city ? { city: { is: { slug: city } } } : {}) },
-    _count: { _all: true },
+  const data = await cached(`categories:${city}`, 60_000, async () => {
+    const categories = await prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
+    // Attach a per-city business count so the UI can show "12 places".
+    const counts = await prisma.business.groupBy({
+      by: ["categoryId"],
+      where: { isPublished: true, ...(city ? { city: { is: { slug: city } } } : {}) },
+      _count: { _all: true },
+    });
+    const map = new Map(counts.map((c) => [c.categoryId, c._count._all]));
+    return categories.map((c) => ({ ...c, count: map.get(c.id) ?? 0 }));
   });
-  const map = new Map(counts.map((c) => [c.categoryId, c._count._all]));
-  res.json(categories.map((c) => ({ ...c, count: map.get(c.id) ?? 0 })));
+  res.json(data);
 });
 
 export const eventsRouter = Router();
@@ -119,6 +131,7 @@ reservationsRouter.post("/", optionalUser, async (req, res) => {
 export const homeRouter = Router();
 homeRouter.get("/", async (req, res) => {
   const city = String(req.query.city ?? "aley");
+  const data = await cached(`home:${city}`, 60_000, async () => {
   const cityWhere = { city: { is: { slug: city } } };
   const base = { isPublished: true, ...cityWhere };
 
@@ -153,7 +166,7 @@ homeRouter.get("/", async (req, res) => {
     else groupMap.set(g, { group: g, icon: c.icon, color: c.color, count: cnt, categories: 1 });
   }
 
-  res.json({
+  return {
     city: cityRow,
     totalBusinesses,
     stats: { businesses: totalBusinesses, categories: activeCategories, events: eventsCount, offers: offersCount },
@@ -164,5 +177,7 @@ homeRouter.get("/", async (req, res) => {
     events,
     categories: categories.map((c) => ({ ...c, count: countMap.get(c.id) ?? 0 })).filter((c) => c.count > 0).slice(0, 12),
     groups: [...groupMap.values()],
+  };
   });
+  res.json(data);
 });

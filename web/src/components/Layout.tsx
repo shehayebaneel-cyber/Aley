@@ -1,23 +1,52 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { AiWidget } from "./AiWidget";
 import { useCart } from "../context/CartContext";
 import { useContent } from "../context/ContentContext";
+import { useLang } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserAuth } from "../context/UserAuthContext";
-import { CartIcon, CloseIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
+import { BellIcon, CartIcon, CloseIcon, GlobeIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
+import { COMMUNITY_URL } from "../lib/config";
 
-const NAV = [
-  { to: "/", label: "Home", end: true },
-  { to: "/explore", label: "Explore" },
-  { to: "/events", label: "Events" },
-  { to: "/offers", label: "Offers" },
-  { to: "/delivery", label: "Delivery" },
-  { to: "/projects", label: "Community" },
-  { to: "/map", label: "Map" },
-  { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
+type NavItem = { to: string; key: string; end?: boolean };
+// Center navigation — the primary destinations.
+const NAV: NavItem[] = [
+  { to: "/", key: "home", end: true },
+  { to: "/explore", key: "explore" },
+  { to: "/events", key: "events" },
+  { to: "/offers", key: "offers" },
+  { to: "/delivery", key: "delivery" },
+  { to: "/community", key: "community" },
+  { to: "/map", key: "map" },
 ];
+
+// Renders a nav destination. The "community" item points to the dedicated
+// non-profit platform (external) once COMMUNITY_URL is set; until then it links
+// to the built-in /community placeholder. Flip the link by editing lib/config.ts.
+function NavEntry({ n, className, onClick }: { n: NavItem; className: string | ((p: { isActive: boolean }) => string); onClick?: () => void }) {
+  const { t } = useLang();
+  const label = t(`nav.${n.key}`);
+  if (n.key === "community" && COMMUNITY_URL) {
+    const cls = typeof className === "function" ? className({ isActive: false }) : className;
+    return <a href={COMMUNITY_URL} target="_blank" rel="noreferrer" className={cls} onClick={onClick}>{label}</a>;
+  }
+  return <NavLink to={n.to} end={n.end} onClick={onClick} className={className}>{label}</NavLink>;
+}
+// Secondary links — kept out of the top bar, shown in the mobile menu + footer.
+const SECONDARY: NavItem[] = [
+  { to: "/about", key: "about" },
+  { to: "/contact", key: "contact" },
+];
+
+function LangToggle() {
+  const { lang, toggle } = useLang();
+  return (
+    <button onClick={toggle} aria-label="Switch language" title={lang === "en" ? "العربية" : "English"} className="btn btn-ghost h-10 shrink-0 gap-1 px-2.5 text-sm font-bold">
+      <GlobeIcon className="h-4 w-4" /> {lang === "en" ? "ع" : "EN"}
+    </button>
+  );
+}
 
 function Logo() {
   const { brand } = useContent();
@@ -33,6 +62,7 @@ function Logo() {
 
 function AccountMenu() {
   const { user, logout, openAuth } = useUserAuth();
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -45,7 +75,7 @@ function AccountMenu() {
 
   if (!user) {
     return (
-      <button onClick={openAuth} className="btn btn-primary px-4 py-2 text-sm"><UserIcon className="h-4 w-4" /> <span className="hidden sm:inline">Log in</span></button>
+      <button onClick={openAuth} className="btn btn-primary px-4 py-2 text-sm"><UserIcon className="h-4 w-4" /> <span className="hidden sm:inline">{t("common.login")}</span></button>
     );
   }
   const initial = user.name?.charAt(0).toUpperCase() ?? "U";
@@ -61,13 +91,13 @@ function AccountMenu() {
             <p className="truncate text-xs text-muted">{user.email}</p>
           </div>
           <button onClick={() => { setOpen(false); navigate("/saved"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
-            <HeartIcon className="h-4 w-4 text-rose-500" /> Saved places
+            <HeartIcon className="h-4 w-4 text-rose-500" /> {t("common.saved")}
           </button>
           <button onClick={() => { setOpen(false); navigate("/orders"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
-            <CartIcon className="h-4 w-4 text-brand" /> My orders
+            <CartIcon className="h-4 w-4 text-brand" /> {t("common.myOrders")}
           </button>
           <button onClick={() => { logout(); setOpen(false); navigate("/"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
-            <LogoutIcon className="h-4 w-4" /> Log out
+            <LogoutIcon className="h-4 w-4" /> {t("common.logout")}
           </button>
         </div>
       )}
@@ -88,85 +118,73 @@ function CartButton() {
 export function Layout() {
   const { theme, toggle } = useTheme();
   const { brand, contact } = useContent();
-  const navigate = useNavigate();
-  const [q, setQ] = useState("");
+  const { t } = useLang();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  function search(e: FormEvent) {
-    e.preventDefault();
-    navigate(`/explore?q=${encodeURIComponent(q.trim())}`);
-    setMenuOpen(false);
-  }
 
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-surface/85 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3">
+          {/* Left: logo + location */}
           <Logo />
           <span className="hidden items-center gap-1 rounded-full surface-2 px-3 py-1 text-xs font-semibold text-muted sm:inline-flex">
-            <MapPinIcon className="h-3.5 w-3.5 text-brand" /> Aley
+            <MapPinIcon className="h-3.5 w-3.5 text-brand" /> {t("common.aley")}
           </span>
 
-          {/* Desktop search */}
-          <form onSubmit={search} className="relative ml-auto hidden max-w-sm flex-1 lg:block">
-            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search businesses, food, services…"
-              className="input !pl-9"
-            />
-          </form>
-
-          <nav className="ml-auto hidden items-center gap-1 lg:ml-4 lg:flex">
+          {/* Center: primary navigation */}
+          <nav className="hidden flex-1 items-center justify-center gap-0.5 lg:flex">
             {NAV.map((n) => (
-              <NavLink
+              <NavEntry
                 key={n.to}
-                to={n.to}
-                end={n.end}
+                n={n}
                 className={({ isActive }) =>
                   `rounded-full px-3 py-2 text-sm font-semibold transition ${
                     isActive ? "bg-brand-soft text-brand-dark" : "text-muted hover:text-ink"
                   }`
                 }
-              >
-                {n.label}
-              </NavLink>
+              />
             ))}
           </nav>
 
-          <button onClick={toggle} aria-label="Toggle theme" className="btn btn-ghost h-10 w-10 !p-0">
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
-          <CartButton />
-          <AccountMenu />
-          <button onClick={() => setMenuOpen((o) => !o)} aria-label="Menu" className="btn btn-ghost h-10 w-10 !p-0 lg:hidden">
-            {menuOpen ? <CloseIcon /> : <MenuIcon />}
-          </button>
+          {/* Right: actions */}
+          <div className="ml-auto flex items-center gap-1 lg:ml-0">
+            <LangToggle />
+            <button onClick={toggle} aria-label="Toggle theme" className="btn btn-ghost h-10 w-10 !p-0">
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            </button>
+            <button aria-label="Notifications" title="Notifications — coming soon" className="btn btn-ghost hidden h-10 w-10 cursor-default !p-0 opacity-50 sm:inline-flex">
+              <BellIcon className="h-5 w-5" />
+            </button>
+            <Link to="/ai" aria-label={t("ai.title")} title={t("ai.title")} className="btn btn-ghost hidden h-10 w-10 !p-0 text-lg sm:inline-flex">✨</Link>
+            <CartButton />
+            <AccountMenu />
+            <Link to="/explore" aria-label={t("common.search")} title={t("common.search")} className="btn btn-ghost hidden h-10 w-10 !p-0 sm:inline-flex">
+              <SearchIcon className="h-5 w-5" />
+            </Link>
+            <button onClick={() => setMenuOpen((o) => !o)} aria-label="Menu" className="btn btn-ghost h-10 w-10 !p-0 lg:hidden">
+              {menuOpen ? <CloseIcon /> : <MenuIcon />}
+            </button>
+          </div>
         </div>
 
         {/* Mobile drawer */}
         {menuOpen && (
           <div className="border-t border-border bg-surface px-4 py-4 lg:hidden">
-            <form onSubmit={search} className="relative mb-3">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="input !pl-9" />
-            </form>
             <div className="grid grid-cols-2 gap-2">
-              {NAV.map((n) => (
-                <NavLink
+              {[...NAV, ...SECONDARY].map((n) => (
+                <NavEntry
                   key={n.to}
-                  to={n.to}
-                  end={n.end}
+                  n={n}
                   onClick={() => setMenuOpen(false)}
                   className={({ isActive }) =>
                     `rounded-xl px-3 py-2.5 text-sm font-semibold ${isActive ? "bg-brand text-white" : "surface-2 text-ink"}`
                   }
-                >
-                  {n.label}
-                </NavLink>
+                />
               ))}
+              <Link to="/explore" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-xl surface-2 px-3 py-2.5 text-sm font-semibold text-ink"><SearchIcon className="h-4 w-4" /> {t("common.search")}</Link>
+              <Link to="/ai" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-xl surface-2 px-3 py-2.5 text-sm font-semibold text-ink">✨ {t("ai.title")}</Link>
             </div>
+            <div className="mt-3"><LangToggle /></div>
           </div>
         )}
       </header>
@@ -184,33 +202,33 @@ export function Layout() {
             <p className="mt-3 max-w-xs text-sm text-muted">{brand.footerText}</p>
           </div>
           <div>
-            <h4 className="text-sm font-bold text-ink">Explore</h4>
+            <h4 className="text-sm font-bold text-ink">{t("footer.explore")}</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted">
-              {NAV.slice(1, 6).map((n) => (
+              {[...NAV.slice(1), ...SECONDARY].map((n) => (
                 <li key={n.to}>
-                  <Link to={n.to} className="hover:text-brand">{n.label}</Link>
+                  <NavEntry n={n} className="hover:text-brand" />
                 </li>
               ))}
-              <li><Link to="/lost-found" className="hover:text-brand">Lost &amp; Found</Link></li>
-              <li><Link to="/notices" className="hover:text-brand">Public Notices</Link></li>
-              <li><Link to="/ai" className="font-semibold text-brand hover:text-brand-dark">Ask Aley AI ✨</Link></li>
+              <li><Link to="/lost-found" className="hover:text-brand">{t("footer.lostFound")}</Link></li>
+              <li><Link to="/notices" className="hover:text-brand">{t("footer.notices")}</Link></li>
+              <li><Link to="/ai" className="font-semibold text-brand hover:text-brand-dark">{t("footer.askAi")}</Link></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-sm font-bold text-ink">For businesses</h4>
+            <h4 className="text-sm font-bold text-ink">{t("footer.forBusiness")}</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted">
-              <li><Link to="/owner/login" className="hover:text-brand">List your business</Link></li>
-              <li><Link to="/owner/login" className="font-semibold text-brand hover:text-brand-dark">Business login →</Link></li>
-              <li><Link to="/driver/login" className="font-semibold text-brand hover:text-brand-dark">Drive with us →</Link></li>
-              <li><Link to="/about" className="hover:text-brand">About the platform</Link></li>
+              <li><Link to="/owner/login" className="hover:text-brand">{t("footer.listBusiness")}</Link></li>
+              <li><Link to="/owner/login" className="font-semibold text-brand hover:text-brand-dark">{t("footer.businessLogin")}</Link></li>
+              <li><Link to="/driver/login" className="font-semibold text-brand hover:text-brand-dark">{t("footer.driveWithUs")}</Link></li>
+              <li><Link to="/about" className="hover:text-brand">{t("footer.aboutPlatform")}</Link></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-sm font-bold text-ink">Coming soon</h4>
+            <h4 className="text-sm font-bold text-ink">{t("footer.comingSoon")}</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted">
-              <li>More cities: Beirut · Byblos · Batroun</li>
-              <li>Jobs & classifieds</li>
-              <li>Loyalty & rewards</li>
+              <li>{t("footer.moreCities")}</li>
+              <li>{t("footer.jobs")}</li>
+              <li>{t("footer.loyalty")}</li>
             </ul>
             {contact.instagram && (
               <a href={`https://instagram.com/${contact.instagram}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-muted hover:text-brand">
@@ -220,7 +238,7 @@ export function Layout() {
           </div>
         </div>
         <div className="border-t border-border py-5 text-center text-xs text-muted">
-          © {new Date().getFullYear()} {brand.name} · Built for the city, growing across Lebanon.
+          © {new Date().getFullYear()} {brand.name} · {t("footer.rights")}
         </div>
       </footer>
     </div>

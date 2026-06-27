@@ -99,7 +99,7 @@ businessesRouter.get("/data/map", async (req, res) => {
   const city = String(req.query.city ?? "");
   const rows = await prisma.business.findMany({
     where: { isPublished: true, lat: { not: null }, lng: { not: null }, ...(city ? { city: { is: { slug: city } } } : {}) },
-    include: { category: { select: { name: true, icon: true, color: true } } },
+    include: { category: { select: { name: true, slug: true, icon: true, color: true, group: true } } },
   });
   res.json(
     rows.map((b) => ({

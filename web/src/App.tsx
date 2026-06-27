@@ -19,8 +19,7 @@ import { LostFound } from "./pages/LostFound";
 import { MapPage } from "./pages/MapPage";
 import { NotFound } from "./pages/NotFound";
 import { Offers } from "./pages/Offers";
-import { ProjectDetail } from "./pages/ProjectDetail";
-import { Projects } from "./pages/Projects";
+import { CommunitySoon } from "./pages/CommunitySoon";
 import { Saved } from "./pages/Saved";
 import { AdminAi } from "./pages/admin/AdminAi";
 import { AdminAnalytics } from "./pages/admin/AdminAnalytics";
@@ -41,7 +40,6 @@ import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
 import { AdminMarketplace } from "./pages/admin/AdminMarketplace";
 import { AdminOrders } from "./pages/admin/AdminOrders";
-import { AdminProjects } from "./pages/admin/AdminProjects";
 import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
@@ -64,7 +62,7 @@ const TITLES: Record<string, string> = {
   "/explore": "Explore Aley",
   "/events": "Events in Aley",
   "/offers": "Offers & deals",
-  "/projects": "Community Projects",
+  "/community": "Improve Aley",
   "/lost-found": "Lost & Found",
   "/notices": "Public Notices",
   "/delivery": "Delivery Service",
@@ -101,15 +99,16 @@ export default function App() {
           <Route path="/events" element={<Events />} />
           <Route path="/offers" element={<Offers />} />
           <Route path="/map" element={<MapPage />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/projects/:slug" element={<ProjectDetail />} />
+          {/* Community Projects moved to a future dedicated non-profit site. */}
+          <Route path="/community" element={<CommunitySoon />} />
+          <Route path="/projects" element={<Navigate to="/community" replace />} />
+          <Route path="/projects/:slug" element={<Navigate to="/community" replace />} />
           <Route path="/lost-found" element={<LostFound />} />
           <Route path="/notices" element={<Announcements />} />
           <Route path="/delivery" element={<Delivery />} />
           <Route path="/delivery/track/:number" element={<DeliveryTracking />} />
           <Route path="/ai" element={<AiPage />} />
-          {/* Love Aley merged into Community Projects — keep old links working */}
-          <Route path="/love-aley" element={<Navigate to="/projects" replace />} />
+          <Route path="/love-aley" element={<Navigate to="/community" replace />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/order/:number" element={<OrderTracking />} />
@@ -146,7 +145,6 @@ export default function App() {
           <Route path="notifications" element={<AdminNotifications />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="reviews" element={<AdminReviews />} />
-          <Route path="projects" element={<AdminProjects />} />
           <Route path="lost-found" element={<AdminLostFound />} />
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="delivery" element={<AdminDelivery />} />

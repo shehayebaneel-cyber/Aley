@@ -2,28 +2,28 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BellIcon, GlobeIcon, MoonIcon, SunIcon } from "../../components/icons";
 import { useAdminAuth } from "../../context/AdminAuthContext";
+import { useLang } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
 import { adminApi } from "../../lib/api";
 
 const LINKS = [
-  { to: "/admin", label: "Dashboard", end: true },
-  { to: "/admin/ai", label: "AI co-pilot" },
-  { to: "/admin/analytics", label: "Analytics" },
-  { to: "/admin/content", label: "Site Content" },
-  { to: "/admin/orders", label: "Orders" },
-  { to: "/admin/delivery", label: "Delivery" },
-  { to: "/admin/drivers", label: "Drivers" },
-  { to: "/admin/businesses", label: "Businesses" },
-  { to: "/admin/claims", label: "Claims" },
-  { to: "/admin/categories", label: "Categories" },
-  { to: "/admin/reviews", label: "Reviews" },
-  { to: "/admin/projects", label: "Projects" },
-  { to: "/admin/lost-found", label: "Lost & Found" },
-  { to: "/admin/announcements", label: "Public Notices" },
-  { to: "/admin/events-offers", label: "Events & Offers" },
-  { to: "/admin/cities", label: "Cities" },
-  { to: "/admin/marketplace", label: "Marketplace" },
-  { to: "/admin/users", label: "Users & Owners" },
+  { to: "/admin", tk: "anav.dashboard", end: true },
+  { to: "/admin/ai", tk: "anav.ai" },
+  { to: "/admin/analytics", tk: "anav.analytics" },
+  { to: "/admin/content", tk: "anav.content" },
+  { to: "/admin/orders", tk: "anav.orders" },
+  { to: "/admin/delivery", tk: "anav.delivery" },
+  { to: "/admin/drivers", tk: "anav.drivers" },
+  { to: "/admin/businesses", tk: "anav.businesses" },
+  { to: "/admin/claims", tk: "anav.claims" },
+  { to: "/admin/categories", tk: "anav.categories" },
+  { to: "/admin/reviews", tk: "anav.reviews" },
+  { to: "/admin/lost-found", tk: "anav.lostfound" },
+  { to: "/admin/announcements", tk: "anav.notices" },
+  { to: "/admin/events-offers", tk: "anav.eventsoffers" },
+  { to: "/admin/cities", tk: "anav.cities" },
+  { to: "/admin/marketplace", tk: "anav.marketplace" },
+  { to: "/admin/users", tk: "anav.users" },
 ];
 
 function NotificationBell() {
@@ -47,6 +47,7 @@ function NotificationBell() {
 export function AdminLayout() {
   const { isAuthed, logout } = useAdminAuth();
   const { theme, toggle } = useTheme();
+  const { t, toggle: toggleLang } = useLang();
   const navigate = useNavigate();
 
   if (!isAuthed) return <Navigate to="/admin/login" replace />;
@@ -61,13 +62,14 @@ export function AdminLayout() {
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {LINKS.map((l) => (
             <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-semibold transition ${isActive ? "bg-brand-soft text-brand-dark" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>
-              {l.label}
+              {t(l.tk)}
             </NavLink>
           ))}
         </nav>
         <div className="space-y-1 p-3">
-          <Link to="/" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted hover:text-ink"><GlobeIcon className="h-4 w-4" /> View site</Link>
-          <button onClick={() => { logout(); navigate("/admin/login"); }} className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-muted hover:text-ink">Sign out</button>
+          <button onClick={toggleLang} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted hover:text-ink"><GlobeIcon className="h-4 w-4" /> {t("lang.switch")}</button>
+          <Link to="/" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted hover:text-ink"><GlobeIcon className="h-4 w-4" /> {t("dash.viewSite")}</Link>
+          <button onClick={() => { logout(); navigate("/admin/login"); }} className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-muted hover:text-ink">{t("dash.signOut")}</button>
         </div>
       </aside>
 
@@ -77,14 +79,15 @@ export function AdminLayout() {
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
             <button onClick={toggle} aria-label="Theme" className="btn btn-ghost h-9 w-9 !p-0">{theme === "dark" ? <SunIcon /> : <MoonIcon />}</button>
-            <button onClick={() => { logout(); navigate("/admin/login"); }} className="btn btn-ghost px-3 py-2 text-sm md:hidden">Sign out</button>
+            <button onClick={toggleLang} className="btn btn-ghost px-3 py-2 text-sm">{t("lang.switch")}</button>
+            <button onClick={() => { logout(); navigate("/admin/login"); }} className="btn btn-ghost px-3 py-2 text-sm md:hidden">{t("dash.signOut")}</button>
           </div>
         </header>
         {/* Mobile nav */}
         <nav className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-3 py-2 md:hidden">
           {LINKS.map((l) => (
             <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => `whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${isActive ? "bg-brand text-white" : "surface-2 text-ink"}`}>
-              {l.label}
+              {t(l.tk)}
             </NavLink>
           ))}
         </nav>
