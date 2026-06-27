@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { AiChat, type AiMessage } from "../../components/AiChat";
 import { BarChart, StatCard } from "../../components/Charts";
 import { ImageField } from "../../components/ImageField";
 import { Stars } from "../../components/Stars";
@@ -9,7 +10,7 @@ import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, tim
 import { useFetch } from "../../lib/useFetch";
 import type { Business, BusinessOrder, Category, EventItem, HoursRow, Offer, Reservation, Review } from "../../types";
 
-const TABS = ["Overview", "Analytics", "Orders", "Reservations", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Reservations", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -83,6 +84,7 @@ export function BusinessDashboard() {
       <div className="mt-6">
         {tab === "Overview" && <Overview biz={biz} />}
         {tab === "Analytics" && <AnalyticsTab biz={biz} />}
+        {tab === "Assistant" && <AssistantTab biz={biz} />}
         {tab === "Orders" && <OrdersTab biz={biz} />}
         {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
@@ -258,6 +260,21 @@ function AnalyticsTab({ biz }: { biz: Business }) {
           {loading && <p className="text-center text-xs text-muted">Updating…</p>}
         </>
       )}
+    </div>
+  );
+}
+
+// ---- AI business assistant ----
+function AssistantTab({ biz }: { biz: Business }) {
+  const send = async (messages: AiMessage[]) =>
+    (await ownerApi.post<{ reply: string }>("/api/ai/owner", { messages, businessId: biz.id })).reply;
+  return (
+    <div className="card h-[64vh] min-h-[440px] p-3">
+      <AiChat
+        send={send}
+        greeting={`Hi! I'm your business assistant for **${biz.name}**. Ask me things like "How is my business performing?", "Why are my views down?", "Write a promotion", "Suggest a better description", or "Analyze my reviews".`}
+        suggestions={["How is my business performing this month?", "Why might my profile views be down?", "Write a weekend promotion", "Suggest a better business description", "Analyze my recent reviews", "Give me 3 social media post ideas"]}
+      />
     </div>
   );
 }

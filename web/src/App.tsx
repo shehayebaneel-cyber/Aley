@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { About } from "./pages/About";
+import { AiPage } from "./pages/AiPage";
 import { Announcements } from "./pages/Announcements";
 import { BusinessProfile } from "./pages/BusinessProfile";
 import { Cart } from "./pages/Cart";
@@ -21,6 +22,7 @@ import { Offers } from "./pages/Offers";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { Projects } from "./pages/Projects";
 import { Saved } from "./pages/Saved";
+import { AdminAi } from "./pages/admin/AdminAi";
 import { AdminAnalytics } from "./pages/admin/AdminAnalytics";
 import { AdminAnnouncements } from "./pages/admin/AdminAnnouncements";
 import { AdminBusinesses } from "./pages/admin/AdminBusinesses";
@@ -66,6 +68,7 @@ const TITLES: Record<string, string> = {
   "/lost-found": "Lost & Found",
   "/notices": "Public Notices",
   "/delivery": "Delivery Service",
+  "/ai": "Aley AI",
   "/map": "Map of Aley",
   "/about": "About",
   "/contact": "Contact",
@@ -104,6 +107,7 @@ export default function App() {
           <Route path="/notices" element={<Announcements />} />
           <Route path="/delivery" element={<Delivery />} />
           <Route path="/delivery/track/:number" element={<DeliveryTracking />} />
+          <Route path="/ai" element={<AiPage />} />
           {/* Love Aley merged into Community Projects — keep old links working */}
           <Route path="/love-aley" element={<Navigate to="/projects" replace />} />
           <Route path="/cart" element={<Cart />} />
@@ -134,6 +138,7 @@ export default function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="analytics" element={<AdminAnalytics />} />
+          <Route path="ai" element={<AdminAi />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="businesses" element={<AdminBusinesses />} />
           <Route path="businesses/:id" element={<AdminBusinessEdit />} />

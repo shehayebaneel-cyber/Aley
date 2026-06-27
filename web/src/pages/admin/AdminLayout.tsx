@@ -7,6 +7,7 @@ import { adminApi } from "../../lib/api";
 
 const LINKS = [
   { to: "/admin", label: "Dashboard", end: true },
+  { to: "/admin/ai", label: "AI co-pilot" },
   { to: "/admin/analytics", label: "Analytics" },
   { to: "/admin/content", label: "Site Content" },
   { to: "/admin/orders", label: "Orders" },

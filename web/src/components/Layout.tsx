@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { AiWidget } from "./AiWidget";
 import { useCart } from "../context/CartContext";
 import { useContent } from "../context/ContentContext";
 import { useTheme } from "../context/ThemeContext";
@@ -174,6 +175,8 @@ export function Layout() {
         <Outlet />
       </main>
 
+      <AiWidget />
+
       <footer className="mt-16 border-t border-border bg-surface">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -190,6 +193,7 @@ export function Layout() {
               ))}
               <li><Link to="/lost-found" className="hover:text-brand">Lost &amp; Found</Link></li>
               <li><Link to="/notices" className="hover:text-brand">Public Notices</Link></li>
+              <li><Link to="/ai" className="font-semibold text-brand hover:text-brand-dark">Ask Aley AI ✨</Link></li>
             </ul>
           </div>
           <div>
