@@ -4,6 +4,7 @@ import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
 import { prisma } from "../db";
 import { outBusiness, parseArr, parseObj, slugify, toJson } from "../lib/serialize";
+import { notifyNextWaitlist } from "../lib/waitlist";
 import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
 
@@ -378,7 +379,41 @@ ownerRouter.patch("/appointments/:id", async (req, res) => {
   if ("date" in b && /^\d{4}-\d{2}-\d{2}$/.test(String(b.date))) data.date = String(b.date);
   if ("time" in b && /^\d{2}:\d{2}$/.test(String(b.time))) data.time = String(b.time);
   if (("date" in data || "time" in data) && !("status" in data)) data.status = "RESCHEDULED";
-  res.json(await prisma.appointment.update({ where: { id: a.id }, data }));
+  const updated = await prisma.appointment.update({ where: { id: a.id }, data });
+  // Freeing the slot? Notify the next person waiting for that day.
+  if (data.status === "CANCELLED") await notifyNextWaitlist(updated.businessId, updated.date);
+  res.json(updated);
+});
+
+// POST /api/owner/checkin { code } — mark a customer arrived by scanning their QR code.
+ownerRouter.post("/checkin", async (req, res) => {
+  const code = String(req.body.code ?? "").trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: "A check-in code is required." });
+  const appt = await prisma.appointment.findFirst({
+    where: { checkInCode: code, business: { ownerId: req.ownerId } },
+    include: { business: { select: { name: true } } },
+  });
+  if (!appt) return res.status(404).json({ error: "No appointment matches that code." });
+  const updated = await prisma.appointment.update({ where: { id: appt.id }, data: { arrivedAt: new Date() } });
+  res.json({ ok: true, appointment: updated, businessName: appt.business.name, customerName: appt.customerName, time: appt.time, date: appt.date });
+});
+
+// ---- Waitlist ----
+ownerRouter.get("/businesses/:id/waitlist", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const items = await prisma.waitlist.findMany({
+    where: { businessId: business.id, status: { in: ["WAITING", "NOTIFIED"] } },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(items);
+});
+ownerRouter.patch("/waitlist/:id", async (req, res) => {
+  const w = await prisma.waitlist.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!w || w.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Waitlist entry not found." });
+  const status = String(req.body.status ?? "").toUpperCase();
+  if (!["WAITING", "NOTIFIED", "CONVERTED", "CLOSED"].includes(status)) return res.status(400).json({ error: "Invalid status." });
+  res.json(await prisma.waitlist.update({ where: { id: w.id }, data: { status } }));
 });
 
 // ---- Booking analytics ----

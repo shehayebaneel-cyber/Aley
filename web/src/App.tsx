@@ -44,6 +44,7 @@ import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
+import { CheckIn } from "./pages/owner/CheckIn";
 import { OwnerHome } from "./pages/owner/OwnerHome";
 import { OwnerLayout } from "./pages/owner/OwnerLayout";
 import { OwnerLogin } from "./pages/owner/OwnerLogin";
@@ -127,6 +128,7 @@ export default function App() {
         <Route path="/owner" element={<OwnerLayout />}>
           <Route index element={<OwnerHome />} />
           <Route path="b/:id" element={<BusinessDashboard />} />
+          <Route path="checkin" element={<CheckIn />} />
         </Route>
 
         {/* Driver app (own chrome) */}

@@ -4,6 +4,7 @@ import { requireUser, signToken } from "../auth";
 import { prisma } from "../db";
 import { computeSlots, resolveBookingConfig } from "../lib/booking";
 import { outBusiness, parseArr, type HoursRow } from "../lib/serialize";
+import { notifyNextWaitlist } from "../lib/waitlist";
 
 const userToken = (id: number) => signToken({ userId: id, role: "user" });
 const safe = (u: { id: number; name: string; email: string | null; avatar: string | null }) => ({ id: u.id, name: u.name, email: u.email, avatar: u.avatar });
@@ -113,6 +114,7 @@ userRouter.patch("/bookings/:id", async (req, res) => {
     if (!cfg.allowCustomerCancel) return res.status(403).json({ error: "This business doesn't allow online cancellation." });
     if (hoursUntil(appt.date, appt.time) < cfg.cancellationHours) return res.status(400).json({ error: `Please cancel at least ${cfg.cancellationHours} hours before.` });
     const updated = await prisma.appointment.update({ where: { id: appt.id }, data: { status: "CANCELLED" } });
+    await notifyNextWaitlist(appt.businessId, appt.date);
     return res.json(updated);
   }
 

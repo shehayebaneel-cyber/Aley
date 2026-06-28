@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
@@ -8,6 +9,7 @@ import { parseArr, type HoursRow } from "../lib/serialize";
 export const bookingRouter = Router();
 
 const STR = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+const genCheckInCode = () => randomBytes(3).toString("hex").toUpperCase(); // 6 hex chars
 
 // Build the active-staff list (with schedules + their appts) and the full appt list for a date.
 async function staffAndAppts(businessId: number, date: string) {
@@ -146,6 +148,7 @@ bookingRouter.post("/", optionalUser, async (req, res) => {
       serviceName: service?.name ?? "",
       staffName: staff?.name ?? "",
       status: "PENDING",
+      checkInCode: genCheckInCode(),
     },
     include: { business: { select: { name: true, slug: true } } },
   });
@@ -158,4 +161,33 @@ bookingRouter.post("/", optionalUser, async (req, res) => {
   });
 
   res.status(201).json({ ok: true, appointment, message: "Booking requested! The business will confirm shortly." });
+});
+
+// POST /api/booking/waitlist — join the waitlist when a day is fully booked.
+bookingRouter.post("/waitlist", optionalUser, async (req, res) => {
+  const b = req.body ?? {};
+  const business = await loadBiz({ id: Number(b.businessId) });
+  if (!business || !appointmentEnabled(business)) return res.status(404).json({ error: "Booking isn't available." });
+  const customerName = STR(b.customerName, 80);
+  const customerPhone = STR(b.customerPhone, 40);
+  const date = STR(b.date, 10);
+  if (!customerName || !customerPhone || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: "Name, phone and date are required." });
+  }
+  const entry = await prisma.waitlist.create({
+    data: {
+      businessId: business.id,
+      serviceId: b.serviceId ? Number(b.serviceId) : null,
+      staffId: b.staffId ? Number(b.staffId) : null,
+      userId: req.userId ?? null,
+      customerName, customerPhone, date, note: STR(b.note, 300), status: "WAITING",
+    },
+  });
+  await notifyAdmins({
+    kind: "WAITLIST",
+    title: `Waitlist join: ${business.name}`,
+    body: `${customerName} (${customerPhone}) is waiting for ${date}.`,
+    link: "/admin/businesses",
+  });
+  res.status(201).json({ ok: true, entry, message: "You're on the waitlist! We'll reach out if a spot opens." });
 });

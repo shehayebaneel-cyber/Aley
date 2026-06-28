@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CalendarIcon, CheckIcon, CloseIcon, ClockIcon } from "./icons";
+import { QRCode, checkInUrl } from "./QRCode";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, userApi } from "../lib/api";
 import type { Business, Service, StaffMember } from "../types";
@@ -30,6 +31,8 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
+  const [wait, setWait] = useState(false); // waitlist mode (chosen when a day is full)
+  const [createdCode, setCreatedCode] = useState("");
 
   useEffect(() => {
     api.get<Options>(`/api/booking/${business.slug}/options`)
@@ -71,17 +74,22 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
     e.preventDefault();
     if (busy) return;
     if (!form.name.trim() || !form.phone.trim()) return setErr("Name and phone are required.");
-    if (!time) return setErr("Please pick a time.");
+    if (!wait && !time) return setErr("Please pick a time.");
     setBusy(true); setErr("");
     const client = user ? userApi : api;
     try {
-      await client.post("/api/booking", {
-        businessId: business.id,
-        serviceId: service?.id ?? null,
-        staffId: staff?.id ?? null,
-        date, time,
-        customerName: form.name, customerPhone: form.phone, note: form.note,
-      });
+      if (wait) {
+        await client.post("/api/booking/waitlist", {
+          businessId: business.id, serviceId: service?.id ?? null, staffId: staff?.id ?? null,
+          date, customerName: form.name, customerPhone: form.phone, note: form.note,
+        });
+      } else {
+        const r = await client.post<{ appointment: { checkInCode?: string } }>("/api/booking", {
+          businessId: business.id, serviceId: service?.id ?? null, staffId: staff?.id ?? null,
+          date, time, customerName: form.name, customerPhone: form.phone, note: form.note,
+        });
+        setCreatedCode(r.appointment?.checkInCode ?? "");
+      }
       setDone(true);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Couldn't book. Try another time.");
@@ -102,13 +110,28 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
         {done ? (
           <div className="mt-6 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"><CheckIcon className="h-7 w-7" /></span>
-            <p className="mt-3 font-display text-lg font-bold text-ink">Booking requested!</p>
-            <p className="mt-1 text-muted">{business.name} will confirm your appointment on {form.phone}.</p>
-            <div className="mt-4 rounded-xl surface-2 p-3 text-left text-sm">
-              {service && <p><span className="text-muted">Service:</span> <span className="font-semibold text-ink">{service.name}</span></p>}
-              {staff && <p><span className="text-muted">With:</span> <span className="font-semibold text-ink">{staff.name}</span></p>}
-              <p><span className="text-muted">When:</span> <span className="font-semibold text-ink">{date} at {time}</span></p>
-            </div>
+            {wait ? (
+              <>
+                <p className="mt-3 font-display text-lg font-bold text-ink">You're on the waitlist!</p>
+                <p className="mt-1 text-muted">If a spot opens on {date}, {business.name} will reach out on {form.phone}.</p>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 font-display text-lg font-bold text-ink">Booking requested!</p>
+                <p className="mt-1 text-muted">{business.name} will confirm your appointment on {form.phone}.</p>
+                <div className="mt-4 rounded-xl surface-2 p-3 text-left text-sm">
+                  {service && <p><span className="text-muted">Service:</span> <span className="font-semibold text-ink">{service.name}</span></p>}
+                  {staff && <p><span className="text-muted">With:</span> <span className="font-semibold text-ink">{staff.name}</span></p>}
+                  <p><span className="text-muted">When:</span> <span className="font-semibold text-ink">{date} at {time}</span></p>
+                </div>
+                {createdCode && (
+                  <div className="mt-4 flex flex-col items-center">
+                    <QRCode value={checkInUrl(createdCode)} size={140} />
+                    <p className="mt-2 text-xs text-muted">Show this QR when you arrive for quick check-in. Code: <span className="font-mono font-semibold text-ink">{createdCode}</span></p>
+                  </div>
+                )}
+              </>
+            )}
             <button onClick={onClose} className="btn btn-primary mt-5 px-6 py-2.5">Done</button>
           </div>
         ) : loadErr ? (
@@ -176,7 +199,10 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
                     {slots === null ? (
                       <div className="grid grid-cols-4 gap-2">{Array.from({ length: 8 }).map((_, i) => <span key={i} className="h-9 animate-pulse rounded-lg surface-2" />)}</div>
                     ) : slots.length === 0 ? (
-                      <p className="rounded-xl surface-2 p-4 text-center text-sm text-muted">No times available on this day. Try another date.</p>
+                      <div className="rounded-xl surface-2 p-4 text-center">
+                        <p className="text-sm text-muted">No times available on this day.</p>
+                        <button type="button" onClick={() => { setWait(true); next(); }} className="btn btn-ghost mt-2 px-4 py-2 text-sm">Join the waitlist for {date}</button>
+                      </div>
                     ) : (
                       <div className="grid grid-cols-4 gap-2">
                         {slots.map((t) => (
@@ -192,9 +218,10 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
                 <form onSubmit={submit} className="space-y-3">
                   <p className="font-semibold text-ink">Your details</p>
                   <div className="rounded-xl surface-2 p-3 text-sm">
+                    {wait && <p className="font-semibold text-amber-600">Joining the waitlist for {date}</p>}
                     {service && <p className="text-ink"><span className="text-muted">Service: </span>{service.name} · {money(service.price)} · {service.durationMin} min</p>}
                     {staff && <p className="text-ink"><span className="text-muted">With: </span>{staff.name}</p>}
-                    <p className="text-ink"><span className="text-muted">When: </span>{date} at {time}</p>
+                    <p className="text-ink"><span className="text-muted">When: </span>{date}{!wait && time ? ` at ${time}` : " (any open time)"}</p>
                   </div>
                   {opts.config.policyNote && <p className="text-xs text-muted">{opts.config.policyNote}</p>}
                   {!!opts.config.cancellationHours && <p className="text-xs text-muted">Free cancellation up to {opts.config.cancellationHours}h before your appointment.</p>}
@@ -202,7 +229,7 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
                   <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required placeholder="Phone number" className="input" />
                   <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} placeholder="Anything we should know? (optional)" className="input" />
                   {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
-                  <button type="submit" disabled={busy} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Booking…" : "Confirm booking"}</button>
+                  <button type="submit" disabled={busy} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Sending…" : wait ? "Join waitlist" : "Confirm booking"}</button>
                 </form>
               )}
             </div>

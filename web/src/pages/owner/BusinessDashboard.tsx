@@ -10,7 +10,7 @@ import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../c
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember, WaitlistEntry } from "../../types";
 
 const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
@@ -550,9 +550,12 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
   const [stats, setStats] = useState<BookingAnalytics | null>(null);
   const [period, setPeriod] = useState("month");
   const [openCust, setOpenCust] = useState<string | null>(null); // appointment uid (id) whose customer panel is open
+  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const load = () => ownerApi.get<Appointment[]>(`/api/owner/businesses/${biz.id}/appointments`).then(setAppts).catch(() => setAppts([]));
   const loadStats = () => ownerApi.get<BookingAnalytics>(`/api/owner/businesses/${biz.id}/booking-analytics?period=${period}`).then(setStats).catch(() => setStats(null));
-  useEffect(() => { if (biz.appointmentBookable) { load(); loadStats(); } /* eslint-disable-next-line */ }, [biz.id, biz.appointmentBookable, period]);
+  const loadWaitlist = () => ownerApi.get<WaitlistEntry[]>(`/api/owner/businesses/${biz.id}/waitlist`).then(setWaitlist).catch(() => setWaitlist([]));
+  useEffect(() => { if (biz.appointmentBookable) { load(); loadStats(); loadWaitlist(); } /* eslint-disable-next-line */ }, [biz.id, biz.appointmentBookable, period]);
+  async function setWaitStatus(id: number, status: string) { await ownerApi.patch(`/api/owner/waitlist/${id}`, { status }); loadWaitlist(); }
 
   async function update(id: number, body: Record<string, unknown>) {
     await ownerApi.patch(`/api/owner/appointments/${id}`, body);
@@ -587,10 +590,11 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-display font-bold text-ink">Booking stats</h3>
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {[["month", "This month"], ["30d", "30 days"], ["all", "All time"]].map(([v, l]) => (
               <button key={v} onClick={() => setPeriod(v)} className={`chip !text-xs ${period === v ? "chip-active" : ""}`}>{l}</button>
             ))}
+            <Link to="/owner/checkin" className="btn btn-ghost px-3 py-1.5 text-xs">📷 Check-in</Link>
           </div>
         </div>
         {stats && (
@@ -636,7 +640,10 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
                 <p className="mt-0.5 text-sm text-muted">{a.customerName} · {a.customerPhone}{a.price > 0 ? ` · $${a.price}` : ""}</p>
                 {a.note && <p className="mt-1 text-sm text-muted">“{a.note}”</p>}
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${APPT_BADGE[a.status]}`}>{a.status.replace("_", "-")}</span>
+              <div className="flex flex-col items-end gap-1">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${APPT_BADGE[a.status]}`}>{a.status.replace("_", "-")}</span>
+                {a.arrivedAt && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-600">Arrived ✓</span>}
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {a.status === "PENDING" && <>
@@ -657,6 +664,27 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
           </div>
         ))}
       </div>
+
+      {/* Waitlist */}
+      {waitlist.length > 0 && (
+        <section className="card mt-6 p-5">
+          <h3 className="font-display font-bold text-ink">Waitlist <span className="text-sm font-normal text-muted">({waitlist.length})</span></h3>
+          <p className="text-sm text-muted">Customers waiting for a spot. When one cancels, the next person is flagged automatically.</p>
+          <div className="mt-3 space-y-2">
+            {waitlist.map((w) => (
+              <div key={w.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5">
+                <span className="flex-1">
+                  <span className="font-semibold text-ink">{w.customerName}</span> <span className="text-xs text-muted">· {w.customerPhone} · wants {w.date}</span>
+                  {w.note && <span className="block text-xs text-muted">“{w.note}”</span>}
+                </span>
+                {w.status === "NOTIFIED" && <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-600">Notified</span>}
+                <button onClick={() => setWaitStatus(w.id, "CONVERTED")} className="chip !text-xs">Booked</button>
+                <button onClick={() => setWaitStatus(w.id, "CLOSED")} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

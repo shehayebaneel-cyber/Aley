@@ -130,6 +130,7 @@ model Business {
   staff          StaffMember[]
   appointments   Appointment[]
   customerProfiles CustomerProfile[]
+  waitlist       Waitlist[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -278,7 +279,27 @@ model Appointment {
   staffName    String   @default("")
   // PENDING | CONFIRMED | RESCHEDULED | CANCELLED | COMPLETED | NO_SHOW
   status       String   @default("PENDING")
+  checkInCode  String   @default("") // short code encoded in the customer's QR
+  arrivedAt    DateTime? // set when the business scans/marks the customer as arrived
   createdAt    DateTime @default(now())
+
+  @@index([businessId, date])
+}
+
+// A customer waiting for a slot to open on a fully-booked day.
+model Waitlist {
+  id            Int      @id @default(autoincrement())
+  businessId    Int
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  serviceId     Int?
+  staffId       Int?
+  userId        Int?
+  customerName  String
+  customerPhone String
+  date          String   // desired date "YYYY-MM-DD"
+  note          String   @default("")
+  status        String   @default("WAITING") // WAITING | NOTIFIED | CONVERTED | CLOSED
+  createdAt     DateTime @default(now())
 
   @@index([businessId, date])
 }

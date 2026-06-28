@@ -242,8 +242,21 @@ export interface Appointment {
   serviceName: string;
   staffName: string;
   status: AppointmentStatus;
+  checkInCode?: string;
+  arrivedAt?: string | null;
   createdAt: string;
   business?: { name: string; slug: string; logo: string | null };
+}
+
+export interface WaitlistEntry {
+  id: number;
+  businessId: number;
+  customerName: string;
+  customerPhone: string;
+  date: string;
+  note: string;
+  status: "WAITING" | "NOTIFIED" | "CONVERTED" | "CLOSED";
+  createdAt: string;
 }
 
 export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";

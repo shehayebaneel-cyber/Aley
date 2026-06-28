@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarIcon } from "../components/icons";
+import { QRCode, checkInUrl } from "../components/QRCode";
 import { useUserAuth } from "../context/UserAuthContext";
 import { userApi } from "../lib/api";
 import type { Appointment, AppointmentStatus } from "../types";
@@ -20,6 +21,7 @@ export function MyBookings() {
   const { user, loading, openAuth } = useUserAuth();
   const [items, setItems] = useState<Appointment[] | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [qrId, setQrId] = useState<number | null>(null);
 
   const load = () => userApi.get<Appointment[]>("/api/me/bookings").then(setItems).catch(() => setItems([]));
   useEffect(() => { if (user) load(); }, [user]);
@@ -69,13 +71,20 @@ export function MyBookings() {
               <p className="text-sm text-muted">{a.serviceName || "Appointment"}{a.staffName ? ` · ${a.staffName}` : ""}</p>
               <p className="text-sm text-ink">{a.date} · {a.time}</p>
               {ACTIVE.includes(a.status) && upcoming(a) && (
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   <button disabled={busyId === a.id} onClick={() => act(a, "reschedule")} className="btn btn-ghost px-3 py-1.5 text-xs disabled:opacity-50">Reschedule</button>
                   <button disabled={busyId === a.id} onClick={() => act(a, "cancel")} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500 disabled:opacity-50">Cancel</button>
+                  {a.checkInCode && <button onClick={() => setQrId(qrId === a.id ? null : a.id)} className="btn btn-ghost px-3 py-1.5 text-xs">{qrId === a.id ? "Hide QR" : "Check-in QR"}</button>}
+                </div>
+              )}
+              {qrId === a.id && a.checkInCode && (
+                <div className="mt-2 flex items-center gap-3 rounded-xl surface-2 p-3">
+                  <QRCode value={checkInUrl(a.checkInCode)} size={96} />
+                  <p className="text-xs text-muted">Show this when you arrive.<br />Code: <span className="font-mono font-semibold text-ink">{a.checkInCode}</span></p>
                 </div>
               )}
             </div>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${BADGE[a.status]}`}>{a.status.replace("_", "-")}</span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${a.arrivedAt ? "bg-emerald-500/15 text-emerald-600" : BADGE[a.status]}`}>{a.arrivedAt ? "Arrived" : a.status.replace("_", "-")}</span>
           </div>
         ))}
       </div>
