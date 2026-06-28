@@ -14,6 +14,19 @@ export function parseArr(value: unknown): unknown[] {
   return [];
 }
 
+export function parseObj(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 export const toJson = (value: unknown): string => JSON.stringify(value ?? []);
 
 export interface HoursRow {
@@ -36,6 +49,7 @@ export function outBusiness<T extends Record<string, unknown>>(b: T) {
     products: parseArr(b.products),
     hours: parseArr(b.hours) as HoursRow[],
     openNow: isOpenNow(parseArr(b.hours) as HoursRow[]),
+    bookingConfig: parseObj(b.bookingConfig),
   };
 }
 

@@ -82,3 +82,14 @@ userRouter.get("/orders", async (req, res) => {
   });
   res.json(orders);
 });
+
+// GET /api/me/bookings — the visitor's own appointments.
+userRouter.get("/bookings", async (req, res) => {
+  const bookings = await prisma.appointment.findMany({
+    where: { userId: req.userId! },
+    orderBy: [{ date: "desc" }, { time: "desc" }],
+    take: 50,
+    include: { business: { select: { name: true, slug: true, logo: true } } },
+  });
+  res.json(bookings);
+});

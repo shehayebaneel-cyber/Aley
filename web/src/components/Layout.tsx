@@ -7,7 +7,7 @@ import { useContent } from "../context/ContentContext";
 import { useLang } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserAuth } from "../context/UserAuthContext";
-import { BellIcon, CartIcon, CloseIcon, GlobeIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
+import { BellIcon, CalendarIcon, CartIcon, CloseIcon, GlobeIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
 import { COMMUNITY_URL } from "../lib/config";
 
 type NavItem = { to: string; key: string; end?: boolean };
@@ -96,6 +96,9 @@ function AccountMenu() {
           </button>
           <button onClick={() => { setOpen(false); navigate("/orders"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <CartIcon className="h-4 w-4 text-brand" /> {t("common.myOrders")}
+          </button>
+          <button onClick={() => { setOpen(false); navigate("/bookings"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            <CalendarIcon className="h-4 w-4 text-brand" /> {t("common.myBookings")}
           </button>
           <button onClick={() => { logout(); setOpen(false); navigate("/"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <LogoutIcon className="h-4 w-4" /> {t("common.logout")}

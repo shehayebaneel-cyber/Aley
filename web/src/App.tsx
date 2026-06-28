@@ -11,6 +11,7 @@ import { Contact } from "./pages/Contact";
 import { Delivery } from "./pages/Delivery";
 import { DeliveryTracking } from "./pages/DeliveryTracking";
 import { MyOrders } from "./pages/MyOrders";
+import { MyBookings } from "./pages/MyBookings";
 import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { Explore } from "./pages/Explore";
@@ -73,6 +74,7 @@ const TITLES: Record<string, string> = {
   "/cart": "Your cart",
   "/checkout": "Checkout",
   "/orders": "My orders",
+  "/bookings": "My appointments",
   "/saved": "Saved places",
 };
 function TitleManager() {
@@ -113,6 +115,7 @@ export default function App() {
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/order/:number" element={<OrderTracking />} />
           <Route path="/orders" element={<MyOrders />} />
+          <Route path="/bookings" element={<MyBookings />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />

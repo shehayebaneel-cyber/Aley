@@ -75,6 +75,8 @@ adminRouter.patch("/businesses/:id", async (req, res) => {
   for (const key of ["isPublished", "isFeatured", "isVerified", "isClaimed"]) if (key in b) data[key] = !!b[key];
   if ("hasDelivery" in b) data.hasDelivery = !!b.hasDelivery;
   if ("hasReservations" in b) data.hasReservations = !!b.hasReservations;
+  if ("hasBooking" in b) data.hasBooking = !!b.hasBooking;
+  if ("bookingConfig" in b && b.bookingConfig && typeof b.bookingConfig === "object") data.bookingConfig = JSON.stringify(b.bookingConfig);
   if ("name" in b) data.name = STR(b.name, 120) || undefined;
   if ("tagline" in b) data.tagline = STR(b.tagline, 160);
   if ("description" in b) data.description = STR(b.description, 4000);

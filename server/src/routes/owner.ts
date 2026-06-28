@@ -185,6 +185,8 @@ ownerRouter.patch("/businesses/:id", async (req, res) => {
   if ("priceRange" in b) data.priceRange = Math.max(1, Math.min(4, Number(b.priceRange) || 2));
   if ("hasDelivery" in b) data.hasDelivery = !!b.hasDelivery;
   if ("hasReservations" in b) data.hasReservations = !!b.hasReservations;
+  if ("hasBooking" in b) data.hasBooking = !!b.hasBooking;
+  if ("bookingConfig" in b && b.bookingConfig && typeof b.bookingConfig === "object") data.bookingConfig = JSON.stringify(b.bookingConfig);
   if ("categoryId" in b) {
     const cat = await prisma.category.findUnique({ where: { id: Number(b.categoryId) } });
     if (cat) data.categoryId = cat.id;
@@ -242,6 +244,129 @@ ownerRouter.patch("/reservations/:id", async (req, res) => {
   if (!["PENDING", "CONFIRMED", "DECLINED", "CANCELLED"].includes(status)) return res.status(400).json({ error: "Invalid status." });
   const updated = await prisma.reservation.update({ where: { id: r.id }, data: { status } });
   res.json(updated);
+});
+
+// ---- Booking: services ----
+ownerRouter.get("/businesses/:id/services", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.service.findMany({ where: { businessId: business.id }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }));
+});
+ownerRouter.post("/businesses/:id/services", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const name = STR(req.body.name, 120).trim();
+  if (!name) return res.status(400).json({ error: "Service name is required." });
+  const count = await prisma.service.count({ where: { businessId: business.id } });
+  const service = await prisma.service.create({
+    data: {
+      businessId: business.id, name,
+      description: STR(req.body.description, 500),
+      durationMin: Math.max(5, Math.min(600, Number(req.body.durationMin) || 30)),
+      price: Math.max(0, Number(req.body.price) || 0),
+      isActive: req.body.isActive !== false,
+      sortOrder: count,
+    },
+  });
+  res.status(201).json(service);
+});
+async function ownedService(ownerId: number | undefined, id: number) {
+  const s = await prisma.service.findUnique({ where: { id }, include: { business: { select: { ownerId: true } } } });
+  return s && s.business.ownerId === ownerId ? s : null;
+}
+ownerRouter.patch("/services/:id", async (req, res) => {
+  const s = await ownedService(req.ownerId, Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "Service not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("name" in b) data.name = STR(b.name, 120).trim() || s.name;
+  if ("description" in b) data.description = STR(b.description, 500);
+  if ("durationMin" in b) data.durationMin = Math.max(5, Math.min(600, Number(b.durationMin) || 30));
+  if ("price" in b) data.price = Math.max(0, Number(b.price) || 0);
+  if ("isActive" in b) data.isActive = !!b.isActive;
+  if ("sortOrder" in b) data.sortOrder = Number(b.sortOrder) || 0;
+  res.json(await prisma.service.update({ where: { id: s.id }, data }));
+});
+ownerRouter.delete("/services/:id", async (req, res) => {
+  const s = await ownedService(req.ownerId, Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "Service not found." });
+  await prisma.service.delete({ where: { id: s.id } });
+  res.json({ ok: true });
+});
+
+// ---- Booking: staff ----
+ownerRouter.get("/businesses/:id/staff", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.staffMember.findMany({ where: { businessId: business.id }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }));
+});
+ownerRouter.post("/businesses/:id/staff", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const name = STR(req.body.name, 80).trim();
+  if (!name) return res.status(400).json({ error: "Staff name is required." });
+  const count = await prisma.staffMember.count({ where: { businessId: business.id } });
+  const member = await prisma.staffMember.create({
+    data: {
+      businessId: business.id, name,
+      role: STR(req.body.role, 80),
+      avatar: req.body.avatar ? STR(req.body.avatar, 500) : null,
+      isActive: req.body.isActive !== false,
+      sortOrder: count,
+    },
+  });
+  res.status(201).json(member);
+});
+async function ownedStaff(ownerId: number | undefined, id: number) {
+  const s = await prisma.staffMember.findUnique({ where: { id }, include: { business: { select: { ownerId: true } } } });
+  return s && s.business.ownerId === ownerId ? s : null;
+}
+ownerRouter.patch("/staff/:id", async (req, res) => {
+  const s = await ownedStaff(req.ownerId, Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "Staff not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("name" in b) data.name = STR(b.name, 80).trim() || s.name;
+  if ("role" in b) data.role = STR(b.role, 80);
+  if ("avatar" in b) data.avatar = b.avatar ? STR(b.avatar, 500) : null;
+  if ("isActive" in b) data.isActive = !!b.isActive;
+  if ("sortOrder" in b) data.sortOrder = Number(b.sortOrder) || 0;
+  res.json(await prisma.staffMember.update({ where: { id: s.id }, data }));
+});
+ownerRouter.delete("/staff/:id", async (req, res) => {
+  const s = await ownedStaff(req.ownerId, Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "Staff not found." });
+  await prisma.staffMember.delete({ where: { id: s.id } });
+  res.json({ ok: true });
+});
+
+// ---- Booking: appointments ----
+ownerRouter.get("/businesses/:id/appointments", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const appointments = await prisma.appointment.findMany({
+    where: { businessId: business.id },
+    orderBy: [{ date: "desc" }, { time: "desc" }],
+    take: 300,
+  });
+  res.json(appointments);
+});
+const APPT_STATUSES = ["PENDING", "CONFIRMED", "RESCHEDULED", "CANCELLED", "COMPLETED", "NO_SHOW"];
+ownerRouter.patch("/appointments/:id", async (req, res) => {
+  const a = await prisma.appointment.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!a || a.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Appointment not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("status" in b) {
+    const status = String(b.status ?? "").toUpperCase();
+    if (!APPT_STATUSES.includes(status)) return res.status(400).json({ error: "Invalid status." });
+    data.status = status;
+  }
+  // Reschedule: owner can move date/time (marks as RESCHEDULED unless a status was sent).
+  if ("date" in b && /^\d{4}-\d{2}-\d{2}$/.test(String(b.date))) data.date = String(b.date);
+  if ("time" in b && /^\d{2}:\d{2}$/.test(String(b.time))) data.time = String(b.time);
+  if (("date" in data || "time" in data) && !("status" in data)) data.status = "RESCHEDULED";
+  res.json(await prisma.appointment.update({ where: { id: a.id }, data }));
 });
 
 // ---- Offers ----

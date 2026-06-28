@@ -190,6 +190,60 @@ export interface GalleryImage {
   caption?: string;
 }
 
+// ---- Appointment booking ----
+export interface Service {
+  id: number;
+  businessId?: number;
+  name: string;
+  description: string;
+  durationMin: number;
+  price: number;
+  isActive: boolean;
+  sortOrder?: number;
+}
+
+export interface StaffMember {
+  id: number;
+  businessId?: number;
+  name: string;
+  role: string;
+  avatar: string | null;
+  isActive: boolean;
+  sortOrder?: number;
+}
+
+export type AppointmentStatus = "PENDING" | "CONFIRMED" | "RESCHEDULED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
+
+export interface Appointment {
+  id: number;
+  businessId: number;
+  serviceId: number | null;
+  staffId: number | null;
+  customerName: string;
+  customerPhone: string;
+  note: string;
+  date: string;
+  time: string;
+  durationMin: number;
+  price: number;
+  serviceName: string;
+  staffName: string;
+  status: AppointmentStatus;
+  createdAt: string;
+  business?: { name: string; slug: string; logo: string | null };
+}
+
+export interface BookingBreak { day: number; start: string; end: string }
+export interface BookingConfig {
+  workingHours?: HoursRow[];
+  breaks?: BookingBreak[];
+  daysOff?: string[];
+  slotInterval?: number;
+  capacity?: number;
+  leadTimeHours?: number;
+  horizonDays?: number;
+}
+
 export interface Business {
   id: number;
   slug: string;
@@ -216,6 +270,8 @@ export interface Business {
   priceRange: number;
   hasDelivery: boolean;
   hasReservations: boolean;
+  hasBooking?: boolean;
+  bookingConfig?: BookingConfig;
   tags: string[];
   faqs: { q: string; a: string }[];
   isFeatured: boolean;

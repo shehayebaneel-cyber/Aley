@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { BookAppointmentModal } from "../components/BookAppointmentModal";
 import { BusinessCard } from "../components/BusinessCard";
 import { FavoriteButton } from "../components/FavoriteButton";
 import { Gallery } from "../components/Gallery";
@@ -26,6 +27,7 @@ export function BusinessProfile() {
   const { data: b, loading, error } = useFetch<Business>(slug ? `/api/businesses/${slug}` : null);
   const { data: related } = useFetch<Business[]>(slug ? `/api/businesses/${slug}/related` : null);
   const [booking, setBooking] = useState(false);
+  const [appt, setAppt] = useState(false);
   useTitle(b?.name);
 
   if (loading) return <div className="mx-auto max-w-5xl px-4 py-16"><div className="card h-96 animate-pulse" /></div>;
@@ -71,6 +73,7 @@ export function BusinessProfile() {
             <FavoriteButton businessId={b.id} className="!h-11 !w-11 border border-border !bg-surface" />
             {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
             {wa && <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
+            {b.hasBooking && <button onClick={() => setAppt(true)} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> Book appointment</button>}
             {b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
             <Link to={`/delivery?pickup=${encodeURIComponent(`${b.name}, ${b.address}`)}${b.lat && b.lng ? `&plat=${b.lat}&plng=${b.lng}` : ""}&businessId=${b.id}`} className="btn btn-ghost px-4 py-2.5"><TruckIcon className="h-4 w-4" /> Request delivery</Link>
             <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} onClick={() => track(b.id, "DIRECTIONS")} target="_blank" rel="noreferrer" className="btn btn-primary px-4 py-2.5"><MapPinIcon className="h-4 w-4" /> Directions</a>
@@ -213,7 +216,9 @@ export function BusinessProfile() {
       <div className="h-20 sm:hidden" />
       <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-border bg-surface/95 p-3 backdrop-blur sm:hidden">
         {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost flex-1 py-2.5 text-sm"><PhoneIcon className="h-4 w-4" /> Call</a>}
-        {b.hasReservations ? (
+        {b.hasBooking ? (
+          <button onClick={() => setAppt(true)} className="btn btn-primary flex-1 py-2.5 text-sm"><CalendarIcon className="h-4 w-4" /> Book</button>
+        ) : b.hasReservations ? (
           <button onClick={() => setBooking(true)} className="btn flex-1 bg-accent py-2.5 text-sm text-white"><CalendarIcon className="h-4 w-4" /> Book</button>
         ) : wa ? (
           <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn flex-1 bg-emerald-500 py-2.5 text-sm text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>
@@ -222,6 +227,7 @@ export function BusinessProfile() {
       </div>
 
       {booking && <BookingModal businessId={b.id} businessName={b.name} onClose={() => setBooking(false)} />}
+      {appt && <BookAppointmentModal business={b} onClose={() => setAppt(false)} />}
     </div>
   );
 }

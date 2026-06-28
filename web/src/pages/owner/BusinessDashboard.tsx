@@ -6,13 +6,13 @@ import { GalleryManager } from "../../components/GalleryManager";
 import { ImageField } from "../../components/ImageField";
 import { MenuEditor } from "../../components/MenuEditor";
 import { Stars } from "../../components/Stars";
-import { CheckIcon, GlobeIcon, StarIcon } from "../../components/icons";
+import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Business, BusinessOrder, Category, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review } from "../../types";
+import type { Appointment, AppointmentStatus, Business, BusinessOrder, Category, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember } from "../../types";
 
-const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -88,6 +88,8 @@ export function BusinessDashboard() {
         {tab === "Analytics" && <AnalyticsTab biz={biz} />}
         {tab === "Assistant" && <AssistantTab biz={biz} />}
         {tab === "Orders" && <OrdersTab biz={biz} />}
+        {tab === "Bookings" && <BookingsTab biz={biz} save={save} />}
+        {tab === "Booking Setup" && <BookingSetupTab biz={biz} save={save} />}
         {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
@@ -529,6 +531,240 @@ function MenuTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) =>
         uploader={ownerApi}
         onSave={(products, productLabel) => save({ products, productLabel })}
       />
+    </div>
+  );
+}
+
+// ---- Bookings (appointments) ----
+const APPT_BADGE: Record<AppointmentStatus, string> = {
+  PENDING: "bg-amber-400/15 text-amber-600",
+  CONFIRMED: "bg-emerald-500/15 text-emerald-600",
+  RESCHEDULED: "bg-blue-500/15 text-blue-600",
+  CANCELLED: "bg-red-500/15 text-red-500",
+  COMPLETED: "bg-brand-soft text-brand-dark",
+  NO_SHOW: "bg-surface-2 text-muted",
+};
+function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
+  const [appts, setAppts] = useState<Appointment[] | null>(null);
+  const [filter, setFilter] = useState<"ALL" | AppointmentStatus>("ALL");
+  const load = () => ownerApi.get<Appointment[]>(`/api/owner/businesses/${biz.id}/appointments`).then(setAppts).catch(() => setAppts([]));
+  useEffect(() => { if (biz.hasBooking) load(); /* eslint-disable-next-line */ }, [biz.id, biz.hasBooking]);
+
+  async function update(id: number, body: Record<string, unknown>) {
+    await ownerApi.patch(`/api/owner/appointments/${id}`, body);
+    load();
+  }
+  async function reschedule(a: Appointment) {
+    const date = window.prompt("New date (YYYY-MM-DD):", a.date);
+    if (!date) return;
+    const time = window.prompt("New time (HH:MM):", a.time);
+    if (!time) return;
+    await update(a.id, { date, time });
+  }
+
+  if (!biz.hasBooking) {
+    return (
+      <div className="card p-8 text-center">
+        <p className="font-display font-bold text-ink">Appointments are turned off</p>
+        <p className="mt-1 text-muted">Turn on booking in <span className="font-semibold">Booking Setup</span> so customers can request appointments.</p>
+        <button onClick={async () => { await save({ hasBooking: true }); }} className="btn btn-primary mt-4 px-5 py-2.5">Enable booking</button>
+      </div>
+    );
+  }
+
+  const shown = (appts ?? []).filter((a) => filter === "ALL" || a.status === filter);
+  const statuses: ("ALL" | AppointmentStatus)[] = ["ALL", "PENDING", "CONFIRMED", "RESCHEDULED", "COMPLETED", "CANCELLED", "NO_SHOW"];
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {statuses.map((s) => (
+          <button key={s} onClick={() => setFilter(s)} className={`chip ${filter === s ? "chip-active" : ""}`}>{s === "ALL" ? "All" : s.replace("_", "-").toLowerCase()}</button>
+        ))}
+      </div>
+      <div className="mt-4 space-y-2">
+        {appts === null && <div className="card h-24 animate-pulse" />}
+        {appts && shown.length === 0 && <div className="card p-8 text-center text-muted">No appointments here yet.</div>}
+        {shown.map((a) => (
+          <div key={a.id} className="card p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-ink">{a.serviceName || "Appointment"} {a.staffName && <span className="font-normal text-muted">with {a.staffName}</span>}</p>
+                <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm text-ink"><CalendarIcon className="h-4 w-4 text-brand" /> {a.date} · {a.time} <span className="text-muted">({a.durationMin} min)</span></p>
+                <p className="mt-0.5 text-sm text-muted">{a.customerName} · {a.customerPhone}{a.price > 0 ? ` · $${a.price}` : ""}</p>
+                {a.note && <p className="mt-1 text-sm text-muted">“{a.note}”</p>}
+              </div>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${APPT_BADGE[a.status]}`}>{a.status.replace("_", "-")}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {a.status === "PENDING" && <>
+                <button onClick={() => update(a.id, { status: "CONFIRMED" })} className="btn btn-primary px-3 py-1.5 text-xs">Confirm</button>
+                <button onClick={() => update(a.id, { status: "CANCELLED" })} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Decline</button>
+              </>}
+              {(a.status === "CONFIRMED" || a.status === "RESCHEDULED") && <>
+                <button onClick={() => update(a.id, { status: "COMPLETED" })} className="btn btn-primary px-3 py-1.5 text-xs">Mark complete</button>
+                <button onClick={() => update(a.id, { status: "NO_SHOW" })} className="btn btn-ghost px-3 py-1.5 text-xs">No-show</button>
+                <button onClick={() => update(a.id, { status: "CANCELLED" })} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Cancel</button>
+              </>}
+              {a.status !== "CANCELLED" && a.status !== "COMPLETED" && (
+                <button onClick={() => reschedule(a)} className="btn btn-ghost px-3 py-1.5 text-xs">Reschedule</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- Booking Setup (services, staff, settings) ----
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
+  const [services, setServices] = useState<Service[] | null>(null);
+  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const cfg = biz.bookingConfig ?? {};
+  const [settings, setSettings] = useState({
+    slotInterval: cfg.slotInterval ?? 30,
+    capacity: cfg.capacity ?? 1,
+    leadTimeHours: cfg.leadTimeHours ?? 1,
+    horizonDays: cfg.horizonDays ?? 30,
+  });
+  const [daysOff, setDaysOff] = useState<string[]>(cfg.daysOff ?? []);
+  const [breaks, setBreaks] = useState<{ day: number; start: string; end: string }[]>(cfg.breaks ?? []);
+  const [newSvc, setNewSvc] = useState({ name: "", durationMin: 30, price: 0, description: "" });
+  const [newStaff, setNewStaff] = useState({ name: "", role: "", avatar: null as string | null });
+  const [newDayOff, setNewDayOff] = useState("");
+
+  const loadSvc = () => ownerApi.get<Service[]>(`/api/owner/businesses/${biz.id}/services`).then(setServices).catch(() => setServices([]));
+  const loadStaff = () => ownerApi.get<StaffMember[]>(`/api/owner/businesses/${biz.id}/staff`).then(setStaff).catch(() => setStaff([]));
+  useEffect(() => { loadSvc(); loadStaff(); /* eslint-disable-next-line */ }, [biz.id]);
+
+  async function addService(e: FormEvent) {
+    e.preventDefault();
+    if (!newSvc.name.trim()) return;
+    await ownerApi.post(`/api/owner/businesses/${biz.id}/services`, newSvc);
+    setNewSvc({ name: "", durationMin: 30, price: 0, description: "" });
+    loadSvc();
+  }
+  async function addStaff(e: FormEvent) {
+    e.preventDefault();
+    if (!newStaff.name.trim()) return;
+    await ownerApi.post(`/api/owner/businesses/${biz.id}/staff`, newStaff);
+    setNewStaff({ name: "", role: "", avatar: null });
+    loadStaff();
+  }
+  async function saveSettings() {
+    await save({ bookingConfig: { ...cfg, ...settings, daysOff, breaks } });
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Enable */}
+      <section className="card flex flex-wrap items-center justify-between gap-3 p-5">
+        <div>
+          <h3 className="font-display font-bold text-ink">Appointment booking</h3>
+          <p className="text-sm text-muted">{biz.hasBooking ? "Customers can book appointments on your page." : "Turn on to show a “Book appointment” button on your page."}</p>
+        </div>
+        <button onClick={async () => { await save({ hasBooking: !biz.hasBooking }); }} className={`chip ${biz.hasBooking ? "chip-active" : ""}`}>{biz.hasBooking ? "Enabled" : "Enable"}</button>
+      </section>
+
+      {/* Services */}
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Services</h3>
+        <p className="text-sm text-muted">Each service has its own duration and price.</p>
+        <div className="mt-3 space-y-2">
+          {(services ?? []).map((s) => (
+            <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5">
+              <span className="flex-1 font-semibold text-ink">{s.name} <span className="text-xs font-normal text-muted">· {s.durationMin} min · {s.price > 0 ? `$${s.price}` : "Free"}</span></span>
+              <button onClick={async () => { await ownerApi.patch(`/api/owner/services/${s.id}`, { isActive: !s.isActive }); loadSvc(); }} className={`chip !text-xs ${s.isActive ? "chip-active" : ""}`}>{s.isActive ? "Active" : "Hidden"}</button>
+              <button onClick={async () => { await ownerApi.delete(`/api/owner/services/${s.id}`); loadSvc(); }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+            </div>
+          ))}
+          {services && services.length === 0 && <p className="text-sm text-muted">No services yet.</p>}
+        </div>
+        <form onSubmit={addService} className="mt-3 grid gap-2 sm:grid-cols-[1fr_7rem_7rem_auto]">
+          <input value={newSvc.name} onChange={(e) => setNewSvc({ ...newSvc, name: e.target.value })} placeholder="Service name" className="input !py-2 text-sm" />
+          <input type="number" min={5} step={5} value={newSvc.durationMin} onChange={(e) => setNewSvc({ ...newSvc, durationMin: Number(e.target.value) })} placeholder="min" className="input !py-2 text-sm" />
+          <input type="number" min={0} step={0.5} value={newSvc.price} onChange={(e) => setNewSvc({ ...newSvc, price: Number(e.target.value) })} placeholder="$" className="input !py-2 text-sm" />
+          <button className="btn btn-primary px-4 py-2 text-sm">Add</button>
+        </form>
+      </section>
+
+      {/* Staff */}
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Staff members <span className="text-xs font-normal text-muted">(optional)</span></h3>
+        <div className="mt-3 space-y-2">
+          {(staff ?? []).map((m) => (
+            <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5">
+              {m.avatar ? <img src={m.avatar} alt="" className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-muted">{m.name.charAt(0)}</span>}
+              <span className="flex-1 font-semibold text-ink">{m.name} {m.role && <span className="text-xs font-normal text-muted">· {m.role}</span>}</span>
+              <button onClick={async () => { await ownerApi.patch(`/api/owner/staff/${m.id}`, { isActive: !m.isActive }); loadStaff(); }} className={`chip !text-xs ${m.isActive ? "chip-active" : ""}`}>{m.isActive ? "Active" : "Hidden"}</button>
+              <button onClick={async () => { await ownerApi.delete(`/api/owner/staff/${m.id}`); loadStaff(); }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+            </div>
+          ))}
+          {staff && staff.length === 0 && <p className="text-sm text-muted">No staff added — customers will just pick a time.</p>}
+        </div>
+        <form onSubmit={addStaff} className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+          <input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="Name" className="input !py-2 text-sm" />
+          <input value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })} placeholder="Role (e.g. Barber)" className="input !py-2 text-sm" />
+          <button className="btn btn-primary px-4 py-2 text-sm">Add</button>
+        </form>
+      </section>
+
+      {/* Settings */}
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Availability settings</h3>
+        <p className="text-sm text-muted">Appointments use your opening <span className="font-semibold">Hours</span>. Add breaks and days off below.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm font-semibold text-ink">Slot interval (min)
+            <input type="number" min={5} step={5} value={settings.slotInterval} onChange={(e) => setSettings({ ...settings, slotInterval: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+          <label className="text-sm font-semibold text-ink">Capacity per slot
+            <input type="number" min={1} value={settings.capacity} onChange={(e) => setSettings({ ...settings, capacity: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+          <label className="text-sm font-semibold text-ink">Min notice (hours)
+            <input type="number" min={0} value={settings.leadTimeHours} onChange={(e) => setSettings({ ...settings, leadTimeHours: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+          <label className="text-sm font-semibold text-ink">Bookable ahead (days)
+            <input type="number" min={1} value={settings.horizonDays} onChange={(e) => setSettings({ ...settings, horizonDays: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+        </div>
+
+        {/* Breaks */}
+        <div className="mt-4">
+          <p className="text-sm font-semibold text-ink">Break times</p>
+          <div className="mt-2 space-y-2">
+            {breaks.map((br, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <select value={br.day} onChange={(e) => setBreaks(breaks.map((x, j) => j === i ? { ...x, day: Number(e.target.value) } : x))} className="input !py-1.5 text-sm w-28">
+                  {DOW.map((d, di) => <option key={di} value={di}>{d}</option>)}
+                </select>
+                <input type="time" value={br.start} onChange={(e) => setBreaks(breaks.map((x, j) => j === i ? { ...x, start: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                <span className="text-muted">–</span>
+                <input type="time" value={br.end} onChange={(e) => setBreaks(breaks.map((x, j) => j === i ? { ...x, end: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                <button onClick={() => setBreaks(breaks.filter((_, j) => j !== i))} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+              </div>
+            ))}
+            <button onClick={() => setBreaks([...breaks, { day: 1, start: "13:00", end: "14:00" }])} className="chip !text-xs">+ Add break</button>
+          </div>
+        </div>
+
+        {/* Days off */}
+        <div className="mt-4">
+          <p className="text-sm font-semibold text-ink">Days off</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {daysOff.map((d) => (
+              <span key={d} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink">{d}<button onClick={() => setDaysOff(daysOff.filter((x) => x !== d))} className="text-red-500">✕</button></span>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input type="date" value={newDayOff} onChange={(e) => setNewDayOff(e.target.value)} className="input !py-2 text-sm" />
+            <button onClick={() => { if (newDayOff && !daysOff.includes(newDayOff)) { setDaysOff([...daysOff, newDayOff].sort()); setNewDayOff(""); } }} className="btn btn-ghost px-4 py-2 text-sm">Add day off</button>
+          </div>
+        </div>
+
+        <SaveBar dirty onSave={saveSettings} />
+      </section>
     </div>
   );
 }

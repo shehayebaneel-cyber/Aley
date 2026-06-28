@@ -79,7 +79,7 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
     name: biz.name, tagline: biz.tagline, categoryId: biz.category.id, description: biz.description,
     phone: biz.phone, whatsapp: biz.whatsapp, instagram: biz.instagram, facebook: biz.facebook, website: biz.website, email: biz.email,
     address: biz.address, lat: biz.lat?.toString() ?? "", lng: biz.lng?.toString() ?? "",
-    priceRange: biz.priceRange, hasDelivery: biz.hasDelivery, hasReservations: biz.hasReservations,
+    priceRange: biz.priceRange, hasDelivery: biz.hasDelivery, hasReservations: biz.hasReservations, hasBooking: biz.hasBooking ?? false,
     tags: biz.tags.join(", "), ownerName: biz.ownerName ?? "", commissionRate: biz.commissionRate ?? 10,
   });
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
@@ -112,6 +112,7 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
         {[1, 2, 3, 4].map((p) => <button key={p} type="button" onClick={() => set({ priceRange: p })} className={`chip ${f.priceRange === p ? "chip-active" : ""}`}>{"$".repeat(p)}</button>)}
         <button type="button" onClick={() => set({ hasDelivery: !f.hasDelivery })} className={`chip ${f.hasDelivery ? "chip-active" : ""}`}>Delivery</button>
         <button type="button" onClick={() => set({ hasReservations: !f.hasReservations })} className={`chip ${f.hasReservations ? "chip-active" : ""}`}>Reservations</button>
+        <button type="button" onClick={() => set({ hasBooking: !f.hasBooking })} className={`chip ${f.hasBooking ? "chip-active" : ""}`}>Appointments</button>
       </div>
       <SaveBar onSave={() => save({ ...f, tags: f.tags.split(",").map((t) => t.trim()).filter(Boolean), lat: f.lat ? Number(f.lat) : null, lng: f.lng ? Number(f.lng) : null } as unknown as Partial<Business>)} />
     </div>

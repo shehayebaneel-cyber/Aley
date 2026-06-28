@@ -86,6 +86,10 @@ model Business {
   priceRange      Int     @default(2) // 1-4 ($ to $$$$)
   hasDelivery     Boolean @default(false)
   hasReservations Boolean @default(false)
+  // Appointment booking (salons, clinics, mechanics…). Admin toggles per business.
+  hasBooking      Boolean @default(false)
+  // JSON: { workingHours:[{day,open,close,closed}], breaks:[{day,start,end}], daysOff:["YYYY-MM-DD"], slotInterval, capacity, leadTimeHours, horizonDays }
+  bookingConfig   String  @default("{}")
 
   // Rich content (JSON strings)
   tags     String @default("[]") // string[] of services/keywords (amenities)
@@ -122,6 +126,9 @@ model Business {
   businessOrders BusinessOrder[]
   claims         BusinessClaim[]
   reservations   Reservation[]
+  services       Service[]
+  staff          StaffMember[]
+  appointments   Appointment[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -176,6 +183,7 @@ model User {
   reviews      Review[]
   favorites    Favorite[]
   reservations Reservation[]
+  appointments Appointment[]
 }
 
 // A table/booking request a visitor makes to a business. The owner confirms or
@@ -195,6 +203,62 @@ model Reservation {
   note       String   @default("")
   status     String   @default("PENDING") // PENDING | CONFIRMED | DECLINED | CANCELLED
   createdAt  DateTime @default(now())
+}
+
+// A bookable service offered by a business (haircut, consultation, oil change…).
+model Service {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name        String
+  description String   @default("")
+  durationMin Int      @default(30) // appointment length in minutes
+  price       Float    @default(0)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  appointments Appointment[]
+}
+
+// A staff member customers can optionally book with.
+model StaffMember {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  role       String   @default("")
+  avatar     String?
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  appointments Appointment[]
+}
+
+// A customer appointment with a business (and optionally a service + staff member).
+model Appointment {
+  id           Int      @id @default(autoincrement())
+  businessId   Int
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  serviceId    Int?
+  service      Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  staffId      Int?
+  staff        StaffMember? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  userId       Int?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customerName String
+  customerPhone String
+  note         String   @default("")
+  date         String // "2026-07-01"
+  time         String // "14:30" (start)
+  durationMin  Int      @default(30) // snapshot of service duration
+  price        Float    @default(0) // snapshot
+  serviceName  String   @default("") // snapshot for display/history
+  staffName    String   @default("")
+  // PENDING | CONFIRMED | RESCHEDULED | CANCELLED | COMPLETED | NO_SHOW
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, date])
 }
 
 model Favorite {
