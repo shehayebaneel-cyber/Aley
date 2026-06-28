@@ -10,7 +10,7 @@ import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../c
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingMode, Business, BusinessOrder, Category, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember } from "../../types";
 
 const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
@@ -547,8 +547,12 @@ const APPT_BADGE: Record<AppointmentStatus, string> = {
 function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
   const [appts, setAppts] = useState<Appointment[] | null>(null);
   const [filter, setFilter] = useState<"ALL" | AppointmentStatus>("ALL");
+  const [stats, setStats] = useState<BookingAnalytics | null>(null);
+  const [period, setPeriod] = useState("month");
+  const [openCust, setOpenCust] = useState<string | null>(null); // appointment uid (id) whose customer panel is open
   const load = () => ownerApi.get<Appointment[]>(`/api/owner/businesses/${biz.id}/appointments`).then(setAppts).catch(() => setAppts([]));
-  useEffect(() => { if (biz.appointmentBookable) load(); /* eslint-disable-next-line */ }, [biz.id, biz.appointmentBookable]);
+  const loadStats = () => ownerApi.get<BookingAnalytics>(`/api/owner/businesses/${biz.id}/booking-analytics?period=${period}`).then(setStats).catch(() => setStats(null));
+  useEffect(() => { if (biz.appointmentBookable) { load(); loadStats(); } /* eslint-disable-next-line */ }, [biz.id, biz.appointmentBookable, period]);
 
   async function update(id: number, body: Record<string, unknown>) {
     await ownerApi.patch(`/api/owner/appointments/${id}`, body);
@@ -575,9 +579,47 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
   const shown = (appts ?? []).filter((a) => filter === "ALL" || a.status === filter);
   const statuses: ("ALL" | AppointmentStatus)[] = ["ALL", "PENDING", "CONFIRMED", "RESCHEDULED", "COMPLETED", "CANCELLED", "NO_SHOW"];
 
+  const cur = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      {/* Analytics summary */}
+      <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display font-bold text-ink">Booking stats</h3>
+          <div className="flex gap-1.5">
+            {[["month", "This month"], ["30d", "30 days"], ["all", "All time"]].map(([v, l]) => (
+              <button key={v} onClick={() => setPeriod(v)} className={`chip !text-xs ${period === v ? "chip-active" : ""}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+        {stats && (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {[
+                ["Appointments", String(stats.total)],
+                ["Completed", String(stats.completed)],
+                ["Cancelled", String(stats.cancelled)],
+                ["No-shows", String(stats.noShow)],
+                ["Revenue", cur(stats.revenue)],
+                ["Avg value", cur(stats.avgValue)],
+              ].map(([label, val]) => (
+                <div key={label} className="rounded-xl surface-2 p-3">
+                  <p className="text-xs text-muted">{label}</p>
+                  <p className="font-display text-lg font-extrabold text-ink">{val}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
+              <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Most booked service</p><p className="font-semibold text-ink">{stats.topService ? `${stats.topService.name} (${stats.topService.count})` : "—"}</p></div>
+              <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Most popular staff</p><p className="font-semibold text-ink">{stats.topStaff ? `${stats.topStaff.name} (${stats.topStaff.count})` : "—"}</p></div>
+              <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Peak hours</p><p className="font-semibold text-ink">{stats.peakHours.length ? stats.peakHours.slice(0, 3).map((p) => `${p.hour} (${p.count})`).join(", ") : "—"}</p></div>
+            </div>
+          </>
+        )}
+      </section>
+
+      <div className="mt-5 flex flex-wrap gap-2">
         {statuses.map((s) => (
           <button key={s} onClick={() => setFilter(s)} className={`chip ${filter === s ? "chip-active" : ""}`}>{s === "ALL" ? "All" : s.replace("_", "-").toLowerCase()}</button>
         ))}
@@ -609,10 +651,70 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
               {a.status !== "CANCELLED" && a.status !== "COMPLETED" && (
                 <button onClick={() => reschedule(a)} className="btn btn-ghost px-3 py-1.5 text-xs">Reschedule</button>
               )}
+              <button onClick={() => setOpenCust(openCust === `${a.id}` ? null : `${a.id}`)} className="btn btn-ghost px-3 py-1.5 text-xs">{openCust === `${a.id}` ? "Hide customer" : "Customer"}</button>
             </div>
+            {openCust === `${a.id}` && <CustomerPanel bizId={biz.id} phone={a.customerPhone} />}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const CRM_TAGS: { key: string; label: string }[] = [
+  { key: "", label: "No tag" }, { key: "VIP", label: "⭐ VIP" }, { key: "REGULAR", label: "Regular" }, { key: "FIRST_VISIT", label: "First visit" },
+];
+const TAG_BADGE: Record<string, string> = { VIP: "bg-amber-400/20 text-amber-600", REGULAR: "bg-emerald-500/15 text-emerald-600", FIRST_VISIT: "bg-blue-500/15 text-blue-600" };
+
+// Mini-CRM panel: a customer's history, totals, tag and notes (keyed by phone).
+function CustomerPanel({ bizId, phone }: { bizId: number; phone: string }) {
+  const [data, setData] = useState<CustomerHistory | null>(null);
+  const [tag, setTag] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    ownerApi.get<CustomerHistory>(`/api/owner/businesses/${bizId}/customers/${encodeURIComponent(phone)}`)
+      .then((d) => { setData(d); setTag(d.storedTag); setNotes(d.notes); })
+      .catch(() => setData(null));
+  }, [bizId, phone]);
+
+  async function save() {
+    await ownerApi.patch(`/api/owner/businesses/${bizId}/customers/${encodeURIComponent(phone)}`, { tag, notes, name: data?.name });
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  if (!data) return <div className="mt-3 h-20 animate-pulse rounded-xl surface-2" />;
+  const effective = tag || data.suggestedTag;
+  return (
+    <div className="mt-3 rounded-xl surface-2 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold text-ink">{data.name || phone}</span>
+        {effective && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${TAG_BADGE[effective] ?? "bg-surface-2 text-muted"}`}>{effective.replace("_", " ")}</span>}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[["Visits", String(data.visits)], ["Completed", String(data.completed)], ["No-shows", String(data.noShows)], ["Total spent", `$${Math.round(data.spent).toLocaleString()}`]].map(([l, v]) => (
+          <div key={l} className="rounded-lg bg-surface p-2"><p className="text-[11px] text-muted">{l}</p><p className="font-bold text-ink">{v}</p></div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-ink">Tag</span>
+        {CRM_TAGS.map((t) => <button key={t.key} onClick={() => setTag(t.key)} className={`chip !text-xs ${tag === t.key ? "chip-active" : ""}`}>{t.label}</button>)}
+      </div>
+      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Private notes about this customer…" className="input mt-2 !py-2 text-sm" />
+      <div className="mt-2 flex items-center gap-3">
+        <button onClick={save} className="btn btn-primary px-4 py-1.5 text-xs">Save</button>
+        {saved && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><CheckIcon className="h-3.5 w-3.5" /> Saved</span>}
+      </div>
+      {data.appointments.length > 1 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-ink">Previous appointments</p>
+          <ul className="mt-1 space-y-1 text-xs text-muted">
+            {data.appointments.slice(0, 8).map((a) => (
+              <li key={a.id} className="flex justify-between"><span>{a.date} · {a.serviceName || "Appointment"}</span><span>{a.status.replace("_", "-").toLowerCase()}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -381,6 +381,100 @@ ownerRouter.patch("/appointments/:id", async (req, res) => {
   res.json(await prisma.appointment.update({ where: { id: a.id }, data }));
 });
 
+// ---- Booking analytics ----
+function bookingRange(period: string): { start?: string; end?: string } {
+  const now = new Date();
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  if (period === "all") return {};
+  if (period === "month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { start: ymd(start), end: ymd(end) };
+  }
+  // default: rolling 30 days
+  const start = new Date(now); start.setDate(start.getDate() - 30);
+  const end = new Date(now); end.setDate(end.getDate() + 1);
+  return { start: ymd(start), end: ymd(end) };
+}
+ownerRouter.get("/businesses/:id/booking-analytics", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const period = String(req.query.period ?? "month");
+  const { start, end } = bookingRange(period);
+  const where: Record<string, unknown> = { businessId: business.id };
+  if (start && end) where.date = { gte: start, lt: end };
+  const appts = await prisma.appointment.findMany({ where });
+
+  const by = (s: string) => appts.filter((a) => a.status === s).length;
+  const completed = appts.filter((a) => a.status === "COMPLETED");
+  const revenue = Math.round(completed.reduce((s, a) => s + (a.price || 0), 0) * 100) / 100;
+
+  const tally = (key: "serviceName" | "staffName") => {
+    const m = new Map<string, number>();
+    for (const a of appts) { const v = (a[key] || "").trim(); if (v) m.set(v, (m.get(v) ?? 0) + 1); }
+    const top = [...m.entries()].sort((x, y) => y[1] - x[1])[0];
+    return top ? { name: top[0], count: top[1] } : null;
+  };
+  const peak = new Map<string, number>();
+  for (const a of appts) { const h = a.time.slice(0, 2) + ":00"; peak.set(h, (peak.get(h) ?? 0) + 1); }
+  const peakHours = [...peak.entries()].map(([hour, count]) => ({ hour, count })).sort((x, y) => y.count - x.count).slice(0, 5);
+
+  res.json({
+    period,
+    total: appts.length,
+    pending: by("PENDING"), confirmed: by("CONFIRMED"), rescheduled: by("RESCHEDULED"),
+    completed: completed.length, cancelled: by("CANCELLED"), noShow: by("NO_SHOW"),
+    revenue,
+    avgValue: completed.length ? Math.round((revenue / completed.length) * 100) / 100 : 0,
+    topService: tally("serviceName"),
+    topStaff: tally("staffName"),
+    peakHours,
+  });
+});
+
+// ---- Customer CRM (keyed by phone within a business) ----
+const TAGS = ["", "VIP", "REGULAR", "FIRST_VISIT"];
+ownerRouter.get("/businesses/:id/customers/:phone", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const phone = decodeURIComponent(req.params.phone);
+  const [appts, profile] = await Promise.all([
+    prisma.appointment.findMany({ where: { businessId: business.id, customerPhone: phone }, orderBy: [{ date: "desc" }, { time: "desc" }] }),
+    prisma.customerProfile.findUnique({ where: { businessId_phone: { businessId: business.id, phone } } }),
+  ]);
+  const completed = appts.filter((a) => a.status === "COMPLETED");
+  const spent = Math.round(completed.reduce((s, a) => s + (a.price || 0), 0) * 100) / 100;
+  const suggested = completed.length === 0 ? "FIRST_VISIT" : completed.length >= 5 ? "VIP" : completed.length >= 2 ? "REGULAR" : "";
+  res.json({
+    phone,
+    name: profile?.name || appts[0]?.customerName || "",
+    tag: profile?.tag || suggested,
+    storedTag: profile?.tag || "",
+    suggestedTag: suggested,
+    notes: profile?.notes || "",
+    visits: appts.length,
+    completed: completed.length,
+    noShows: appts.filter((a) => a.status === "NO_SHOW").length,
+    spent,
+    lastVisit: appts[0]?.date ?? null,
+    appointments: appts.slice(0, 20),
+  });
+});
+ownerRouter.patch("/businesses/:id/customers/:phone", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const phone = decodeURIComponent(req.params.phone);
+  const tag = TAGS.includes(String(req.body.tag)) ? String(req.body.tag) : "";
+  const notes = STR(req.body.notes, 2000);
+  const name = STR(req.body.name, 80);
+  const profile = await prisma.customerProfile.upsert({
+    where: { businessId_phone: { businessId: business.id, phone } },
+    create: { businessId: business.id, phone, tag, notes, name },
+    update: { tag, notes, name },
+  });
+  res.json(profile);
+});
+
 // ---- Offers ----
 ownerRouter.get("/businesses/:id/offers", async (req, res) => {
   const business = await ownedBusiness(req);

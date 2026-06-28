@@ -248,6 +248,37 @@ export interface Appointment {
 
 export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";
 
+export interface BookingAnalytics {
+  period: string;
+  total: number;
+  pending: number;
+  confirmed: number;
+  rescheduled: number;
+  completed: number;
+  cancelled: number;
+  noShow: number;
+  revenue: number;
+  avgValue: number;
+  topService: { name: string; count: number } | null;
+  topStaff: { name: string; count: number } | null;
+  peakHours: { hour: string; count: number }[];
+}
+
+export interface CustomerHistory {
+  phone: string;
+  name: string;
+  tag: string;
+  storedTag: string;
+  suggestedTag: string;
+  notes: string;
+  visits: number;
+  completed: number;
+  noShows: number;
+  spent: number;
+  lastVisit: string | null;
+  appointments: Appointment[];
+}
+
 export interface BookingBreak { day: number; start: string; end: string }
 export interface BookingConfig {
   workingHours?: HoursRow[];

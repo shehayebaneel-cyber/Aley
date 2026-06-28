@@ -129,6 +129,7 @@ model Business {
   services       Service[]
   staff          StaffMember[]
   appointments   Appointment[]
+  customerProfiles CustomerProfile[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -238,6 +239,21 @@ model StaffMember {
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   appointments Appointment[]
+}
+
+// Lightweight per-business CRM record keyed by phone: owner-set tag + notes.
+// Visit/spend stats are computed from appointments, not stored here.
+model CustomerProfile {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  phone      String
+  name       String   @default("")
+  tag        String   @default("") // "" | VIP | REGULAR | FIRST_VISIT
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([businessId, phone])
 }
 
 // A customer appointment with a business (and optionally a service + staff member).
