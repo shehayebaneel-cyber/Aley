@@ -202,12 +202,25 @@ export interface Service {
   sortOrder?: number;
 }
 
+export interface TimeOff { from: string; to: string }
+export interface StaffSchedule {
+  workingHours?: HoursRow[];
+  breaks?: BookingBreak[];
+  daysOff?: string[];
+  timeOff?: TimeOff[];
+}
+
 export interface StaffMember {
   id: number;
   businessId?: number;
   name: string;
   role: string;
   avatar: string | null;
+  bio?: string;
+  experience?: string;
+  languages?: string[];
+  rating?: number;
+  schedule?: StaffSchedule;
   isActive: boolean;
   sortOrder?: number;
 }

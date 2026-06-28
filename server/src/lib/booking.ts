@@ -120,58 +120,112 @@ const ACTIVE = ["PENDING", "CONFIRMED", "RESCHEDULED"];
 
 export interface ExistingAppt { time: string; durationMin: number; staffId: number | null; status: string }
 
-/** Available start times ("HH:MM") for a date, service duration, and optional staff member. */
+// ---- Per-staff schedules (Phase 2) ----
+export interface TimeOff { from: string; to: string } // inclusive "YYYY-MM-DD" range (vacation)
+export interface StaffSchedule {
+  workingHours: HoursRow[]; // empty = inherit business/booking hours
+  breaks: BookingBreak[];
+  daysOff: string[]; // individual blocked dates
+  timeOff: TimeOff[]; // vacation ranges
+}
+export function resolveStaffSchedule(raw: unknown): StaffSchedule {
+  const o = parseObj(raw);
+  return {
+    workingHours: Array.isArray(o.workingHours) ? (o.workingHours as HoursRow[]) : [],
+    breaks: Array.isArray(o.breaks) ? (o.breaks as BookingBreak[]) : [],
+    daysOff: Array.isArray(o.daysOff) ? (o.daysOff as string[]).map(String) : [],
+    timeOff: Array.isArray(o.timeOff) ? (o.timeOff as TimeOff[]).filter((t) => t && t.from && t.to) : [],
+  };
+}
+/** Is the staff member off (day off or on vacation) on this date? */
+export function staffOffOn(schedule: StaffSchedule, dateStr: string): boolean {
+  if (schedule.daysOff.includes(dateStr)) return true;
+  return schedule.timeOff.some((t) => dateStr >= t.from && dateStr <= t.to);
+}
+
+export interface StaffForSlots { id: number; schedule: StaffSchedule; appts: ExistingAppt[] }
+
+const breakOverlap = (breaks: BookingBreak[], weekday: number, start: number, end: number) =>
+  breaks.filter((b) => b.day === weekday).some((b) => start < toMin(b.end) && end > toMin(b.start));
+
+const hoursOpen = (hours: HoursRow[], weekday: number) => hours.find((h) => h.day === weekday && !h.closed);
+
+const apptOverlap = (appts: ExistingAppt[], start: number, end: number, padS: number, padE: number) => {
+  const candS = start - padS;
+  const candE = end + padE;
+  return appts.filter((e) => ACTIVE.includes(e.status)).some((e) => {
+    const es = toMin(e.time) - padS;
+    const ee = toMin(e.time) + (e.durationMin || 0) + padE;
+    return candS < ee && candE > es;
+  });
+};
+
+/** Whether a specific staff member can take an appointment at [start,end] on a date. */
+function staffFree(s: StaffForSlots, weekday: number, dateStr: string, start: number, end: number, cfg: BookingConfig, businessHours: HoursRow[]): boolean {
+  if (staffOffOn(s.schedule, dateStr)) return false;
+  const hours = s.schedule.workingHours.length ? s.schedule.workingHours : cfg.workingHours.length ? cfg.workingHours : businessHours;
+  const row = hoursOpen(hours, weekday);
+  if (!row || start < toMin(row.open) || end > toMin(row.close)) return false;
+  if (breakOverlap(s.schedule.breaks, weekday, start, end)) return false;
+  if (apptOverlap(s.appts, start, end, cfg.bufferBefore, cfg.bufferAfter)) return false;
+  return true;
+}
+
+/** Available start times ("HH:MM") for a date, service duration, optional staff member, and per-staff schedules. */
 export function computeSlots(opts: {
   config: BookingConfig;
   businessHours: HoursRow[];
   dateStr: string;
   durationMin: number;
-  existing: ExistingAppt[];
-  staffId: number | null;
   now: Date;
+  existing?: ExistingAppt[]; // business-wide appts (used when no staff)
+  staffId?: number | null; // selected staff (null/undefined = any)
+  staff?: StaffForSlots[]; // active staff with their schedules + appts (enables per-staff availability)
 }): string[] {
-  const { config, businessHours, dateStr, durationMin, existing, staffId, now } = opts;
+  const { config, businessHours, dateStr, durationMin, now } = opts;
+  const staff = opts.staff ?? [];
+  const selectedStaffId = opts.staffId ?? null;
   const date = new Date(`${dateStr}T00:00:00`);
   if (isNaN(date.getTime()) || durationMin <= 0) return [];
   if (config.daysOff.includes(dateStr)) return [];
 
-  const active = existing.filter((e) => ACTIVE.includes(e.status));
-  // Daily cap (business-wide) reached → no slots.
-  if (config.maxPerDay > 0 && active.length >= config.maxPerDay) return [];
+  const allActive = (staff.length ? staff.flatMap((s) => s.appts) : opts.existing ?? []).filter((e) => ACTIVE.includes(e.status));
+  if (config.maxPerDay > 0 && allActive.length >= config.maxPerDay) return [];
 
   const weekday = date.getDay();
   const hoursSrc = config.workingHours.length ? config.workingHours : businessHours;
-  const row = hoursSrc.find((h) => h.day === weekday);
-  if (!row || row.closed) return [];
+  const row = hoursOpen(hoursSrc, weekday);
+  if (!row) return [];
 
   const openM = toMin(row.open);
   const closeM = toMin(row.close);
-  const breaks = config.breaks.filter((b) => b.day === weekday).map((b) => [toMin(b.start), toMin(b.end)] as const);
   const interval = config.slotInterval;
   const padS = config.bufferBefore;
   const padE = config.bufferAfter;
-
   const isToday = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
   const earliest = now.getHours() * 60 + now.getMinutes() + config.leadTimeHours * 60;
 
   const slots: string[] = [];
   for (let start = openM; start + durationMin <= closeM; start += interval) {
     const end = start + durationMin;
-    if (breaks.some(([bs, be]) => start < be && end > bs)) continue;
+    if (breakOverlap(config.breaks, weekday, start, end)) continue; // business-wide break
     if (isToday && start < earliest) continue;
 
-    // Buffer-aware overlap: each block reserves padBefore..padAfter around its service time.
-    const candS = start - padS;
-    const candE = end + padE;
-    const overlapping = active.filter((e) => {
-      const es = toMin(e.time) - padS;
-      const ee = toMin(e.time) + (e.durationMin || 0) + padE;
-      return candS < ee && candE > es;
-    });
-    if (staffId != null) {
-      if (overlapping.some((e) => e.staffId === staffId)) continue;
-    } else if (overlapping.length >= config.capacity) {
-      continue;
+    if (staff.length) {
+      if (selectedStaffId != null) {
+        const s = staff.find((x) => x.id === selectedStaffId);
+        if (!s || !staffFree(s, weekday, dateStr, start, end, config, businessHours)) continue;
+      } else if (!staff.some((s) => staffFree(s, weekday, dateStr, start, end, config, businessHours))) {
+        continue; // "any" → need at least one free staff
+      }
+    } else {
+      // No staff defined → business-wide concurrency limited by capacity.
+      const candS = start - padS, candE = end + padE;
+      const overlapping = allActive.filter((e) => {
+        const es = toMin(e.time) - padS, ee = toMin(e.time) + (e.durationMin || 0) + padE;
+        return candS < ee && candE > es;
+      });
+      if (overlapping.length >= config.capacity) continue;
     }
     slots.push(toHHMM(start));
   }

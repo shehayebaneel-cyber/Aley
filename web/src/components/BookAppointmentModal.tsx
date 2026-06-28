@@ -149,9 +149,17 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
                     <span className="font-semibold text-ink">Any available</span>
                   </button>
                   {opts.staff.map((m) => (
-                    <button key={m.id} onClick={() => setStaff(m)} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${staff?.id === m.id ? "border-brand bg-brand-soft" : "border-border hover:border-brand/50"}`}>
-                      {m.avatar ? <img src={m.avatar} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 font-bold text-muted">{m.name.charAt(0)}</span>}
-                      <span><span className="block font-semibold text-ink">{m.name}</span>{m.role && <span className="block text-xs text-muted">{m.role}</span>}</span>
+                    <button key={m.id} onClick={() => setStaff(m)} className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${staff?.id === m.id ? "border-brand bg-brand-soft" : "border-border hover:border-brand/50"}`}>
+                      {m.avatar ? <img src={m.avatar} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface-2 font-bold text-muted">{m.name.charAt(0)}</span>}
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="font-semibold text-ink">{m.name}</span>
+                          {!!m.rating && m.rating > 0 && <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-amber-500">★ {m.rating.toFixed(1)}</span>}
+                        </span>
+                        {(m.role || m.experience) && <span className="block text-xs text-muted">{[m.role, m.experience].filter(Boolean).join(" · ")}</span>}
+                        {!!m.languages?.length && <span className="mt-0.5 block text-xs text-muted">🗣 {m.languages.join(", ")}</span>}
+                        {m.bio && <span className="mt-1 block line-clamp-2 text-xs text-muted">{m.bio}</span>}
+                      </span>
                     </button>
                   ))}
                 </div>

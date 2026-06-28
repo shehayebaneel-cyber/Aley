@@ -228,6 +228,12 @@ model StaffMember {
   name       String
   role       String   @default("")
   avatar     String?
+  bio        String   @default("")
+  experience String   @default("") // e.g. "5 years"
+  languages  String   @default("[]") // JSON string[] of spoken languages
+  rating     Float    @default(0)
+  // JSON: { workingHours:[{day,open,close,closed}], breaks:[{day,start,end}], timeOff:[{from,to}], daysOff:[date] }
+  schedule   String   @default("{}")
   isActive   Boolean  @default(true)
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())

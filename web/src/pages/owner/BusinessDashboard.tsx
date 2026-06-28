@@ -619,6 +619,125 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
 
 // ---- Booking Setup (services, staff, settings) ----
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// A staff member with editable profile + personal schedule (hours, breaks, vacation).
+function StaffRow({ staff, reload }: { staff: StaffMember; reload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [f, setF] = useState({
+    role: staff.role ?? "", experience: staff.experience ?? "", bio: staff.bio ?? "",
+    languages: (staff.languages ?? []).join(", "), avatar: staff.avatar ?? null as string | null,
+  });
+  const sched = staff.schedule ?? {};
+  const [customHours, setCustomHours] = useState(!!sched.workingHours?.length);
+  const [hours, setHours] = useState<HoursRow[]>(() =>
+    [0, 1, 2, 3, 4, 5, 6].map((day) => sched.workingHours?.find((h) => h.day === day) ?? { day, open: "09:00", close: "18:00", closed: day === 0 }),
+  );
+  const [breaks, setBreaks] = useState<{ day: number; start: string; end: string }[]>(sched.breaks ?? []);
+  const [timeOff, setTimeOff] = useState<{ from: string; to: string }[]>(sched.timeOff ?? []);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await ownerApi.patch(`/api/owner/staff/${staff.id}`, {
+        role: f.role, experience: f.experience, bio: f.bio,
+        languages: f.languages.split(",").map((s) => s.trim()).filter(Boolean),
+        avatar: f.avatar,
+        schedule: { workingHours: customHours ? hours : [], breaks, timeOff },
+      });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+      reload();
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="rounded-xl border border-border p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {staff.avatar ? <img src={staff.avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-muted">{staff.name.charAt(0)}</span>}
+        <span className="flex-1 font-semibold text-ink">{staff.name} {staff.role && <span className="text-xs font-normal text-muted">· {staff.role}</span>}{!!timeOff.length && <span className="ml-2 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-bold text-amber-600">on leave set</span>}</span>
+        <button onClick={() => setOpen((o) => !o)} className="chip !text-xs">{open ? "Close" : "Edit"}</button>
+        <button onClick={async () => { await ownerApi.patch(`/api/owner/staff/${staff.id}`, { isActive: !staff.isActive }); reload(); }} className={`chip !text-xs ${staff.isActive ? "chip-active" : ""}`}>{staff.isActive ? "Active" : "Hidden"}</button>
+        <button onClick={async () => { await ownerApi.delete(`/api/owner/staff/${staff.id}`); reload(); }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+            <div><ImageField value={f.avatar} uploadWith={ownerApi} onChange={(avatar) => setF({ ...f, avatar })} aspect="aspect-square" label="photo" /></div>
+            <div className="space-y-2">
+              <input value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} placeholder="Role (e.g. Senior Barber)" className="input !py-2 text-sm" />
+              <input value={f.experience} onChange={(e) => setF({ ...f, experience: e.target.value })} placeholder="Experience (e.g. 5 years)" className="input !py-2 text-sm" />
+              <input value={f.languages} onChange={(e) => setF({ ...f, languages: e.target.value })} placeholder="Languages (comma separated, e.g. Arabic, English)" className="input !py-2 text-sm" />
+              <textarea value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} rows={2} placeholder="Short bio (optional)" className="input !py-2 text-sm" />
+            </div>
+          </div>
+
+          {/* Personal working hours */}
+          <div>
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-ink"><input type="checkbox" checked={customHours} onChange={(e) => setCustomHours(e.target.checked)} /> Custom working hours <span className="font-normal text-muted">(off = use business hours)</span></label>
+            {customHours && (
+              <div className="mt-2 space-y-1.5">
+                {hours.map((h, i) => (
+                  <div key={h.day} className="flex items-center gap-2">
+                    <span className="w-10 text-sm font-semibold text-ink">{DOW[h.day]}</span>
+                    {h.closed ? <span className="flex-1 text-sm text-muted">Off</span> : (
+                      <div className="flex flex-1 items-center gap-2">
+                        <input type="time" value={h.open} onChange={(e) => setHours(hours.map((x, j) => j === i ? { ...x, open: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                        <span className="text-muted">–</span>
+                        <input type="time" value={h.close} onChange={(e) => setHours(hours.map((x, j) => j === i ? { ...x, close: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                      </div>
+                    )}
+                    <button onClick={() => setHours(hours.map((x, j) => j === i ? { ...x, closed: !x.closed } : x))} className={`chip !text-xs ${h.closed ? "chip-active" : ""}`}>{h.closed ? "Off" : "Working"}</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Personal breaks */}
+          <div>
+            <p className="text-sm font-semibold text-ink">Breaks</p>
+            <div className="mt-1.5 space-y-1.5">
+              {breaks.map((br, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <select value={br.day} onChange={(e) => setBreaks(breaks.map((x, j) => j === i ? { ...x, day: Number(e.target.value) } : x))} className="input !py-1.5 text-sm w-24">{DOW.map((d, di) => <option key={di} value={di}>{d}</option>)}</select>
+                  <input type="time" value={br.start} onChange={(e) => setBreaks(breaks.map((x, j) => j === i ? { ...x, start: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                  <span className="text-muted">–</span>
+                  <input type="time" value={br.end} onChange={(e) => setBreaks(breaks.map((x, j) => j === i ? { ...x, end: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                  <button onClick={() => setBreaks(breaks.filter((_, j) => j !== i))} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+                </div>
+              ))}
+              <button onClick={() => setBreaks([...breaks, { day: 1, start: "13:00", end: "14:00" }])} className="chip !text-xs">+ Add break</button>
+            </div>
+          </div>
+
+          {/* Vacation / time off */}
+          <div>
+            <p className="text-sm font-semibold text-ink">Vacation / time off</p>
+            <div className="mt-1.5 space-y-1.5">
+              {timeOff.map((t, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input type="date" value={t.from} onChange={(e) => setTimeOff(timeOff.map((x, j) => j === i ? { ...x, from: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                  <span className="text-muted">→</span>
+                  <input type="date" value={t.to} onChange={(e) => setTimeOff(timeOff.map((x, j) => j === i ? { ...x, to: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                  <button onClick={() => setTimeOff(timeOff.filter((_, j) => j !== i))} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+                </div>
+              ))}
+              <button onClick={() => setTimeOff([...timeOff, { from: "", to: "" }])} className="chip !text-xs">+ Add leave</button>
+              <p className="text-xs text-muted">Bookings on these dates won't be offered for this staff member.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={save} disabled={busy} className="btn btn-primary px-5 py-2 text-sm disabled:opacity-60">{busy ? "Saving…" : "Save staff"}</button>
+            {saved && <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600"><CheckIcon className="h-4 w-4" /> Saved</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
   const [services, setServices] = useState<Service[] | null>(null);
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
@@ -716,14 +835,7 @@ function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Busin
       <section className="card p-5">
         <h3 className="font-display font-bold text-ink">Staff members <span className="text-xs font-normal text-muted">(optional)</span></h3>
         <div className="mt-3 space-y-2">
-          {(staff ?? []).map((m) => (
-            <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5">
-              {m.avatar ? <img src={m.avatar} alt="" className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-muted">{m.name.charAt(0)}</span>}
-              <span className="flex-1 font-semibold text-ink">{m.name} {m.role && <span className="text-xs font-normal text-muted">· {m.role}</span>}</span>
-              <button onClick={async () => { await ownerApi.patch(`/api/owner/staff/${m.id}`, { isActive: !m.isActive }); loadStaff(); }} className={`chip !text-xs ${m.isActive ? "chip-active" : ""}`}>{m.isActive ? "Active" : "Hidden"}</button>
-              <button onClick={async () => { await ownerApi.delete(`/api/owner/staff/${m.id}`); loadStaff(); }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
-            </div>
-          ))}
+          {(staff ?? []).map((m) => <StaffRow key={m.id} staff={m} reload={loadStaff} />)}
           {staff && staff.length === 0 && <p className="text-sm text-muted">No staff added — customers will just pick a time.</p>}
         </div>
         <form onSubmit={addStaff} className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">

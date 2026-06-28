@@ -1,13 +1,28 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
-import { computeSlots, effectiveBookingMode, isAppointmentMode, resolveBookingConfig } from "../lib/booking";
+import { computeSlots, effectiveBookingMode, isAppointmentMode, resolveBookingConfig, resolveStaffSchedule } from "../lib/booking";
 import { notifyAdmins } from "../lib/notify";
 import { parseArr, type HoursRow } from "../lib/serialize";
 
 export const bookingRouter = Router();
 
 const STR = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+
+// Build the active-staff list (with schedules + their appts) and the full appt list for a date.
+async function staffAndAppts(businessId: number, date: string) {
+  const [staffRows, appts] = await Promise.all([
+    prisma.staffMember.findMany({ where: { businessId, isActive: true } }),
+    prisma.appointment.findMany({ where: { businessId, date }, select: { time: true, durationMin: true, staffId: true, status: true } }),
+  ]);
+  const existing = appts.map((a) => ({ ...a, staffId: a.staffId ?? null }));
+  const staff = staffRows.map((s) => ({
+    id: s.id,
+    schedule: resolveStaffSchedule(s.schedule),
+    appts: existing.filter((a) => a.staffId === s.id),
+  }));
+  return { staff, existing };
+}
 
 type BizWithCategory = NonNullable<Awaited<ReturnType<typeof loadBiz>>>;
 function loadBiz(where: { slug: string } | { id: number }) {
@@ -29,10 +44,16 @@ async function findBookable(slug: string): Promise<BizWithCategory | null> {
 bookingRouter.get("/:slug/options", async (req, res) => {
   const business = await findBookable(req.params.slug);
   if (!business) return res.status(404).json({ error: "Booking isn't available for this business." });
-  const [services, staff] = await Promise.all([
+  const [services, staffRows] = await Promise.all([
     prisma.service.findMany({ where: { businessId: business.id, isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
     prisma.staffMember.findMany({ where: { businessId: business.id, isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
   ]);
+  // Public staff profile (omit internal schedule; parse languages JSON).
+  const staff = staffRows.map((s) => ({
+    id: s.id, name: s.name, role: s.role, avatar: s.avatar, bio: s.bio,
+    experience: s.experience, rating: s.rating,
+    languages: parseArr(s.languages) as string[],
+  }));
   const cfg = resolveBookingConfig(business.bookingConfig);
   const mode = effectiveBookingMode(business.category?.slug, cfg, business.hasBooking);
   res.json({
@@ -65,17 +86,14 @@ bookingRouter.get("/:slug/slots", async (req, res) => {
     if (svc) durationMin = svc.durationMin;
   }
 
-  const existing = await prisma.appointment.findMany({
-    where: { businessId: business.id, date },
-    select: { time: true, durationMin: true, staffId: true, status: true },
-  });
-
+  const { staff, existing } = await staffAndAppts(business.id, date);
   const slots = computeSlots({
     config: resolveBookingConfig(business.bookingConfig),
     businessHours: parseArr(business.hours) as HoursRow[],
     dateStr: date,
     durationMin,
-    existing: existing.map((e) => ({ ...e, staffId: e.staffId ?? null })),
+    existing,
+    staff: staff.length ? staff : undefined,
     staffId,
     now: new Date(),
   });
@@ -104,16 +122,14 @@ bookingRouter.post("/", optionalUser, async (req, res) => {
   const durationMin = service?.durationMin ?? resolveBookingConfig(business.bookingConfig).slotInterval;
 
   // Re-check the slot is still free (avoid double-booking on race).
-  const existing = await prisma.appointment.findMany({
-    where: { businessId: business.id, date },
-    select: { time: true, durationMin: true, staffId: true, status: true },
-  });
+  const { staff: staffList, existing } = await staffAndAppts(business.id, date);
   const free = computeSlots({
     config: resolveBookingConfig(business.bookingConfig),
     businessHours: parseArr(business.hours) as HoursRow[],
     dateStr: date,
     durationMin,
-    existing: existing.map((e) => ({ ...e, staffId: e.staffId ?? null })),
+    existing,
+    staff: staffList.length ? staffList : undefined,
     staffId: staff?.id ?? null,
     now: new Date(),
   });

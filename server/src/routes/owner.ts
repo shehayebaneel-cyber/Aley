@@ -3,7 +3,7 @@ import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
 import { prisma } from "../db";
-import { outBusiness, slugify, toJson } from "../lib/serialize";
+import { outBusiness, parseArr, parseObj, slugify, toJson } from "../lib/serialize";
 import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
 
@@ -295,10 +295,15 @@ ownerRouter.delete("/services/:id", async (req, res) => {
 });
 
 // ---- Booking: staff ----
+// Parse JSON fields so the owner UI gets real arrays/objects.
+const outStaff = (s: { languages: string; schedule: string } & Record<string, unknown>) => ({
+  ...s, languages: parseArr(s.languages), schedule: parseObj(s.schedule),
+});
 ownerRouter.get("/businesses/:id/staff", async (req, res) => {
   const business = await ownedBusiness(req);
   if (!business) return res.status(404).json({ error: "Business not found." });
-  res.json(await prisma.staffMember.findMany({ where: { businessId: business.id }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }));
+  const staff = await prisma.staffMember.findMany({ where: { businessId: business.id }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
+  res.json(staff.map(outStaff));
 });
 ownerRouter.post("/businesses/:id/staff", async (req, res) => {
   const business = await ownedBusiness(req);
@@ -311,11 +316,14 @@ ownerRouter.post("/businesses/:id/staff", async (req, res) => {
       businessId: business.id, name,
       role: STR(req.body.role, 80),
       avatar: req.body.avatar ? STR(req.body.avatar, 500) : null,
+      bio: STR(req.body.bio, 1000),
+      experience: STR(req.body.experience, 80),
+      languages: toJson(Array.isArray(req.body.languages) ? req.body.languages.slice(0, 20) : []),
       isActive: req.body.isActive !== false,
       sortOrder: count,
     },
   });
-  res.status(201).json(member);
+  res.status(201).json(outStaff(member));
 });
 async function ownedStaff(ownerId: number | undefined, id: number) {
   const s = await prisma.staffMember.findUnique({ where: { id }, include: { business: { select: { ownerId: true } } } });
@@ -329,9 +337,13 @@ ownerRouter.patch("/staff/:id", async (req, res) => {
   if ("name" in b) data.name = STR(b.name, 80).trim() || s.name;
   if ("role" in b) data.role = STR(b.role, 80);
   if ("avatar" in b) data.avatar = b.avatar ? STR(b.avatar, 500) : null;
+  if ("bio" in b) data.bio = STR(b.bio, 1000);
+  if ("experience" in b) data.experience = STR(b.experience, 80);
+  if ("languages" in b && Array.isArray(b.languages)) data.languages = toJson(b.languages.slice(0, 20));
+  if ("schedule" in b && b.schedule && typeof b.schedule === "object") data.schedule = JSON.stringify(b.schedule);
   if ("isActive" in b) data.isActive = !!b.isActive;
   if ("sortOrder" in b) data.sortOrder = Number(b.sortOrder) || 0;
-  res.json(await prisma.staffMember.update({ where: { id: s.id }, data }));
+  res.json(outStaff(await prisma.staffMember.update({ where: { id: s.id }, data })));
 });
 ownerRouter.delete("/staff/:id", async (req, res) => {
   const s = await ownedStaff(req.ownerId, Number(req.params.id));
