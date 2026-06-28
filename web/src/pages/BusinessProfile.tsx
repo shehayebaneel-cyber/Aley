@@ -74,8 +74,8 @@ export function BusinessProfile() {
             {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
             {wa && <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
             {b.appointmentBookable && <button onClick={() => setAppt(true)} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> {b.bookingCta ?? "Book appointment"}</button>}
-            {b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
-            <Link to={`/delivery?pickup=${encodeURIComponent(`${b.name}, ${b.address}`)}${b.lat && b.lng ? `&plat=${b.lat}&plng=${b.lng}` : ""}&businessId=${b.id}`} className="btn btn-ghost px-4 py-2.5"><TruckIcon className="h-4 w-4" /> Request delivery</Link>
+            {b.bookingMode === "table" && b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
+            {b.hasDelivery && <Link to={`/delivery?pickup=${encodeURIComponent(`${b.name}, ${b.address}`)}${b.lat && b.lng ? `&plat=${b.lat}&plng=${b.lng}` : ""}&businessId=${b.id}`} className="btn btn-ghost px-4 py-2.5"><TruckIcon className="h-4 w-4" /> Request delivery</Link>}
             <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} onClick={() => track(b.id, "DIRECTIONS")} target="_blank" rel="noreferrer" className="btn btn-primary px-4 py-2.5"><MapPinIcon className="h-4 w-4" /> Directions</a>
           </div>
         </div>
@@ -218,7 +218,7 @@ export function BusinessProfile() {
         {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost flex-1 py-2.5 text-sm"><PhoneIcon className="h-4 w-4" /> Call</a>}
         {b.appointmentBookable ? (
           <button onClick={() => setAppt(true)} className="btn btn-primary flex-1 py-2.5 text-sm"><CalendarIcon className="h-4 w-4" /> Book</button>
-        ) : b.hasReservations ? (
+        ) : b.bookingMode === "table" && b.hasReservations ? (
           <button onClick={() => setBooking(true)} className="btn flex-1 bg-accent py-2.5 text-sm text-white"><CalendarIcon className="h-4 w-4" /> Book</button>
         ) : wa ? (
           <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn flex-1 bg-emerald-500 py-2.5 text-sm text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>
