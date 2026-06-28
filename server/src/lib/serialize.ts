@@ -1,3 +1,5 @@
+import { ctaLabelFor, effectiveBookingMode, isAppointmentMode, resolveBookingConfig } from "./booking";
+
 // SQLite has no JSON column type, so list/object fields are JSON strings.
 // These helpers parse them on the way out so the frontend gets real arrays.
 
@@ -49,7 +51,20 @@ export function outBusiness<T extends Record<string, unknown>>(b: T) {
     products: parseArr(b.products),
     hours: parseArr(b.hours) as HoursRow[],
     openNow: isOpenNow(parseArr(b.hours) as HoursRow[]),
-    bookingConfig: parseObj(b.bookingConfig),
+    ...bookingFields(b),
+  };
+}
+
+// Effective booking behaviour (mode/label) derived from category + config.
+function bookingFields(b: Record<string, unknown>) {
+  const cfg = resolveBookingConfig(b.bookingConfig);
+  const categorySlug = (b.category as { slug?: string } | undefined)?.slug;
+  const mode = effectiveBookingMode(categorySlug, cfg, !!b.hasBooking);
+  return {
+    bookingConfig: cfg,
+    bookingMode: mode,
+    bookingCta: ctaLabelFor(mode),
+    appointmentBookable: isAppointmentMode(mode),
   };
 }
 

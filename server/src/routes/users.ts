@@ -2,7 +2,8 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireUser, signToken } from "../auth";
 import { prisma } from "../db";
-import { outBusiness } from "../lib/serialize";
+import { computeSlots, resolveBookingConfig } from "../lib/booking";
+import { outBusiness, parseArr, type HoursRow } from "../lib/serialize";
 
 const userToken = (id: number) => signToken({ userId: id, role: "user" });
 const safe = (u: { id: number; name: string; email: string | null; avatar: string | null }) => ({ id: u.id, name: u.name, email: u.email, avatar: u.avatar });
@@ -92,4 +93,53 @@ userRouter.get("/bookings", async (req, res) => {
     include: { business: { select: { name: true, slug: true, logo: true } } },
   });
   res.json(bookings);
+});
+
+const hoursUntil = (date: string, time: string) => (new Date(`${date}T${time}:00`).getTime() - Date.now()) / 3_600_000;
+
+// PATCH /api/me/bookings/:id — customer self-service cancel or reschedule (if the business allows it).
+userRouter.patch("/bookings/:id", async (req, res) => {
+  const appt = await prisma.appointment.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { business: { include: { category: { select: { slug: true } } } } },
+  });
+  if (!appt || appt.userId !== req.userId) return res.status(404).json({ error: "Appointment not found." });
+  if (["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status)) return res.status(400).json({ error: "This appointment can't be changed anymore." });
+
+  const cfg = resolveBookingConfig(appt.business.bookingConfig);
+  const action = String(req.body?.action ?? "");
+
+  if (action === "cancel") {
+    if (!cfg.allowCustomerCancel) return res.status(403).json({ error: "This business doesn't allow online cancellation." });
+    if (hoursUntil(appt.date, appt.time) < cfg.cancellationHours) return res.status(400).json({ error: `Please cancel at least ${cfg.cancellationHours} hours before.` });
+    const updated = await prisma.appointment.update({ where: { id: appt.id }, data: { status: "CANCELLED" } });
+    return res.json(updated);
+  }
+
+  if (action === "reschedule") {
+    if (!cfg.allowCustomerReschedule) return res.status(403).json({ error: "This business doesn't allow online rescheduling." });
+    if (hoursUntil(appt.date, appt.time) < cfg.cancellationHours) return res.status(400).json({ error: `Please reschedule at least ${cfg.cancellationHours} hours before.` });
+    const date = String(req.body?.date ?? "");
+    const time = String(req.body?.time ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ error: "A valid new date and time are required." });
+
+    const existing = await prisma.appointment.findMany({
+      where: { businessId: appt.businessId, date, id: { not: appt.id } },
+      select: { time: true, durationMin: true, staffId: true, status: true },
+    });
+    const free = computeSlots({
+      config: cfg,
+      businessHours: parseArr(appt.business.hours) as HoursRow[],
+      dateStr: date,
+      durationMin: appt.durationMin,
+      existing: existing.map((e) => ({ ...e, staffId: e.staffId ?? null })),
+      staffId: appt.staffId,
+      now: new Date(),
+    });
+    if (!free.includes(time)) return res.status(409).json({ error: "That time isn't available. Please pick another." });
+    const updated = await prisma.appointment.update({ where: { id: appt.id }, data: { date, time, status: "RESCHEDULED" } });
+    return res.json(updated);
+  }
+
+  res.status(400).json({ error: "Unknown action." });
 });

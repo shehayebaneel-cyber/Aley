@@ -14,13 +14,37 @@ const BADGE: Record<AppointmentStatus, string> = {
   NO_SHOW: "bg-surface-2 text-muted",
 };
 
+const ACTIVE: AppointmentStatus[] = ["PENDING", "CONFIRMED", "RESCHEDULED"];
+
 export function MyBookings() {
   const { user, loading, openAuth } = useUserAuth();
   const [items, setItems] = useState<Appointment[] | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (user) userApi.get<Appointment[]>("/api/me/bookings").then(setItems).catch(() => setItems([]));
-  }, [user]);
+  const load = () => userApi.get<Appointment[]>("/api/me/bookings").then(setItems).catch(() => setItems([]));
+  useEffect(() => { if (user) load(); }, [user]);
+
+  async function act(a: Appointment, action: "cancel" | "reschedule") {
+    let body: Record<string, unknown> = { action };
+    if (action === "reschedule") {
+      const date = window.prompt("New date (YYYY-MM-DD):", a.date);
+      if (!date) return;
+      const time = window.prompt("New time (HH:MM):", a.time);
+      if (!time) return;
+      body = { action, date, time };
+    } else if (!window.confirm("Cancel this appointment?")) return;
+    setBusyId(a.id);
+    try {
+      await userApi.patch(`/api/me/bookings/${a.id}`, body);
+      await load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't update the appointment.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const upcoming = (a: Appointment) => new Date(`${a.date}T${a.time}:00`).getTime() > Date.now();
 
   if (loading) return <div className="mx-auto max-w-3xl px-4 py-16 text-muted">Loading…</div>;
   if (!user)
@@ -44,6 +68,12 @@ export function MyBookings() {
               {a.business ? <Link to={`/business/${a.business.slug}`} className="font-display font-bold text-ink hover:text-brand">{a.business.name}</Link> : <span className="font-display font-bold text-ink">Appointment</span>}
               <p className="text-sm text-muted">{a.serviceName || "Appointment"}{a.staffName ? ` · ${a.staffName}` : ""}</p>
               <p className="text-sm text-ink">{a.date} · {a.time}</p>
+              {ACTIVE.includes(a.status) && upcoming(a) && (
+                <div className="mt-2 flex gap-2">
+                  <button disabled={busyId === a.id} onClick={() => act(a, "reschedule")} className="btn btn-ghost px-3 py-1.5 text-xs disabled:opacity-50">Reschedule</button>
+                  <button disabled={busyId === a.id} onClick={() => act(a, "cancel")} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500 disabled:opacity-50">Cancel</button>
+                </div>
+              )}
             </div>
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${BADGE[a.status]}`}>{a.status.replace("_", "-")}</span>
           </div>

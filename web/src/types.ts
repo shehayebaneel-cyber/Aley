@@ -233,6 +233,8 @@ export interface Appointment {
   business?: { name: string; slug: string; logo: string | null };
 }
 
+export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";
+
 export interface BookingBreak { day: number; start: string; end: string }
 export interface BookingConfig {
   workingHours?: HoursRow[];
@@ -242,6 +244,14 @@ export interface BookingConfig {
   capacity?: number;
   leadTimeHours?: number;
   horizonDays?: number;
+  bufferBefore?: number;
+  bufferAfter?: number;
+  maxPerDay?: number;
+  cancellationHours?: number;
+  allowCustomerCancel?: boolean;
+  allowCustomerReschedule?: boolean;
+  mode?: "" | BookingMode;
+  policyNote?: string;
 }
 
 export interface Business {
@@ -272,6 +282,9 @@ export interface Business {
   hasReservations: boolean;
   hasBooking?: boolean;
   bookingConfig?: BookingConfig;
+  bookingMode?: BookingMode;
+  bookingCta?: string;
+  appointmentBookable?: boolean;
   tags: string[];
   faqs: { q: string; a: string }[];
   isFeatured: boolean;

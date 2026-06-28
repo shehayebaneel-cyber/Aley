@@ -10,7 +10,7 @@ import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../c
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, Business, BusinessOrder, Category, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember } from "../../types";
+import type { Appointment, AppointmentStatus, BookingMode, Business, BusinessOrder, Category, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember } from "../../types";
 
 const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
@@ -548,7 +548,7 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
   const [appts, setAppts] = useState<Appointment[] | null>(null);
   const [filter, setFilter] = useState<"ALL" | AppointmentStatus>("ALL");
   const load = () => ownerApi.get<Appointment[]>(`/api/owner/businesses/${biz.id}/appointments`).then(setAppts).catch(() => setAppts([]));
-  useEffect(() => { if (biz.hasBooking) load(); /* eslint-disable-next-line */ }, [biz.id, biz.hasBooking]);
+  useEffect(() => { if (biz.appointmentBookable) load(); /* eslint-disable-next-line */ }, [biz.id, biz.appointmentBookable]);
 
   async function update(id: number, body: Record<string, unknown>) {
     await ownerApi.patch(`/api/owner/appointments/${id}`, body);
@@ -562,12 +562,12 @@ function BookingsTab({ biz, save }: { biz: Business; save: (p: Partial<Business>
     await update(a.id, { date, time });
   }
 
-  if (!biz.hasBooking) {
+  if (!biz.appointmentBookable) {
     return (
       <div className="card p-8 text-center">
         <p className="font-display font-bold text-ink">Appointments are turned off</p>
         <p className="mt-1 text-muted">Turn on booking in <span className="font-semibold">Booking Setup</span> so customers can request appointments.</p>
-        <button onClick={async () => { await save({ hasBooking: true }); }} className="btn btn-primary mt-4 px-5 py-2.5">Enable booking</button>
+        <button onClick={async () => { await save({ bookingConfig: { ...(biz.bookingConfig ?? {}), mode: "appointment" } }); }} className="btn btn-primary mt-4 px-5 py-2.5">Enable booking</button>
       </div>
     );
   }
@@ -628,12 +628,27 @@ function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Busin
     capacity: cfg.capacity ?? 1,
     leadTimeHours: cfg.leadTimeHours ?? 1,
     horizonDays: cfg.horizonDays ?? 30,
+    bufferBefore: cfg.bufferBefore ?? 0,
+    bufferAfter: cfg.bufferAfter ?? 0,
+    maxPerDay: cfg.maxPerDay ?? 0,
+    cancellationHours: cfg.cancellationHours ?? 12,
   });
+  const [mode, setMode] = useState<"" | BookingMode>(cfg.mode ?? "");
+  const [allowCancel, setAllowCancel] = useState(cfg.allowCustomerCancel ?? true);
+  const [allowReschedule, setAllowReschedule] = useState(cfg.allowCustomerReschedule ?? true);
+  const [policyNote, setPolicyNote] = useState(cfg.policyNote ?? "");
   const [daysOff, setDaysOff] = useState<string[]>(cfg.daysOff ?? []);
   const [breaks, setBreaks] = useState<{ day: number; start: string; end: string }[]>(cfg.breaks ?? []);
   const [newSvc, setNewSvc] = useState({ name: "", durationMin: 30, price: 0, description: "" });
   const [newStaff, setNewStaff] = useState({ name: "", role: "", avatar: null as string | null });
   const [newDayOff, setNewDayOff] = useState("");
+  const [savedMode, setSavedMode] = useState(false);
+
+  async function saveMode(m: "" | BookingMode) {
+    setMode(m);
+    await save({ bookingConfig: { ...cfg, mode: m } });
+    setSavedMode(true); setTimeout(() => setSavedMode(false), 2000);
+  }
 
   const loadSvc = () => ownerApi.get<Service[]>(`/api/owner/businesses/${biz.id}/services`).then(setServices).catch(() => setServices([]));
   const loadStaff = () => ownerApi.get<StaffMember[]>(`/api/owner/businesses/${biz.id}/staff`).then(setStaff).catch(() => setStaff([]));
@@ -654,18 +669,25 @@ function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Busin
     loadStaff();
   }
   async function saveSettings() {
-    await save({ bookingConfig: { ...cfg, ...settings, daysOff, breaks } });
+    await save({ bookingConfig: { ...cfg, ...settings, mode, allowCustomerCancel: allowCancel, allowCustomerReschedule: allowReschedule, policyNote, daysOff, breaks } });
   }
 
   return (
     <div className="space-y-6">
-      {/* Enable */}
-      <section className="card flex flex-wrap items-center justify-between gap-3 p-5">
-        <div>
-          <h3 className="font-display font-bold text-ink">Appointment booking</h3>
-          <p className="text-sm text-muted">{biz.hasBooking ? "Customers can book appointments on your page." : "Turn on to show a “Book appointment” button on your page."}</p>
+      {/* Mode (category-driven, with override) */}
+      <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display font-bold text-ink">Booking mode</h3>
+            <p className="text-sm text-muted">By default this follows your category ({biz.category.name}). Currently showing: <span className="font-semibold text-ink">{biz.bookingCta ?? (biz.appointmentBookable ? "Book Appointment" : "Off")}</span>.</p>
+          </div>
+          {savedMode && <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600"><CheckIcon className="h-4 w-4" /> Saved</span>}
         </div>
-        <button onClick={async () => { await save({ hasBooking: !biz.hasBooking }); }} className={`chip ${biz.hasBooking ? "chip-active" : ""}`}>{biz.hasBooking ? "Enabled" : "Enable"}</button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {([["", "Auto (by category)"], ["appointment", "Book Appointment"], ["service", "Request Service"], ["none", "Off"]] as ["" | BookingMode, string][]).map(([val, label]) => (
+            <button key={val} onClick={() => saveMode(val)} className={`chip ${mode === val ? "chip-active" : ""}`}>{label}</button>
+          ))}
+        </div>
       </section>
 
       {/* Services */}
@@ -728,6 +750,28 @@ function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Busin
           <label className="text-sm font-semibold text-ink">Bookable ahead (days)
             <input type="number" min={1} value={settings.horizonDays} onChange={(e) => setSettings({ ...settings, horizonDays: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
           </label>
+          <label className="text-sm font-semibold text-ink">Buffer before (min)
+            <input type="number" min={0} step={5} value={settings.bufferBefore} onChange={(e) => setSettings({ ...settings, bufferBefore: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+          <label className="text-sm font-semibold text-ink">Buffer after (min)
+            <input type="number" min={0} step={5} value={settings.bufferAfter} onChange={(e) => setSettings({ ...settings, bufferAfter: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+          <label className="text-sm font-semibold text-ink">Max appointments / day <span className="font-normal text-muted">(0 = unlimited)</span>
+            <input type="number" min={0} value={settings.maxPerDay} onChange={(e) => setSettings({ ...settings, maxPerDay: Number(e.target.value) })} className="input mt-1 !py-2 text-sm" />
+          </label>
+        </div>
+
+        {/* Cancellation policy */}
+        <div className="mt-4 rounded-xl surface-2 p-3">
+          <p className="text-sm font-semibold text-ink">Customer cancellation policy</p>
+          <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+            <label className="inline-flex items-center gap-1.5 text-ink"><input type="checkbox" checked={allowCancel} onChange={(e) => setAllowCancel(e.target.checked)} /> Allow cancel</label>
+            <label className="inline-flex items-center gap-1.5 text-ink"><input type="checkbox" checked={allowReschedule} onChange={(e) => setAllowReschedule(e.target.checked)} /> Allow reschedule</label>
+            <label className="inline-flex items-center gap-1.5 text-ink">Cutoff (hours before)
+              <input type="number" min={0} value={settings.cancellationHours} onChange={(e) => setSettings({ ...settings, cancellationHours: Number(e.target.value) })} className="input !py-1.5 text-sm w-20" />
+            </label>
+          </div>
+          <input value={policyNote} onChange={(e) => setPolicyNote(e.target.value)} placeholder="Policy note shown to customers (optional)" className="input mt-2 !py-2 text-sm" />
         </div>
 
         {/* Breaks */}

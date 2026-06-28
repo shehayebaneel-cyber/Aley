@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
-import { computeSlots, resolveBookingConfig } from "../lib/booking";
+import { computeSlots, effectiveBookingMode, isAppointmentMode, resolveBookingConfig } from "../lib/booking";
 import { notifyAdmins } from "../lib/notify";
 import { parseArr, type HoursRow } from "../lib/serialize";
 
@@ -9,9 +9,19 @@ export const bookingRouter = Router();
 
 const STR = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
-async function findBookable(slug: string) {
-  const business = await prisma.business.findUnique({ where: { slug } });
-  if (!business || !business.isPublished || !business.hasBooking) return null;
+type BizWithCategory = NonNullable<Awaited<ReturnType<typeof loadBiz>>>;
+function loadBiz(where: { slug: string } | { id: number }) {
+  return prisma.business.findUnique({ where: where as { slug: string }, include: { category: { select: { slug: true } } } });
+}
+/** A business is bookable when its effective (category-driven) mode uses the appointment flow. */
+function appointmentEnabled(business: { isPublished: boolean; hasBooking: boolean; bookingConfig: string; category: { slug: string } | null }) {
+  if (!business.isPublished) return false;
+  const mode = effectiveBookingMode(business.category?.slug, resolveBookingConfig(business.bookingConfig), business.hasBooking);
+  return isAppointmentMode(mode);
+}
+async function findBookable(slug: string): Promise<BizWithCategory | null> {
+  const business = await loadBiz({ slug });
+  if (!business || !appointmentEnabled(business)) return null;
   return business;
 }
 
@@ -24,12 +34,18 @@ bookingRouter.get("/:slug/options", async (req, res) => {
     prisma.staffMember.findMany({ where: { businessId: business.id, isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
   ]);
   const cfg = resolveBookingConfig(business.bookingConfig);
+  const mode = effectiveBookingMode(business.category?.slug, cfg, business.hasBooking);
   res.json({
     businessId: business.id,
     businessName: business.name,
     services,
     staff,
-    config: { slotInterval: cfg.slotInterval, leadTimeHours: cfg.leadTimeHours, horizonDays: cfg.horizonDays },
+    config: {
+      slotInterval: cfg.slotInterval, leadTimeHours: cfg.leadTimeHours, horizonDays: cfg.horizonDays,
+      cancellationHours: cfg.cancellationHours, allowCustomerCancel: cfg.allowCustomerCancel,
+      allowCustomerReschedule: cfg.allowCustomerReschedule, policyNote: cfg.policyNote, mode,
+      ctaLabel: mode === "service" ? "Request Service" : "Book Appointment",
+    },
   });
 });
 
@@ -69,8 +85,8 @@ bookingRouter.get("/:slug/slots", async (req, res) => {
 // POST /api/booking — create an appointment request.
 bookingRouter.post("/", optionalUser, async (req, res) => {
   const b = req.body ?? {};
-  const business = await prisma.business.findUnique({ where: { id: Number(b.businessId) } });
-  if (!business || !business.isPublished || !business.hasBooking) return res.status(404).json({ error: "Booking isn't available." });
+  const business = await loadBiz({ id: Number(b.businessId) });
+  if (!business || !appointmentEnabled(business)) return res.status(404).json({ error: "Booking isn't available." });
 
   const customerName = STR(b.customerName, 80);
   const customerPhone = STR(b.customerPhone, 40);

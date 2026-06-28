@@ -11,7 +11,7 @@ const addDays = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n
 interface Options {
   services: Service[];
   staff: StaffMember[];
-  config: { slotInterval: number; leadTimeHours: number; horizonDays: number };
+  config: { slotInterval: number; leadTimeHours: number; horizonDays: number; cancellationHours?: number; policyNote?: string; ctaLabel?: string };
 }
 
 export function BookAppointmentModal({ business, onClose }: { business: Business; onClose: () => void }) {
@@ -94,7 +94,7 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <div className="card pop-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-xl font-extrabold text-ink">Book an appointment</h2>
+          <h2 className="font-display text-xl font-extrabold text-ink">{opts?.config.ctaLabel ?? business.bookingCta ?? "Book an appointment"}</h2>
           <button onClick={onClose} aria-label="Close" className="text-muted hover:text-ink"><CloseIcon /></button>
         </div>
         <p className="mt-0.5 text-sm text-muted">{business.name}</p>
@@ -188,6 +188,8 @@ export function BookAppointmentModal({ business, onClose }: { business: Business
                     {staff && <p className="text-ink"><span className="text-muted">With: </span>{staff.name}</p>}
                     <p className="text-ink"><span className="text-muted">When: </span>{date} at {time}</p>
                   </div>
+                  {opts.config.policyNote && <p className="text-xs text-muted">{opts.config.policyNote}</p>}
+                  {!!opts.config.cancellationHours && <p className="text-xs text-muted">Free cancellation up to {opts.config.cancellationHours}h before your appointment.</p>}
                   <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="Your name" className="input" />
                   <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required placeholder="Phone number" className="input" />
                   <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} placeholder="Anything we should know? (optional)" className="input" />

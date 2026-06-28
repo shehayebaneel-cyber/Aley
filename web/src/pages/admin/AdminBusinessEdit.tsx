@@ -6,7 +6,7 @@ import { MenuEditor } from "../../components/MenuEditor";
 import { CheckIcon, GlobeIcon, TrashIcon } from "../../components/icons";
 import { adminApi, formatEventDate } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Business, Category, EventItem, GalleryImage, HoursRow, Offer } from "../../types";
+import type { BookingMode, Business, Category, EventItem, GalleryImage, HoursRow, Offer } from "../../types";
 
 type Biz = Business & { owner?: { id: number; name: string; email: string; phone: string } | null; offers?: Offer[]; events?: EventItem[] };
 const TABS = ["Profile", "Photos", "Hours", "Menu / Products", "Offers", "Events", "Owner"] as const;
@@ -80,6 +80,7 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
     phone: biz.phone, whatsapp: biz.whatsapp, instagram: biz.instagram, facebook: biz.facebook, website: biz.website, email: biz.email,
     address: biz.address, lat: biz.lat?.toString() ?? "", lng: biz.lng?.toString() ?? "",
     priceRange: biz.priceRange, hasDelivery: biz.hasDelivery, hasReservations: biz.hasReservations, hasBooking: biz.hasBooking ?? false,
+    bookingMode: biz.bookingConfig?.mode ?? "",
     tags: biz.tags.join(", "), ownerName: biz.ownerName ?? "", commissionRate: biz.commissionRate ?? 10,
   });
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
@@ -112,9 +113,18 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
         {[1, 2, 3, 4].map((p) => <button key={p} type="button" onClick={() => set({ priceRange: p })} className={`chip ${f.priceRange === p ? "chip-active" : ""}`}>{"$".repeat(p)}</button>)}
         <button type="button" onClick={() => set({ hasDelivery: !f.hasDelivery })} className={`chip ${f.hasDelivery ? "chip-active" : ""}`}>Delivery</button>
         <button type="button" onClick={() => set({ hasReservations: !f.hasReservations })} className={`chip ${f.hasReservations ? "chip-active" : ""}`}>Reservations</button>
-        <button type="button" onClick={() => set({ hasBooking: !f.hasBooking })} className={`chip ${f.hasBooking ? "chip-active" : ""}`}>Appointments</button>
       </div>
-      <SaveBar onSave={() => save({ ...f, tags: f.tags.split(",").map((t) => t.trim()).filter(Boolean), lat: f.lat ? Number(f.lat) : null, lng: f.lng ? Number(f.lng) : null } as unknown as Partial<Business>)} />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-ink">Appointments</span>
+        <select value={f.bookingMode} onChange={(e) => set({ bookingMode: e.target.value as "" | BookingMode })} className={`${inp} !mt-0 w-auto`}>
+          <option value="">Auto (by category)</option>
+          <option value="appointment">Book Appointment</option>
+          <option value="service">Request Service</option>
+          <option value="none">Off</option>
+        </select>
+        <span className="text-xs text-muted">Booking follows the business category unless overridden.</span>
+      </div>
+      <SaveBar onSave={() => save({ ...f, bookingMode: undefined, bookingConfig: { ...(biz.bookingConfig ?? {}), mode: f.bookingMode as "" | BookingMode }, tags: f.tags.split(",").map((t) => t.trim()).filter(Boolean), lat: f.lat ? Number(f.lat) : null, lng: f.lng ? Number(f.lng) : null } as unknown as Partial<Business>)} />
     </div>
   );
 }
