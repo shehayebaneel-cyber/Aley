@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { businessMetrics, platformMetrics, resolveRange } from "./analytics";
+import { availableSlots, bookAppointment, findBookableBusinesses } from "./bookingService";
 import { estimateDelivery, getDeliverySettings } from "./delivery";
 import { prisma } from "../db";
 import { isOpenNow, parseArr, type HoursRow } from "./serialize";
@@ -20,7 +21,7 @@ const client = API_KEY ? new Anthropic({ apiKey: API_KEY }) : null;
 
 export type AiContext = "public" | "owner" | "admin";
 export interface ChatMsg { role: "user" | "assistant"; content: string }
-export interface ChatCtx { businessId?: number }
+export interface ChatCtx { businessId?: number; userId?: number; userName?: string }
 
 const CITY = "aley";
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -129,6 +130,40 @@ const DELIVERY_TOOL = {
     pickup: { type: "string", description: "Pickup place/address text, for the prefilled link." },
   } },
 };
+// ---- Booking tools (public) ----
+const FIND_BOOKABLE_TOOL = {
+  name: "find_bookable_businesses",
+  description: "Find businesses in Aley that accept appointment bookings (salons, barbers, clinics, dentists, mechanics, tutors, etc.) matching a query or category. Returns each business's slug and its bookable services (id, name, duration, price). Use this first when the user wants to book/make an appointment.",
+  input_schema: { type: "object" as const, properties: {
+    query: { type: "string", description: "What the user wants, e.g. 'haircut', 'dentist', 'oil change'." },
+    category: { type: "string", description: "Optional category slug, e.g. 'barbers', 'dentists'." },
+  } },
+};
+const AVAILABILITY_TOOL = {
+  name: "get_appointment_availability",
+  description: "List available appointment start times for a business on a specific date. Provide businessSlug and date (YYYY-MM-DD). Optionally serviceId (from find_bookable_businesses) for correct duration, and staffId. Always resolve relative dates like 'tomorrow' to an absolute YYYY-MM-DD using today's date before calling.",
+  input_schema: { type: "object" as const, properties: {
+    businessSlug: { type: "string" },
+    date: { type: "string", description: "YYYY-MM-DD" },
+    serviceId: { type: "integer" },
+    staffId: { type: "integer" },
+  }, required: ["businessSlug", "date"] },
+};
+const CREATE_APPOINTMENT_TOOL = {
+  name: "create_appointment",
+  description: "Book an appointment. ONLY call after you have (1) confirmed an exact date and time that appeared in get_appointment_availability, and (2) collected the customer's name and phone number. The booking is created as a pending request the business confirms. Returns a check-in code on success.",
+  input_schema: { type: "object" as const, properties: {
+    businessSlug: { type: "string" },
+    date: { type: "string", description: "YYYY-MM-DD" },
+    time: { type: "string", description: "HH:MM, must be one of the available slots" },
+    serviceId: { type: "integer" },
+    staffId: { type: "integer" },
+    customerName: { type: "string" },
+    customerPhone: { type: "string" },
+    note: { type: "string" },
+  }, required: ["businessSlug", "date", "time", "customerName", "customerPhone"] },
+};
+
 const PERIOD_PROP = { period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "90d", "year"], description: "Time range (default 30d)." } };
 const OWNER_ANALYTICS_TOOL = { name: "get_business_analytics", description: "Get this business's analytics: views, search appearances, CTR, calls/WhatsApp/directions/website clicks, favorites, bookings, orders, revenue, reviews, with period-over-period deltas and insights.", input_schema: { type: "object" as const, properties: PERIOD_PROP } };
 const OWNER_PROFILE_TOOL = { name: "get_business_profile", description: "Get this business's current profile: description, tags, products, hours, rating, and recent reviews. Use before writing copy or analyzing reviews.", input_schema: { type: "object" as const, properties: {} } };
@@ -141,7 +176,7 @@ function toolsFor(ctx: AiContext) {
     SIMPLE("list_events", "List upcoming events in Aley."),
     SIMPLE("list_offers", "List current offers/deals in Aley."),
     SIMPLE("list_announcements", "List official public notices (municipality, utilities, road works, emergencies, weather, health)."),
-    DELIVERY_TOOL];
+    DELIVERY_TOOL, FIND_BOOKABLE_TOOL, AVAILABILITY_TOOL, CREATE_APPOINTMENT_TOOL];
 }
 
 async function executeTool(name: string, input: Record<string, unknown>, ctx: AiContext, c: ChatCtx) {
@@ -152,6 +187,14 @@ async function executeTool(name: string, input: Record<string, unknown>, ctx: Ai
     case "list_offers": return listOffers();
     case "list_announcements": return listAnnouncements();
     case "delivery_estimate": return deliveryEstimate(input);
+    case "find_bookable_businesses": return findBookableBusinesses(input.query ? String(input.query) : undefined, input.category ? String(input.category) : undefined);
+    case "get_appointment_availability": return availableSlots(String(input.businessSlug), String(input.date), input.serviceId ? Number(input.serviceId) : null, input.staffId ? Number(input.staffId) : null);
+    case "create_appointment": return bookAppointment({
+      slug: String(input.businessSlug), date: String(input.date), time: String(input.time),
+      serviceId: input.serviceId ? Number(input.serviceId) : null, staffId: input.staffId ? Number(input.staffId) : null,
+      customerName: String(input.customerName ?? c.userName ?? ""), customerPhone: String(input.customerPhone ?? ""),
+      note: input.note ? String(input.note) : undefined, userId: c.userId ?? null,
+    });
     case "get_business_profile": return c.businessId ? getBusinessProfileById(c.businessId) : { error: "no business" };
     case "get_business_analytics": {
       if (!c.businessId) return { error: "no business" };
@@ -197,7 +240,12 @@ You help VISITORS discover Aley: find and compare businesses/services, recommend
 - To recommend, call search_businesses (and get_business for detail). Rank by relevance, rating, number of reviews and whether it's open now; explain your pick in one line.
 - For "what's happening" use list_events; for deals list_offers; "road closures/announcements" list_announcements.
 - For delivery ("deliver X from A to B", "pick up a package") gather what/where, call delivery_estimate, give the price range, and share the prefilled [Request delivery](/delivery?...) link.
-- For booking a table/appointment, point to the business page where they can book.`;
+- For booking an APPOINTMENT ("book me a haircut tomorrow after 5", "make a dentist appointment"):
+  1. find_bookable_businesses to find the place + its services (note the serviceId).
+  2. Resolve relative dates to YYYY-MM-DD (today is ${today()}), then get_appointment_availability for that business/date/service. If the user said "after 5", offer only matching slots.
+  3. Propose specific options. Once the user picks a time, make sure you have their name and phone${c.userName ? ` (their name is ${c.userName} — still confirm the phone)` : ""}, then call create_appointment.
+  4. Only call create_appointment with a time returned by availability. After booking, confirm the date/time and give the check-in code, and mention they can manage it under [My appointments](/bookings).
+- For booking a restaurant TABLE, point to the business page (the Book a table button).`;
 }
 
 /** Run the grounded assistant. Returns the reply text. */

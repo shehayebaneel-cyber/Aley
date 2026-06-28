@@ -24,7 +24,10 @@ aiRouter.post("/chat", optionalUser, async (req, res) => {
   const messages = parseMessages(req.body);
   if (!messages) return res.status(400).json({ error: "Send a non-empty messages array." });
   try {
-    const { reply, grounded } = await runChat("public", messages);
+    // Logged-in visitors can book through the assistant; attach their identity.
+    let userName: string | undefined;
+    if (req.userId) userName = (await prisma.user.findUnique({ where: { id: req.userId } }))?.name ?? undefined;
+    const { reply, grounded } = await runChat("public", messages, { userId: req.userId, userName });
     res.json({ reply, grounded });
   } catch (e) {
     console.error("AI chat error:", e);
