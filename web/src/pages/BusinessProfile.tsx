@@ -1,12 +1,14 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BusinessCard } from "../components/BusinessCard";
 import { FavoriteButton } from "../components/FavoriteButton";
+import { Gallery } from "../components/Gallery";
+import { ProductModal, DIET_META } from "../components/ProductModal";
+import { ProductPlaceholder } from "../components/ProductPlaceholder";
 import { Stars } from "../components/Stars";
-import { useCart } from "../context/CartContext";
 import {
   CalendarIcon, CheckIcon, ClockIcon, CloseIcon, FacebookIcon, GlobeIcon, InstagramIcon,
-  MapPinIcon, PhoneIcon, StarIcon, TagIcon, TruckIcon, VerifiedIcon, WhatsAppIcon,
+  MapPinIcon, PhoneIcon, SearchIcon, StarIcon, TagIcon, TruckIcon, VerifiedIcon, WhatsAppIcon,
 } from "../components/icons";
 import { useUserAuth } from "../context/UserAuthContext";
 import { track } from "../lib/track";
@@ -14,15 +16,15 @@ import { api, dayName, formatEventDate, PRICE, timeAgo } from "../lib/api";
 import { mapsLinkFromCoords, mapsLinkFromText } from "../lib/maps";
 import { useFetch } from "../lib/useFetch";
 import { useTitle } from "../lib/useTitle";
-import type { Business } from "../types";
+import type { Business, ProductItem } from "../types";
+
+const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+const DIET_FILTERS = ["vegetarian", "vegan", "gluten-free"] as const;
 
 export function BusinessProfile() {
   const { slug } = useParams();
-  const cart = useCart();
   const { data: b, loading, error } = useFetch<Business>(slug ? `/api/businesses/${slug}` : null);
   const { data: related } = useFetch<Business[]>(slug ? `/api/businesses/${slug}/related` : null);
-  const [lightbox, setLightbox] = useState<string | null>(null);
-  const [added, setAdded] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
   useTitle(b?.name);
 
@@ -48,7 +50,7 @@ export function BusinessProfile() {
 
       <div className="mx-auto max-w-6xl px-4">
         {/* Header card */}
-        <div className="card -mt-16 flex flex-col gap-4 p-5 sm:flex-row sm:items-end">
+        <div className="card relative z-10 -mt-16 flex flex-col gap-4 p-5 sm:flex-row sm:items-end">
           <div className="flex items-end gap-4">
             <img src={b.logo ?? b.cover ?? ""} alt={b.name} className="h-24 w-24 shrink-0 rounded-2xl border-4 border-surface object-cover shadow-lg" />
             <div>
@@ -91,57 +93,10 @@ export function BusinessProfile() {
             )}
 
             {/* Gallery */}
-            {b.gallery.length > 0 && (
-              <section className="card p-5">
-                <h2 className="font-display text-lg font-bold text-ink">Gallery</h2>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {b.gallery.map((g) => (
-                    <button key={g} onClick={() => setLightbox(g)} className="aspect-square overflow-hidden rounded-xl">
-                      <img src={g} alt="" loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
+            <Gallery images={b.gallery} />
 
             {/* Menu / Products / Services */}
-            {!!b.products?.length && (
-              <section className="card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="font-display text-lg font-bold text-ink">{b.productLabel || "Products & Services"}</h2>
-                  {!b.openNow && <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-bold text-red-500">Closed — ordering unavailable</span>}
-                </div>
-                <div className="mt-3 space-y-5">
-                  {b.products.map((sec) => (
-                    <div key={sec.title}>
-                      <p className="text-xs font-bold uppercase tracking-wide text-brand">{sec.title}</p>
-                      <ul className="mt-2 divide-y divide-border">
-                        {sec.items.map((it, i) => (
-                          <li key={i} className="flex items-center justify-between gap-3 py-2">
-                            <span>
-                              <span className="font-semibold text-ink">{it.name}</span>
-                              {it.description && <span className="block text-xs text-muted">{it.description}</span>}
-                            </span>
-                            {it.price ? (
-                              <span className="flex shrink-0 items-center gap-2">
-                                <span className="font-semibold text-ink">${it.price}</span>
-                                <button
-                                  disabled={!b.openNow}
-                                  onClick={() => { cart.add({ businessId: b.id, businessSlug: b.slug, businessName: b.name, businessLogo: b.logo, name: it.name, price: it.price! }); setAdded(it.name); }}
-                                  className="btn btn-primary px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  {added === it.name ? "Added ✓" : "Add"}
-                                </button>
-                              </span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {!!b.products?.length && <MenuSection business={b} />}
 
             {/* Offers */}
             {!!b.offers?.length && (
@@ -267,14 +222,132 @@ export function BusinessProfile() {
       </div>
 
       {booking && <BookingModal businessId={b.id} businessName={b.name} onClose={() => setBooking(false)} />}
-
-      {/* Lightbox */}
-      {lightbox && (
-        <button onClick={() => setLightbox(null)} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <img src={lightbox} alt="" className="max-h-[90vh] max-w-full rounded-2xl" />
-        </button>
-      )}
     </div>
+  );
+}
+
+// ---- Menu / Products (visual ordering experience) ----
+function MenuSection({ business }: { business: Business }) {
+  const sections = business.products ?? [];
+  const canOrder = business.openNow;
+  const [modal, setModal] = useState<ProductItem | null>(null);
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<string>("all"); // "all" | "featured" | "diet:<x>" | section title
+
+  const dietsPresent = useMemo(() => {
+    const present = new Set<string>();
+    sections.forEach((sec) => sec.items.forEach((it) => it.diet?.forEach((d) => present.add(d))));
+    return DIET_FILTERS.filter((d) => present.has(d));
+  }, [sections]);
+
+  const featured = useMemo(() => sections.flatMap((sec) => sec.items.filter((it) => it.featured)), [sections]);
+
+  const query = q.trim().toLowerCase();
+  const matches = (it: ProductItem) => {
+    if (query && !`${it.name} ${it.description ?? ""}`.toLowerCase().includes(query)) return false;
+    if (filter.startsWith("diet:") && !(it.diet ?? []).includes(filter.slice(5))) return false;
+    return true;
+  };
+
+  const sectionFilterActive = filter !== "all" && filter !== "featured" && !filter.startsWith("diet:");
+  const visibleSections = sections
+    .filter((sec) => !sectionFilterActive || sec.title === filter)
+    .map((sec) => ({ title: sec.title, items: sec.items.filter((it) => (filter === "featured" ? it.featured : true)).filter(matches) }))
+    .filter((sec) => sec.items.length > 0);
+
+  const showFeaturedStrip = filter === "all" && !query && featured.length > 0;
+  const totalShown = visibleSections.reduce((s, sec) => s + sec.items.length, 0);
+
+  const chipCls = (active: boolean) => `chip ${active ? "chip-active" : ""}`;
+
+  return (
+    <section className="card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-display text-lg font-bold text-ink">{business.productLabel || "Menu"}</h2>
+        {!canOrder && <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-bold text-red-500">Closed — ordering unavailable</span>}
+      </div>
+
+      {/* Search */}
+      <div className="relative mt-3">
+        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the menu…" className="input !py-2.5 !pl-9" />
+      </div>
+
+      {/* Filters */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={() => setFilter("all")} className={chipCls(filter === "all")}>All</button>
+        {featured.length > 0 && <button onClick={() => setFilter("featured")} className={chipCls(filter === "featured")}>⭐ Featured</button>}
+        {dietsPresent.map((d) => (
+          <button key={d} onClick={() => setFilter(`diet:${d}`)} className={chipCls(filter === `diet:${d}`)}>{DIET_META[d]?.icon} {DIET_META[d]?.label ?? d}</button>
+        ))}
+        {sections.length > 1 && sections.map((sec) => (
+          <button key={sec.title} onClick={() => setFilter(sec.title)} className={chipCls(filter === sec.title)}>{sec.title}</button>
+        ))}
+      </div>
+
+      {/* Featured strip */}
+      {showFeaturedStrip && (
+        <div className="mt-5">
+          <p className="text-xs font-bold uppercase tracking-wide text-amber-500">⭐ Featured</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {featured.map((it, i) => <ProductRow key={`f${i}`} item={it} canOrder={canOrder} onOpen={() => setModal(it)} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Sections */}
+      <div className="mt-5 space-y-6">
+        {totalShown === 0 && <p className="py-6 text-center text-sm text-muted">No items match your search.</p>}
+        {visibleSections.map((sec) => (
+          <div key={sec.title}>
+            <p className="text-xs font-bold uppercase tracking-wide text-brand">{sec.title}</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {sec.items.map((it, i) => <ProductRow key={`${sec.title}-${i}`} item={it} canOrder={canOrder} onOpen={() => setModal(it)} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {modal && <ProductModal business={business} item={modal} canOrder={canOrder} onClose={() => setModal(null)} />}
+    </section>
+  );
+}
+
+function ProductRow({ item, canOrder, onOpen }: { item: ProductItem; canOrder: boolean; onOpen: () => void }) {
+  const unavailable = item.available === false;
+  const hasOptions = !!item.options?.length;
+  return (
+    <button
+      type="button"
+      disabled={unavailable}
+      onClick={onOpen}
+      className="group flex w-full items-stretch gap-3 rounded-2xl border border-border p-2.5 text-left transition hover:border-brand/60 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
+        {item.image ? <img src={item.image} alt={item.name} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" /> : <ProductPlaceholder className="h-full w-full" />}
+        {item.badge && <span className="absolute left-1 top-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-950">{item.badge}</span>}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate font-semibold text-ink">{item.name}</span>
+          {item.featured && <StarIcon className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+        </div>
+        {item.description && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted">{item.description}</p>}
+        {!!item.diet?.length && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {item.diet.map((d) => <span key={d} className="text-xs" title={DIET_META[d]?.label}>{DIET_META[d]?.icon}</span>)}
+          </div>
+        )}
+        <div className="mt-auto flex items-center justify-between pt-1.5">
+          <span className="font-semibold text-ink">{item.price != null ? `${hasOptions ? "from " : ""}${money(item.price)}` : ""}</span>
+          {unavailable ? (
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-bold text-muted">Unavailable</span>
+          ) : (
+            <span className="rounded-full bg-brand px-3 py-1 text-xs font-bold text-white transition group-hover:bg-brand-dark">{canOrder ? (hasOptions ? "Customize" : "Add") : "View"}</span>
+          )}
+        </div>
+      </div>
+    </button>
   );
 }
 

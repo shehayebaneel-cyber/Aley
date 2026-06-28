@@ -42,18 +42,20 @@ export function Cart() {
               </div>
               <ul className="divide-y divide-border">
                 {g.items.map((it) => (
-                  <li key={it.name} className="flex items-center gap-3 px-4 py-3">
+                  <li key={it.uid} className="flex items-center gap-3 px-4 py-3">
+                    {it.image && <img src={it.image} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />}
                     <span className="flex-1">
                       <span className="font-semibold text-ink">{it.name}</span>
+                      {!!it.options?.length && <span className="block text-xs text-muted">{it.options.map((o) => o.choice).join(" · ")}</span>}
                       <span className="block text-xs text-muted">{currency(it.price)} each</span>
                     </span>
                     <div className="inline-flex items-center rounded-full border border-border">
-                      <button onClick={() => setQty(g.businessId, it.name, it.quantity - 1)} className="px-3 py-1 font-bold text-ink">−</button>
+                      <button onClick={() => setQty(it.uid, it.quantity - 1)} className="px-3 py-1 font-bold text-ink">−</button>
                       <span className="w-7 text-center text-sm font-semibold">{it.quantity}</span>
-                      <button onClick={() => setQty(g.businessId, it.name, it.quantity + 1)} className="px-3 py-1 font-bold text-ink">+</button>
+                      <button onClick={() => setQty(it.uid, it.quantity + 1)} className="px-3 py-1 font-bold text-ink">+</button>
                     </div>
                     <span className="w-16 text-right font-semibold text-ink">{currency(it.price * it.quantity)}</span>
-                    <button onClick={() => remove(g.businessId, it.name)} className="text-muted hover:text-red-500" aria-label="Remove">✕</button>
+                    <button onClick={() => remove(it.uid)} className="text-muted hover:text-red-500" aria-label="Remove">✕</button>
                   </li>
                 ))}
               </ul>

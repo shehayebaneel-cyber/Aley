@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { AiWidget } from "./AiWidget";
+import { AutoTranslate } from "./AutoTranslate";
 import { useCart } from "../context/CartContext";
 import { useContent } from "../context/ContentContext";
 import { useLang } from "../context/LanguageContext";
@@ -193,6 +194,7 @@ export function Layout() {
         <Outlet />
       </main>
 
+      <AutoTranslate />
       <AiWidget />
 
       <footer className="mt-16 border-t border-border bg-surface">

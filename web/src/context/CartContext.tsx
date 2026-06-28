@@ -1,13 +1,25 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
+/** A chosen customization, e.g. { group: "Size", choice: "Large", price: 1 }. */
+export interface CartItemOption {
+  group: string;
+  choice: string;
+  price: number;
+}
+
 export interface CartItem {
+  /** Stable line id — same product + same options merge; different options don't. */
+  uid: string;
   businessId: number;
   businessSlug: string;
   businessName: string;
   businessLogo: string | null;
   name: string;
+  /** Unit price INCLUDING any selected option surcharges. */
   price: number;
   quantity: number;
+  image?: string | null;
+  options?: CartItemOption[];
 }
 
 export interface CartGroup {
@@ -25,20 +37,27 @@ interface CartValue {
   count: number;
   subtotal: number;
   businessCount: number;
-  add: (item: Omit<CartItem, "quantity">, qty?: number) => void;
-  setQty: (businessId: number, name: string, qty: number) => void;
-  remove: (businessId: number, name: string) => void;
+  add: (item: Omit<CartItem, "quantity" | "uid">, qty?: number) => void;
+  setQty: (uid: string, qty: number) => void;
+  remove: (uid: string) => void;
   clear: () => void;
 }
 
 const CartContext = createContext<CartValue | null>(null);
 const KEY = "aley-cart";
-const itemKey = (businessId: number, name: string) => `${businessId}::${name}`;
+
+/** Build a stable line id from the business, product name, and chosen options. */
+function lineUid(item: { businessId: number; name: string; options?: CartItemOption[] }) {
+  const opts = (item.options ?? []).map((o) => `${o.group}:${o.choice}`).sort().join("|");
+  return `${item.businessId}::${item.name}::${opts}`;
+}
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem(KEY) || "[]");
+      const raw: CartItem[] = JSON.parse(localStorage.getItem(KEY) || "[]");
+      // Backfill uid for carts saved before options existed.
+      return raw.map((i) => ({ ...i, uid: i.uid ?? lineUid(i) }));
     } catch {
       return [];
     }
@@ -72,14 +91,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       businessCount: groups.length,
       add: (item, qty = 1) =>
         setItems((prev) => {
-          const k = itemKey(item.businessId, item.name);
-          const existing = prev.find((i) => itemKey(i.businessId, i.name) === k);
-          if (existing) return prev.map((i) => (itemKey(i.businessId, i.name) === k ? { ...i, quantity: i.quantity + qty } : i));
-          return [...prev, { ...item, quantity: qty }];
+          const uid = lineUid(item);
+          const existing = prev.find((i) => i.uid === uid);
+          if (existing) return prev.map((i) => (i.uid === uid ? { ...i, quantity: i.quantity + qty } : i));
+          return [...prev, { ...item, uid, quantity: qty }];
         }),
-      setQty: (businessId, name, qty) =>
-        setItems((prev) => (qty <= 0 ? prev.filter((i) => itemKey(i.businessId, i.name) !== itemKey(businessId, name)) : prev.map((i) => (itemKey(i.businessId, i.name) === itemKey(businessId, name) ? { ...i, quantity: qty } : i)))),
-      remove: (businessId, name) => setItems((prev) => prev.filter((i) => itemKey(i.businessId, i.name) !== itemKey(businessId, name))),
+      setQty: (uid, qty) =>
+        setItems((prev) => (qty <= 0 ? prev.filter((i) => i.uid !== uid) : prev.map((i) => (i.uid === uid ? { ...i, quantity: qty } : i)))),
+      remove: (uid) => setItems((prev) => prev.filter((i) => i.uid !== uid)),
       clear: () => setItems([]),
     };
   }, [items]);

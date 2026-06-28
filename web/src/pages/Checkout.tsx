@@ -34,7 +34,15 @@ export function Checkout() {
     try {
       const order = await client.post<{ number: string }>("/api/orders", {
         ...f,
-        baskets: groups.map((g) => ({ businessId: g.businessId, items: g.items.map((it) => ({ name: it.name, price: it.price, quantity: it.quantity })) })),
+        baskets: groups.map((g) => ({
+          businessId: g.businessId,
+          items: g.items.map((it) => ({
+            // Fold chosen options into the name so the kitchen sees them (price already includes surcharges).
+            name: (it.options?.length ? `${it.name} (${it.options.map((o) => o.choice).join(", ")})` : it.name).slice(0, 120),
+            price: it.price,
+            quantity: it.quantity,
+          })),
+        })),
       });
       clear();
       navigate(`/order/${order.number}`);

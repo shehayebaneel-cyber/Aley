@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { GalleryManager } from "../../components/GalleryManager";
 import { ImageField } from "../../components/ImageField";
+import { MenuEditor } from "../../components/MenuEditor";
 import { CheckIcon, GlobeIcon, TrashIcon } from "../../components/icons";
 import { adminApi, formatEventDate } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Business, Category, EventItem, HoursRow, Offer, ProductSection } from "../../types";
+import type { Business, Category, EventItem, GalleryImage, HoursRow, Offer } from "../../types";
 
 type Biz = Business & { owner?: { id: number; name: string; email: string; phone: string } | null; offers?: Offer[]; events?: EventItem[] };
 const TABS = ["Profile", "Photos", "Hours", "Menu / Products", "Offers", "Events", "Owner"] as const;
@@ -119,7 +121,7 @@ function ProfileTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => P
 function PhotosTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => Promise<void> }) {
   const [logo, setLogo] = useState(biz.logo);
   const [cover, setCover] = useState(biz.cover);
-  const [gallery, setGallery] = useState<string[]>(biz.gallery ?? []);
+  const [gallery, setGallery] = useState<GalleryImage[]>(biz.gallery ?? []);
   return (
     <div className="space-y-6">
       <div className="grid gap-6 sm:grid-cols-2">
@@ -128,11 +130,8 @@ function PhotosTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => Pr
       </div>
       <section className="card p-5">
         <h3 className="font-display font-bold text-ink">Gallery</h3>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {gallery.map((g, i) => (
-            <div key={i} className="relative"><img src={g} alt="" className="aspect-square w-full rounded-xl object-cover" /><button onClick={() => setGallery(gallery.filter((_, j) => j !== i))} className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">×</button></div>
-          ))}
-          <div className="aspect-square"><ImageField value={null} uploadWith={adminApi} onChange={(u) => u && setGallery([...gallery, u])} aspect="aspect-square" label="photo" /></div>
+        <div className="mt-3">
+          <GalleryManager value={gallery} onChange={setGallery} cover={cover} onCoverChange={setCover} uploader={adminApi} />
         </div>
       </section>
       <SaveBar onSave={() => save({ logo, cover, gallery })} />
@@ -164,34 +163,13 @@ function HoursTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => Pro
 }
 
 function ProductsTab({ biz, save }: { biz: Biz; save: (p: Partial<Business>) => Promise<void> }) {
-  const [label, setLabel] = useState(biz.productLabel ?? "Products & Services");
-  const [sections, setSections] = useState<ProductSection[]>(biz.products ?? []);
-  const setSec = (i: number, p: Partial<ProductSection>) => setSections(sections.map((s, j) => (j === i ? { ...s, ...p } : s)));
-  const setItem = (si: number, ii: number, p: Partial<ProductSection["items"][0]>) => setSec(si, { items: sections[si].items.map((it, j) => (j === ii ? { ...it, ...p } : it)) });
   return (
-    <div className="space-y-4">
-      <L label="Section heading (e.g. Menu, Rooms, Collections)"><input value={label} onChange={(e) => setLabel(e.target.value)} className={inp} /></L>
-      {sections.map((sec, si) => (
-        <div key={si} className="card p-4">
-          <div className="flex items-center gap-2">
-            <input value={sec.title} onChange={(e) => setSec(si, { title: e.target.value })} placeholder="Section title" className={`${inp} !mt-0 font-semibold`} />
-            <button onClick={() => setSections(sections.filter((_, j) => j !== si))} className="btn btn-ghost h-9 w-9 !p-0 text-red-500"><TrashIcon className="h-4 w-4" /></button>
-          </div>
-          <div className="mt-2 space-y-2">
-            {sec.items.map((it, ii) => (
-              <div key={ii} className="flex items-center gap-2">
-                <input value={it.name} onChange={(e) => setItem(si, ii, { name: e.target.value })} placeholder="Item" className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-                <input value={it.price ?? ""} onChange={(e) => setItem(si, ii, { price: e.target.value === "" ? undefined : Number(e.target.value) })} placeholder="$" className="w-20 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-                <button onClick={() => setSec(si, { items: sec.items.filter((_, j) => j !== ii) })} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
-              </div>
-            ))}
-            <button onClick={() => setSec(si, { items: [...sec.items, { name: "" }] })} className="chip">+ Add item</button>
-          </div>
-        </div>
-      ))}
-      <button onClick={() => setSections([...sections, { title: "New section", items: [] }])} className="chip">+ Add section</button>
-      <SaveBar onSave={() => save({ products: sections.filter((s) => s.title.trim()), productLabel: label } as Partial<Business>)} />
-    </div>
+    <MenuEditor
+      initialSections={biz.products ?? []}
+      initialLabel={biz.productLabel ?? "Products & Services"}
+      uploader={adminApi}
+      onSave={(products, productLabel) => save({ products, productLabel } as Partial<Business>)}
+    />
   );
 }
 

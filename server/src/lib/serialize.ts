@@ -27,7 +27,10 @@ export interface HoursRow {
 export function outBusiness<T extends Record<string, unknown>>(b: T) {
   return {
     ...b,
-    gallery: parseArr(b.gallery) as string[],
+    // Normalize gallery to {url, caption?} objects (legacy entries were bare URL strings).
+    gallery: (parseArr(b.gallery) as (string | { url: string; caption?: string })[])
+      .map((g) => (typeof g === "string" ? { url: g } : { url: g.url, caption: g.caption }))
+      .filter((g) => g.url),
     tags: parseArr(b.tags) as string[],
     faqs: parseArr(b.faqs) as { q: string; a: string }[],
     products: parseArr(b.products),

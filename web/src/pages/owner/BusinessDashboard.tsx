@@ -2,15 +2,17 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AiChat, type AiMessage } from "../../components/AiChat";
 import { BarChart, StatCard } from "../../components/Charts";
+import { GalleryManager } from "../../components/GalleryManager";
 import { ImageField } from "../../components/ImageField";
+import { MenuEditor } from "../../components/MenuEditor";
 import { Stars } from "../../components/Stars";
 import { CheckIcon, GlobeIcon, StarIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Business, BusinessOrder, Category, EventItem, HoursRow, Offer, Reservation, Review } from "../../types";
+import type { Business, BusinessOrder, Category, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review } from "../../types";
 
-const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Reservations", "Profile", "Photos", "Hours", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -90,6 +92,7 @@ export function BusinessDashboard() {
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
         {tab === "Hours" && <HoursTab biz={biz} save={save} />}
+        {tab === "Menu" && <MenuTab biz={biz} save={save} />}
         {tab === "Offers" && <OffersTab biz={biz} />}
         {tab === "Events" && <EventsTab biz={biz} />}
         {tab === "Reviews" && <ReviewsTab biz={biz} />}
@@ -464,7 +467,7 @@ function ProfileTab({ biz, save }: { biz: Business; save: (p: Partial<Business>)
 function PhotosTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
   const [logo, setLogo] = useState(biz.logo);
   const [cover, setCover] = useState(biz.cover);
-  const [gallery, setGallery] = useState<string[]>(biz.gallery);
+  const [gallery, setGallery] = useState<GalleryImage[]>(biz.gallery);
   return (
     <div className="space-y-6">
       <div className="grid gap-6 sm:grid-cols-2">
@@ -473,14 +476,8 @@ function PhotosTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) 
       </div>
       <section className="card p-5">
         <h3 className="font-display font-bold text-ink">Gallery</h3>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {gallery.map((g, i) => (
-            <div key={i} className="relative">
-              <img src={g} alt="" className="aspect-square w-full rounded-xl object-cover" />
-              <button onClick={() => setGallery(gallery.filter((_, j) => j !== i))} className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold text-white">Remove</button>
-            </div>
-          ))}
-          <div className="aspect-square"><ImageField value={null} onChange={(url) => url && setGallery([...gallery, url])} aspect="aspect-square" label="photo" /></div>
+        <div className="mt-3">
+          <GalleryManager value={gallery} onChange={setGallery} cover={cover} onCoverChange={setCover} uploader={ownerApi} />
         </div>
       </section>
       <SaveBar dirty onSave={async () => { await save({ logo, cover, gallery }); }} />
@@ -515,6 +512,24 @@ function HoursTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) =
       </div>
       <SaveBar dirty onSave={async () => { await save({ hours }); }} />
     </section>
+  );
+}
+
+// ---- Menu / Products ----
+function MenuTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
+  return (
+    <div>
+      <div className="mb-4">
+        <h3 className="font-display font-bold text-ink">Your menu</h3>
+        <p className="text-sm text-muted">Add photos, descriptions and customization options. Customers browse with their eyes — great photos sell.</p>
+      </div>
+      <MenuEditor
+        initialSections={biz.products ?? []}
+        initialLabel={biz.productLabel ?? "Menu"}
+        uploader={ownerApi}
+        onSave={(products, productLabel) => save({ products, productLabel })}
+      />
+    </div>
   );
 }
 

@@ -145,9 +145,49 @@ export interface Review {
   createdAt: string;
 }
 
+/** A single selectable choice within an option group (e.g. "Large", "Oat Milk"). */
+export interface ProductChoice {
+  label: string;
+  /** Extra charge added to the base price when chosen. Omit/0 = free. */
+  price?: number;
+}
+
+/** A group of customization choices for a product (e.g. "Size", "Milk", "Extras"). */
+export interface ProductOptionGroup {
+  name: string;
+  /** "single" = pick one (radio); "multi" = pick any (checkboxes). */
+  type: "single" | "multi";
+  required?: boolean;
+  choices: ProductChoice[];
+}
+
+export interface ProductItem {
+  name: string;
+  price?: number;
+  description?: string;
+  image?: string | null;
+  /** Featured items surface at the top of the menu. */
+  featured?: boolean;
+  /** Optional ribbon, e.g. "Best Seller", "New", "Most Popular". */
+  badge?: string;
+  /** When false, the item is shown as unavailable and can't be ordered. */
+  available?: boolean;
+  /** Dietary tags: "vegetarian" | "vegan" | "gluten-free". */
+  diet?: string[];
+  ingredients?: string;
+  allergens?: string;
+  options?: ProductOptionGroup[];
+}
+
 export interface ProductSection {
   title: string;
-  items: { name: string; price?: number; description?: string }[];
+  items: ProductItem[];
+}
+
+/** A gallery photo with an optional caption. */
+export interface GalleryImage {
+  url: string;
+  caption?: string;
 }
 
 export interface Business {
@@ -161,7 +201,7 @@ export interface Business {
   ownerName?: string;
   logo: string | null;
   cover: string | null;
-  gallery: string[];
+  gallery: GalleryImage[];
   phone: string;
   whatsapp: string;
   instagram: string;
