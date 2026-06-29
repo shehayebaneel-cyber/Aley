@@ -24,6 +24,14 @@ export const MapPinIcon = ({ className = "h-5 w-5" }: P) => (
     <circle cx="12" cy="10" r="3" />
   </svg>
 );
+export const ShareIcon = ({ className = "h-5 w-5" }: P) => (
+  <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+  </svg>
+);
 export const ClockIcon = ({ className = "h-5 w-5" }: P) => (
   <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
     <circle cx="12" cy="12" r="9" />

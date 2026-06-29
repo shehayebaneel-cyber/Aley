@@ -11,7 +11,7 @@ import { ProductPlaceholder } from "../components/ProductPlaceholder";
 import { Stars } from "../components/Stars";
 import {
   CalendarIcon, CheckIcon, ClockIcon, CloseIcon, FacebookIcon, GlobeIcon, InstagramIcon,
-  MapPinIcon, PhoneIcon, SearchIcon, StarIcon, TagIcon, TruckIcon, VerifiedIcon, WhatsAppIcon,
+  MapPinIcon, PhoneIcon, SearchIcon, ShareIcon, StarIcon, TagIcon, TruckIcon, VerifiedIcon, WhatsAppIcon,
 } from "../components/icons";
 import { useUserAuth } from "../context/UserAuthContext";
 import { track } from "../lib/track";
@@ -23,6 +23,22 @@ import type { Business, ProductItem } from "../types";
 
 const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 const DIET_FILTERS = ["vegetarian", "vegan", "gluten-free"] as const;
+
+// Native share sheet (mobile) with a copy-link fallback (desktop).
+function ShareButton({ name, tagline }: { name: string; tagline: string }) {
+  const [copied, setCopied] = useState(false);
+  async function share() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title: `${name} · Aley`, text: tagline || `Check out ${name} on Aley`, url }); } catch { /* cancelled */ }
+      return;
+    }
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
+  }
+  return (
+    <button onClick={share} aria-label="Share" className="btn btn-ghost px-4 py-2.5"><ShareIcon className="h-4 w-4" /> {copied ? "Copied!" : "Share"}</button>
+  );
+}
 
 export function BusinessProfile() {
   const { slug } = useParams();
@@ -50,7 +66,13 @@ export function BusinessProfile() {
     <div>
       {/* Cover */}
       <div className="relative h-56 w-full overflow-hidden bg-surface-2 sm:h-72">
-        {b.cover && <img src={b.cover} alt="" className="h-full w-full object-cover" />}
+        {b.cover ? (
+          <img src={b.cover} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand/30 via-brand-soft to-surface-2">
+            <span className="text-5xl opacity-60">{b.category.icon}</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
 
@@ -75,6 +97,7 @@ export function BusinessProfile() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <FavoriteButton businessId={b.id} className="!h-11 !w-11 border border-border !bg-surface" />
+            <ShareButton name={b.name} tagline={b.tagline} />
             {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
             {wa && <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
             {b.hasFacilities && <button onClick={() => setFacBook({ open: true })} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> Book Now</button>}
