@@ -261,25 +261,42 @@ export interface WaitlistEntry {
 
 export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";
 
-// ---- Payments ledger ----
+// ---- Finance / accounting ----
 export interface Transaction {
   id: number;
-  source: "VOUCHER" | "FACILITY" | "ORDER";
+  source: string;
   refId: number;
   code: string;
   description: string;
   customerName: string;
   customerPhone: string;
   amount: number;
+  commission: number;
+  deliveryFee: number;
+  net: number;
   refundedAmount: number;
-  status: "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED";
+  status: string; // payment status
   method: string;
+  payoutStatus: string;
+  notes: string;
   createdAt: string;
   refundedAt: string | null;
   business?: { name: string; slug: string };
 }
-export interface LedgerSummary {
-  count: number; gross: number; refunded: number; net: number; bySource: Record<string, number>;
+export interface Wallet {
+  totalSales: number; commission: number; refunds: number;
+  pendingBalance: number; availableBalance: number; inPayout: number; paidOut: number;
+  lifetimeEarnings: number; outstandingBalance: number;
+}
+export interface Payout {
+  id: number; businessId: number; periodStart: string; periodEnd: string;
+  grossSales: number; commission: number; refunds: number; adjustments: number; net: number;
+  status: "PENDING" | "PAID" | "FAILED" | "CANCELLED"; method: string; notes: string;
+  createdAt: string; paidAt: string | null; business?: { name: string; slug: string };
+}
+export interface AdminFinance {
+  totalSales: number; platformRevenue: number; commissions: number; deliveryFees: number;
+  owedToBusinesses: number; paidOut: number; pendingPayouts: number; refunds: number; failed: number; transactions: number;
 }
 
 // ---- Gift vouchers ----

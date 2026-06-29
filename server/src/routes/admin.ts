@@ -7,7 +7,8 @@ import { DELIVERY_STATUSES as COURIER_STATUSES, driverEarnings, effectiveDriverC
 import { getMarketplaceSettings, saveMarketplaceSettings } from "../lib/marketplace";
 import { prisma } from "../db";
 import { recomputeProject, recomputeRating } from "../lib/ratings";
-import { refundTransaction, summarize } from "../lib/ledger";
+import { addAdjustment, generatePayout, refundTransaction, setPayoutStatus } from "../lib/ledger";
+import { toCsv } from "../lib/csv";
 import { outBusiness, outProject, slugify, toJson } from "../lib/serialize";
 import { recomputeOrder } from "./orders";
 
@@ -167,23 +168,95 @@ adminRouter.post("/vouchers/:id/disable", async (req, res) => {
   res.json(await prisma.voucher.update({ where: { id: v.id }, data: { status: disable ? "DISABLED" : "ACTIVE" } }));
 });
 
-// ---- Payments ledger (platform-wide) ----
+// ---- Finance: platform ledger, payouts, adjustments, commission settings ----
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Platform finance dashboard totals.
+adminRouter.get("/finance", async (_req, res) => {
+  const [txs, payouts, orders] = await Promise.all([
+    prisma.transaction.findMany({ select: { amount: true, commission: true, net: true, refundedAmount: true, status: true, payoutStatus: true } }),
+    prisma.payout.findMany({ select: { net: true, status: true } }),
+    prisma.order.aggregate({ _sum: { deliveryFee: true } }),
+  ]);
+  const collected = txs.filter((t) => ["PAID", "PARTIALLY_REFUNDED"].includes(t.status));
+  const sales = round2(collected.reduce((s, t) => s + t.amount, 0));
+  const commission = round2(collected.reduce((s, t) => s + t.commission, 0));
+  const refunds = round2(txs.reduce((s, t) => s + t.refundedAmount, 0));
+  const deliveryFees = round2(orders._sum.deliveryFee ?? 0);
+  const owed = round2(collected.filter((t) => t.payoutStatus !== "PAID").reduce((s, t) => s + (t.amount > 0 ? t.net * (t.amount - t.refundedAmount) / t.amount : t.net), 0));
+  const paidOut = round2(payouts.filter((p) => p.status === "PAID").reduce((s, p) => s + p.net, 0));
+  const pendingPayouts = round2(payouts.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.net, 0));
+  res.json({
+    totalSales: sales, platformRevenue: round2(commission + deliveryFees), commissions: commission, deliveryFees,
+    owedToBusinesses: owed, paidOut, pendingPayouts, refunds,
+    failed: txs.filter((t) => t.status === "FAILED").length, transactions: txs.length,
+  });
+});
+
 adminRouter.get("/transactions", async (req, res) => {
   const q = req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (q.source) where.source = q.source;
+  if (q.status) where.status = q.status;
   if (q.q) where.OR = [{ code: { contains: q.q, mode: "insensitive" } }, { customerName: { contains: q.q, mode: "insensitive" } }, { description: { contains: q.q, mode: "insensitive" } }];
-  const [items, all] = await Promise.all([
-    prisma.transaction.findMany({ where, orderBy: { createdAt: "desc" }, take: 200, include: { business: { select: { name: true, slug: true } } } }),
-    prisma.transaction.findMany({ select: { amount: true, refundedAmount: true, source: true } }),
-  ]);
-  res.json({ items, summary: summarize(all) });
+  const items = await prisma.transaction.findMany({ where, orderBy: { createdAt: "desc" }, take: 200, include: { business: { select: { name: true, slug: true } } } });
+  res.json({ items });
+});
+adminRouter.get("/transactions.csv", async (_req, res) => {
+  const txs = await prisma.transaction.findMany({ orderBy: { createdAt: "desc" }, include: { business: { select: { name: true } } } });
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="aley-transactions.csv"`);
+  res.send(toCsv(["ID", "Date", "Business", "Source", "Reference", "Customer", "Gross", "Commission", "DeliveryFee", "Net", "Payment", "Payout", "Refunded", "Notes"],
+    txs.map((t) => [t.id, t.createdAt.toISOString().slice(0, 10), t.business?.name ?? "", t.source, t.code, t.customerName, t.amount, t.commission, t.deliveryFee, t.net, t.status, t.payoutStatus, t.refundedAmount, t.notes])));
 });
 adminRouter.post("/transactions/:id/refund", async (req, res) => {
-  const r = await refundTransaction(Number(req.params.id), req.body?.amount != null ? Number(req.body.amount) : undefined);
+  const r = await refundTransaction(Number(req.params.id), req.body?.amount != null ? Number(req.body.amount) : undefined, "admin");
   if ("error" in r) return res.status(400).json(r);
   res.json(r);
 });
+adminRouter.post("/adjustments", async (req, res) => {
+  const businessId = Number(req.body.businessId);
+  const net = Number(req.body.amount);
+  if (!businessId || !Number.isFinite(net) || net === 0) return res.status(400).json({ error: "Business and a non-zero amount are required." });
+  await addAdjustment(businessId, net, String(req.body.description ?? ""), "admin");
+  res.json({ ok: true });
+});
+
+// ---- Payouts ----
+adminRouter.get("/payouts", async (req, res) => {
+  const where: Record<string, unknown> = {};
+  if (req.query.status) where.status = String(req.query.status);
+  const payouts = await prisma.payout.findMany({ where, orderBy: { createdAt: "desc" }, take: 200, include: { business: { select: { name: true, slug: true } } } });
+  res.json(payouts);
+});
+adminRouter.post("/payouts/generate", async (req, res) => {
+  const businessId = Number(req.body.businessId);
+  if (!businessId) return res.status(400).json({ error: "Select a business." });
+  const r = await generatePayout(businessId, String(req.body.periodStart ?? ""), String(req.body.periodEnd ?? ""), "admin");
+  if ("error" in r) return res.status(400).json(r);
+  res.json(r);
+});
+adminRouter.post("/payouts/:id/status", async (req, res) => {
+  const status = String(req.body.status ?? "").toUpperCase();
+  if (!["PAID", "FAILED", "CANCELLED"].includes(status)) return res.status(400).json({ error: "Invalid status." });
+  const r = await setPayoutStatus(Number(req.params.id), status as "PAID" | "FAILED" | "CANCELLED", "admin");
+  if ("error" in r) return res.status(400).json(r);
+  res.json(r);
+});
+
+// ---- Commission settings (global + fixed fee + per-category) ----
+adminRouter.get("/commission", async (_req, res) => {
+  const [settings, cats] = await Promise.all([getMarketplaceSettings(), prisma.category.findMany({ where: { commissionRate: { gt: 0 } }, select: { id: true, slug: true, name: true, commissionRate: true }, orderBy: { name: "asc" } })]);
+  res.json({ global: settings.commissionRate, fixedFee: settings.fixedFee, categories: cats });
+});
+adminRouter.post("/commission", async (req, res) => {
+  const b = req.body as { global?: number; fixedFee?: number; category?: { id: number; rate: number } };
+  if (b.global != null || b.fixedFee != null) await saveMarketplaceSettings({ ...(b.global != null ? { commissionRate: b.global } : {}), ...(b.fixedFee != null ? { fixedFee: b.fixedFee } : {}) });
+  if (b.category?.id != null) await prisma.category.update({ where: { id: Number(b.category.id) }, data: { commissionRate: Math.max(0, Number(b.category.rate) || 0) } });
+  res.json({ ok: true });
+});
+
+// ---- Business ownership claims ----
 
 // ---- Business ownership claims ----
 adminRouter.get("/claims", async (req, res) => {

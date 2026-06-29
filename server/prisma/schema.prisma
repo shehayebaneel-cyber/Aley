@@ -47,6 +47,7 @@ model Category {
   color      String     @default("#0ea5a4")
   sortOrder  Int        @default(0)
   isActive   Boolean    @default(true)
+  commissionRate Float   @default(0) // platform % for this category (0 = use global default)
   businesses Business[]
 }
 
@@ -136,6 +137,7 @@ model Business {
   voucherTypes   VoucherType[]
   vouchers       Voucher[]
   transactions   Transaction[]
+  payouts        Payout[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -293,27 +295,63 @@ model Appointment {
   @@index([businessId, date])
 }
 
-// A money-in record for every paid sale — one ledger across all channels.
-// Designed to plug into a real payment gateway later (add gatewayRef/payout fields).
+// The financial ledger: one row per money event across all channels. Each row
+// carries gross, platform commission, delivery fee, and net owed to the business,
+// plus payment + payout + refund status. Gateway-agnostic (records now; a real
+// provider just flips paymentStatus and supplies refs later).
 model Transaction {
   id             Int      @id @default(autoincrement())
   businessId     Int?
   business       Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
-  source         String // VOUCHER | FACILITY | ORDER
-  refId          Int      @default(0) // id of the underlying record (voucher/booking/businessOrder)
+  // VOUCHER | FACILITY | ORDER | APPOINTMENT | DELIVERY | EVENT | ADJUSTMENT
+  source         String
+  refId          Int      @default(0) // id of the underlying record
   code           String   @default("") // voucher code / order number / reference
   description    String   @default("")
   customerName   String   @default("")
   customerPhone  String   @default("")
   userId         Int?
-  amount         Float    @default(0)
+  amount         Float    @default(0) // gross paid by the customer
+  commission     Float    @default(0) // platform commission
+  deliveryFee    Float    @default(0) // platform delivery fee (if any)
+  net            Float    @default(0) // amount owed to the business (gross - commission)
   refundedAmount Float    @default(0)
-  status         String   @default("PAID") // PAID | PARTIALLY_REFUNDED | REFUNDED
-  method         String   @default("CARD")
+  // UNPAID | PENDING | PAID | FAILED | REFUNDED | PARTIALLY_REFUNDED | CANCELLED
+  status         String   @default("PAID")
+  method         String   @default("CARD") // CASH | PAY_AT_BUSINESS | MANUAL | PENDING_ONLINE | CARD | WHISH …
+  // UNPAID | IN_PAYOUT | PAID  (business payout state of the net)
+  payoutStatus   String   @default("UNPAID")
+  payoutId       Int?
+  payout         Payout?  @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  notes          String   @default("")
+  confirmedBy    String   @default("") // admin who created/edited/confirmed it
   createdAt      DateTime @default(now())
   refundedAt     DateTime?
   @@index([businessId])
   @@index([source])
+  @@index([payoutId])
+}
+
+// A batch payout to a business for a period: sums net owed, minus refunds, plus
+// adjustments → final amount. Admin creates these manually for now.
+model Payout {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  periodStart String   @default("")
+  periodEnd   String   @default("")
+  grossSales  Float    @default(0)
+  commission  Float    @default(0)
+  refunds     Float    @default(0)
+  adjustments Float    @default(0)
+  net         Float    @default(0) // final payout amount
+  status      String   @default("PENDING") // PENDING | PAID | FAILED | CANCELLED
+  method      String   @default("MANUAL")
+  notes       String   @default("")
+  createdBy   String   @default("")
+  createdAt   DateTime @default(now())
+  paidAt      DateTime?
+  transactions Transaction[]
 }
 
 // A gift-voucher product a business sells (template).

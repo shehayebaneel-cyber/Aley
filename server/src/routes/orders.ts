@@ -93,9 +93,15 @@ ordersRouter.post("/", optionalUser, async (req, res) => {
     },
     include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true, logo: true } } } } },
   });
-  // Ledger: record each business's share of the order as a paid transaction.
+  // Ledger: record each business's share of the order with its commission snapshot.
   for (const bo of order.businessOrders) {
-    await recordTransaction({ businessId: bo.businessId, source: "ORDER", refId: bo.id, code: order.number, description: `Order · ${bo.business?.name ?? ""}`, customerName: order.customerName, customerPhone: order.customerPhone, userId: order.customerId, amount: bo.subtotal, method: paymentMethod });
+    await recordTransaction({
+      businessId: bo.businessId, source: "ORDER", refId: bo.id, code: order.number,
+      description: `Order · ${bo.business?.name ?? ""}`, customerName: order.customerName, customerPhone: order.customerPhone,
+      userId: order.customerId, amount: bo.subtotal, commission: bo.commissionAmount, net: round2(bo.subtotal - bo.commissionAmount),
+      status: paymentMethod === "ONLINE" ? "PAID" : "PENDING", // cash = pending until collected
+      method: paymentMethod === "ONLINE" ? "PENDING_ONLINE" : "CASH",
+    });
   }
   res.status(201).json(order);
 });

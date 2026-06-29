@@ -9,8 +9,9 @@ import { Stars } from "../../components/Stars";
 import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
+import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, LedgerSummary, Offer, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
 const TABS = ["Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
@@ -1286,57 +1287,82 @@ function FieldBookingsTab({ biz }: { biz: Business }) {
   );
 }
 
-// ---- Earnings (money ledger) ----
-const TX_LABEL: Record<string, string> = { VOUCHER: "🎁 Gift voucher", FACILITY: "🏟️ Court booking", ORDER: "🛍️ Order" };
-const TX_BADGE: Record<string, string> = { PAID: "bg-emerald-500/15 text-emerald-600", PARTIALLY_REFUNDED: "bg-amber-400/15 text-amber-600", REFUNDED: "bg-red-500/15 text-red-500" };
+// ---- Earnings / Wallet (business finance) ----
+const TX_LABEL: Record<string, string> = { VOUCHER: "🎁 Gift voucher", FACILITY: "🏟️ Court booking", ORDER: "🛍️ Order", APPOINTMENT: "📅 Appointment", DELIVERY: "🚚 Delivery", ADJUSTMENT: "⚙️ Adjustment" };
+const PAY_BADGE: Record<string, string> = { PAID: "bg-emerald-500/15 text-emerald-600", PENDING: "bg-amber-400/15 text-amber-600", UNPAID: "bg-amber-400/15 text-amber-600", PARTIALLY_REFUNDED: "bg-amber-400/15 text-amber-600", REFUNDED: "bg-red-500/15 text-red-500", FAILED: "bg-red-500/15 text-red-500", CANCELLED: "bg-surface-2 text-muted" };
+const PO_BADGE: Record<string, string> = { PENDING: "bg-amber-400/15 text-amber-600", PAID: "bg-emerald-500/15 text-emerald-600", FAILED: "bg-red-500/15 text-red-500", CANCELLED: "bg-surface-2 text-muted" };
+const cur2 = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 function EarningsTab({ biz }: { biz: Business }) {
-  const [items, setItems] = useState<Transaction[] | null>(null);
-  const [sum, setSum] = useState<LedgerSummary | null>(null);
-  const load = () => ownerApi.get<{ items: Transaction[]; summary: LedgerSummary }>(`/api/owner/businesses/${biz.id}/transactions`).then((d) => { setItems(d.items); setSum(d.summary); }).catch(() => setItems([]));
+  const [data, setData] = useState<{ wallet: Wallet; commission: { rate: number; fixedFee: number; source: string }; transactions: Transaction[]; payouts: Payout[] } | null>(null);
+  const load = () => ownerApi.get<{ wallet: Wallet; commission: { rate: number; fixedFee: number; source: string }; transactions: Transaction[]; payouts: Payout[] }>(`/api/owner/businesses/${biz.id}/wallet`).then(setData).catch(() => setData(null));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [biz.id]);
-  const cur = (n: number) => `$${Math.round(n).toLocaleString()}`;
   async function refund(t: Transaction) {
-    let amount: number | undefined;
-    if (t.source === "VOUCHER" || t.amount > 0) {
-      const def = (t.amount - t.refundedAmount).toFixed(2);
-      const v = window.prompt(`Refund amount (max $${def}):`, def);
-      if (v == null) return;
-      amount = Number(v);
-    }
-    if (!window.confirm("Record this refund? This cancels the item. (Money is sent back once a payment gateway is connected.)")) return;
-    try { await ownerApi.post(`/api/owner/transactions/${t.id}/refund`, { amount }); load(); }
+    const def = (t.amount - t.refundedAmount).toFixed(2);
+    const v = window.prompt(`Refund amount (max $${def}):`, def);
+    if (v == null) return;
+    if (!window.confirm("Record this refund? It cancels the item and logs the amount. (Money is returned once a payment gateway is connected.)")) return;
+    try { await ownerApi.post(`/api/owner/transactions/${t.id}/refund`, { amount: Number(v) }); load(); }
     catch (e) { window.alert(e instanceof Error ? e.message : "Couldn't refund."); }
   }
+  if (!data) return <div className="card h-72 animate-pulse" />;
+  const w = data.wallet;
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-ink">💡 Payments are currently in demo mode — amounts are recorded for your books, but real money moves once a payment gateway is connected. Refunds here cancel the item and log the amount.</div>
-      {sum && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[["Net earnings", cur(sum.net)], ["Gross collected", cur(sum.gross)], ["Refunded", cur(sum.refunded)], ["Transactions", String(sum.count)]].map(([l, v]) => (
-            <div key={l} className="card p-4"><p className="text-xs text-muted">{l}</p><p className="font-display text-xl font-extrabold text-ink">{v}</p></div>
-          ))}
+      <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-ink">💡 Demo mode — amounts are recorded for your books and payouts are tracked; real money moves once a payment gateway is connected.</div>
+
+      {/* Wallet */}
+      <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display font-bold text-ink">Wallet</h3>
+          <button onClick={() => downloadCsv(`${biz.slug}-transactions.csv`, ["ID", "Date", "Source", "Reference", "Customer", "Gross", "Commission", "Net", "Payment", "Payout", "Refunded"], data.transactions.map((t) => [t.id, new Date(t.createdAt).toISOString().slice(0, 10), t.source, t.code, t.customerName, t.amount, t.commission, t.net, t.status, t.payoutStatus, t.refundedAmount]))} className="btn btn-ghost px-3 py-1.5 text-xs">⬇ Export CSV</button>
         </div>
-      )}
-      {sum && Object.keys(sum.bySource).length > 0 && (
-        <div className="flex flex-wrap gap-2">{Object.entries(sum.bySource).map(([s, v]) => <span key={s} className="chip">{TX_LABEL[s] ?? s}: {cur(v)}</span>)}</div>
-      )}
-      <div>
-        <h3 className="font-display font-bold text-ink">All transactions</h3>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl bg-brand-soft p-3"><p className="text-xs text-brand-dark">Available for payout</p><p className="font-display text-xl font-extrabold text-brand-dark">{cur2(w.availableBalance)}</p></div>
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Pending balance</p><p className="font-display text-xl font-extrabold text-ink">{cur2(w.pendingBalance)}</p></div>
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Outstanding (owed)</p><p className="font-display text-xl font-extrabold text-ink">{cur2(w.outstandingBalance)}</p></div>
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Paid out</p><p className="font-display text-xl font-extrabold text-ink">{cur2(w.paidOut)}</p></div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Total sales</p><p className="font-bold text-ink">{cur2(w.totalSales)}</p></div>
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Commission deducted</p><p className="font-bold text-ink">−{cur2(w.commission)}</p></div>
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Refunds</p><p className="font-bold text-ink">{cur2(w.refunds)}</p></div>
+          <div className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">Lifetime earnings</p><p className="font-bold text-ink">{cur2(w.lifetimeEarnings)}</p></div>
+        </div>
+        <p className="mt-2 text-xs text-muted">Your commission rate: <span className="font-semibold text-ink">{data.commission.rate}%</span>{data.commission.fixedFee ? ` + ${cur2(data.commission.fixedFee)}/transaction` : ""} ({data.commission.source}). Net = sales − commission.</p>
+      </section>
+
+      {/* Payout history */}
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Payout history</h3>
         <div className="mt-2 space-y-2">
-          {items === null && <div className="card h-20 animate-pulse" />}
-          {items && items.length === 0 && <div className="card p-8 text-center text-muted">No sales yet. When customers buy vouchers, book courts or order, they appear here.</div>}
-          {(items ?? []).map((t) => (
-            <div key={t.id} className="card flex flex-wrap items-center gap-2 p-3 text-sm">
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-ink">{TX_LABEL[t.source] ?? t.source} · {cur(t.amount)}{t.refundedAmount > 0 ? <span className="text-red-500"> (−{cur(t.refundedAmount)})</span> : null}</p>
-                <p className="text-muted">{t.description} · {t.customerName || "—"} · {new Date(t.createdAt).toLocaleDateString()}{t.code ? ` · ${t.code}` : ""}</p>
-              </div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${TX_BADGE[t.status] ?? "bg-surface-2 text-muted"}`}>{t.status.replace("_", " ").toLowerCase()}</span>
-              {t.status !== "REFUNDED" && <button onClick={() => refund(t)} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Refund</button>}
+          {data.payouts.length === 0 && <p className="text-sm text-muted">No payouts yet. The platform pays out your available balance on a schedule.</p>}
+          {data.payouts.map((p) => (
+            <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5 text-sm">
+              <span className="flex-1 text-ink"><span className="font-semibold">{cur2(p.net)}</span> <span className="text-muted">· {p.periodStart || "—"}{p.periodEnd ? ` → ${p.periodEnd}` : ""} · gross {cur2(p.grossSales)} − comm {cur2(p.commission)}</span></span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${PO_BADGE[p.status]}`}>{p.status.toLowerCase()}</span>
             </div>
           ))}
         </div>
-      </div>
+      </section>
+
+      {/* Transactions */}
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Transactions</h3>
+        <div className="mt-2 space-y-2">
+          {data.transactions.length === 0 && <div className="p-6 text-center text-sm text-muted">No sales yet.</div>}
+          {data.transactions.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink">{TX_LABEL[t.source] ?? t.source} · gross {cur2(t.amount)} · <span className="text-emerald-600">net {cur2(t.net)}</span>{t.commission ? <span className="text-muted"> (−{cur2(t.commission)} comm)</span> : null}{t.refundedAmount > 0 ? <span className="text-red-500"> · −{cur2(t.refundedAmount)} refunded</span> : null}</p>
+                <p className="text-muted">{t.description} · {t.customerName || "—"} · {new Date(t.createdAt).toLocaleDateString()}{t.code ? ` · ${t.code}` : ""}</p>
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${PAY_BADGE[t.status] ?? "bg-surface-2 text-muted"}`}>{t.status.replace("_", " ").toLowerCase()}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${t.payoutStatus === "PAID" ? "bg-emerald-500/15 text-emerald-600" : "bg-surface-2 text-muted"}`}>payout: {t.payoutStatus.toLowerCase()}</span>
+              {t.status !== "REFUNDED" && t.status !== "CANCELLED" && t.amount > 0 && <button onClick={() => refund(t)} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Refund</button>}
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

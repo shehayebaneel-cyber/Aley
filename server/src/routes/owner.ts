@@ -2,11 +2,13 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
+import { getMarketplaceSettings } from "../lib/marketplace";
+import { toCsv } from "../lib/csv";
 import { prisma } from "../db";
 import { outBusiness, parseArr, parseObj, slugify, toJson, type HoursRow } from "../lib/serialize";
 import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
 import { effectiveStatus } from "../lib/voucher";
-import { refundTransaction, summarize } from "../lib/ledger";
+import { refundTransaction, walletFor } from "../lib/ledger";
 import { notifyNextWaitlist } from "../lib/waitlist";
 import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
@@ -759,17 +761,37 @@ ownerRouter.post("/voucher-redeem", async (req, res) => {
   res.json({ ok: true, redeemed: amount, remainingBalance: updated.balance, status: updated.status, title: v.title });
 });
 
-// ---- Payments ledger (earnings + refunds) ----
-ownerRouter.get("/businesses/:id/transactions", async (req, res) => {
+// ---- Wallet, statement, transactions, payouts (business finance) ----
+ownerRouter.get("/businesses/:id/wallet", async (req, res) => {
   const business = await ownedBusiness(req);
   if (!business) return res.status(404).json({ error: "Business not found." });
-  const txs = await prisma.transaction.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" }, take: 300 });
-  res.json({ items: txs, summary: summarize(txs) });
+  const [txs, payouts, settings] = await Promise.all([
+    prisma.transaction.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" } }),
+    prisma.payout.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" }, take: 50 }),
+    getMarketplaceSettings(),
+  ]);
+  const cat = await prisma.category.findUnique({ where: { id: business.categoryId }, select: { commissionRate: true, name: true } });
+  const rate = business.commissionRate > 0 ? business.commissionRate : (cat?.commissionRate ?? 0) > 0 ? cat!.commissionRate : settings.commissionRate;
+  res.json({
+    wallet: walletFor(txs),
+    commission: { rate, fixedFee: settings.fixedFee, source: business.commissionRate > 0 ? "business" : (cat?.commissionRate ?? 0) > 0 ? "category" : "platform" },
+    transactions: txs.slice(0, 200),
+    payouts,
+  });
+});
+ownerRouter.get("/businesses/:id/transactions.csv", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).send("Business not found.");
+  const txs = await prisma.transaction.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" } });
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="${business.slug}-transactions.csv"`);
+  res.send(toCsv(["ID", "Date", "Source", "Reference", "Customer", "Gross", "Commission", "Net", "Payment", "Payout", "Refunded"],
+    txs.map((t) => [t.id, t.createdAt.toISOString().slice(0, 10), t.source, t.code, t.customerName, t.amount, t.commission, t.net, t.status, t.payoutStatus, t.refundedAmount])));
 });
 ownerRouter.post("/transactions/:id/refund", async (req, res) => {
   const tx = await prisma.transaction.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
   if (!tx || tx.business?.ownerId !== req.ownerId) return res.status(404).json({ error: "Transaction not found." });
-  const r = await refundTransaction(tx.id, req.body?.amount != null ? Number(req.body.amount) : undefined);
+  const r = await refundTransaction(tx.id, req.body?.amount != null ? Number(req.body.amount) : undefined, "owner");
   if ("error" in r) return res.status(400).json(r);
   res.json(r);
 });

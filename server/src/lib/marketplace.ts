@@ -6,6 +6,7 @@ export const MARKETPLACE_DEFAULTS = {
   deliveryFee: 3,
   freeDeliveryThreshold: 30, // 0 = no free delivery
   commissionRate: 10, // platform % applied to a business unless it has its own rate
+  fixedFee: 0, // flat platform fee added per transaction (on top of %)
 };
 export type MarketplaceSettings = typeof MARKETPLACE_DEFAULTS;
 
@@ -13,6 +14,7 @@ const KEYS: Record<keyof MarketplaceSettings, string> = {
   deliveryFee: "marketplace.deliveryFee",
   freeDeliveryThreshold: "marketplace.freeDeliveryThreshold",
   commissionRate: "marketplace.commissionRate",
+  fixedFee: "marketplace.fixedFee",
 };
 
 export async function getMarketplaceSettings(): Promise<MarketplaceSettings> {
@@ -22,8 +24,13 @@ export async function getMarketplaceSettings(): Promise<MarketplaceSettings> {
     deliveryFee: map.get(KEYS.deliveryFee) ?? MARKETPLACE_DEFAULTS.deliveryFee,
     freeDeliveryThreshold: map.get(KEYS.freeDeliveryThreshold) ?? MARKETPLACE_DEFAULTS.freeDeliveryThreshold,
     commissionRate: map.get(KEYS.commissionRate) ?? MARKETPLACE_DEFAULTS.commissionRate,
+    fixedFee: map.get(KEYS.fixedFee) ?? MARKETPLACE_DEFAULTS.fixedFee,
   };
 }
+
+/** Resolve commission %: per-business override > per-category > global default. */
+export const resolveCommissionRate = (businessRate: number, categoryRate: number, settings: MarketplaceSettings) =>
+  businessRate && businessRate > 0 ? businessRate : categoryRate && categoryRate > 0 ? categoryRate : settings.commissionRate;
 
 export async function saveMarketplaceSettings(partial: Partial<Record<keyof MarketplaceSettings, unknown>>): Promise<MarketplaceSettings> {
   const entries = (Object.keys(KEYS) as (keyof MarketplaceSettings)[]).filter((k) => k in partial);
