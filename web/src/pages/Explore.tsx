@@ -120,14 +120,14 @@ export function Explore() {
 
           {/* Mobile: group chips, then sub-categories of the active group */}
           <div className="lg:hidden">
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
               <button onClick={() => choose({ category: null, group: null })} className={`chip whitespace-nowrap ${!activeCategory && !activeGroup ? "chip-active" : ""}`}>{t("explore.all")}</button>
               {grouped.map(({ group }) => (
                 <button key={group} onClick={() => choose({ group, category: null })} className={`chip whitespace-nowrap ${activeGroup === group || activeCatGroup === group ? "chip-active" : ""}`}>{groupIcon(group)} {group}</button>
               ))}
             </div>
             {(activeGroup || activeCatGroup) && (
-              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+              <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
                 {(grouped.find((g) => g.group === (activeGroup || activeCatGroup))?.items ?? []).map((c) => (
                   <button key={c.id} onClick={() => choose({ category: c.slug, group: null })} className={`chip whitespace-nowrap ${activeCategory === c.slug ? "chip-active" : ""}`}>{c.icon} {c.name}</button>
                 ))}

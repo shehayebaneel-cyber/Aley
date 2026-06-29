@@ -16,6 +16,16 @@ import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Bus
 const TABS = ["Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
+// Group the tabs into a tidy 2-level nav so the dashboard isn't an 18-tab wall.
+const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
+  { label: "Overview", icon: "🏠", tabs: ["Overview"] },
+  { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
+  { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers"] },
+  { label: "Bookings", icon: "📅", tabs: ["Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations"] },
+  { label: "Page", icon: "✏️", tabs: ["Profile", "Photos", "Hours", "Events", "Reviews"] },
+  { label: "Assistant", icon: "✨", tabs: ["Assistant"] },
+];
+
 export function BusinessDashboard() {
   const { id } = useParams();
   const { refresh } = useOwnerAuth();
@@ -70,19 +80,33 @@ export function BusinessDashboard() {
         </div>
       )}
 
-      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
-              tab === t ? "border-brand text-brand" : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {(() => {
+        const activeGroup = TAB_GROUPS.find((g) => g.tabs.includes(tab)) ?? TAB_GROUPS[0];
+        return (
+          <>
+            {/* Top-level groups */}
+            <div className="no-scrollbar mt-5 flex gap-1.5 overflow-x-auto pb-1">
+              {TAB_GROUPS.map((g) => (
+                <button
+                  key={g.label}
+                  onClick={() => { if (!g.tabs.includes(tab)) setTab(g.tabs[0]); }}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition ${activeGroup.label === g.label ? "bg-brand text-white" : "surface-2 text-muted hover:text-ink"}`}
+                >
+                  <span>{g.icon}</span> {g.label}
+                </button>
+              ))}
+            </div>
+            {/* Sub-tabs within the active group (hidden when the group has only one) */}
+            {activeGroup.tabs.length > 1 && (
+              <div className="no-scrollbar mt-3 flex gap-1 overflow-x-auto border-b border-border">
+                {activeGroup.tabs.map((t) => (
+                  <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 px-3.5 py-2 text-sm font-semibold transition ${tab === t ? "border-brand text-brand" : "border-transparent text-muted hover:text-ink"}`}>{t}</button>
+                ))}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       <div className="mt-6">
         {tab === "Overview" && <Overview biz={biz} />}

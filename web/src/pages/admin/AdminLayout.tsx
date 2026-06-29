@@ -87,7 +87,7 @@ export function AdminLayout() {
           </div>
         </header>
         {/* Mobile nav */}
-        <nav className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-3 py-2 md:hidden">
+        <nav className="no-scrollbar flex gap-1 overflow-x-auto border-b border-border bg-surface px-3 py-2 md:hidden">
           {LINKS.map((l) => (
             <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => `whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${isActive ? "bg-brand text-white" : "surface-2 text-ink"}`}>
               {t(l.tk)}
