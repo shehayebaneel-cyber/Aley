@@ -9,6 +9,17 @@ import type { HomeData } from "../types";
 
 const CITY = "aley";
 
+// "Everything you can do" — surfaces the platform's capabilities, each linking
+// to the right filtered Explore view or page.
+const CAPABILITIES = [
+  { icon: "🍽️", title: "Order & Delivery", sub: "Cafés, restaurants & shops", to: "/explore?delivery=true", color: "#f97316" },
+  { icon: "📅", title: "Book Appointments", sub: "Salons, clinics, barbers", to: "/explore?group=Health%20%26%20Beauty", color: "#ec4899" },
+  { icon: "🏟️", title: "Rent Sports Courts", sub: "Padel, football, by the hour", to: "/explore?group=Sports%20%26%20Recreation", color: "#16a34a" },
+  { icon: "🍷", title: "Book a Table", sub: "Reserve at top restaurants", to: "/explore?reservations=true", color: "#dc2626" },
+  { icon: "🎁", title: "Gift Vouchers", sub: "Send a gift from a local shop", to: "/explore?gift=true", color: "#a855f7" },
+  { icon: "🚚", title: "Send a Delivery", sub: "Courier anywhere in Aley", to: "/delivery", color: "#0ea5e9" },
+];
+
 // The high-level "main categories" (groups) + display order and icons.
 const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
 const GROUP_META: Record<string, { icon: string; color: string }> = {
@@ -86,6 +97,19 @@ export function Home() {
       )}
 
       <div className="mx-auto max-w-7xl space-y-16 px-4 py-12">
+        {/* What you can do */}
+        <Section title="Everything you can do in Aley" subtitle="One app for your whole town">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {CAPABILITIES.map((c) => (
+              <Link key={c.title} to={c.to} className="card card-hover group flex flex-col items-center gap-2 p-5 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl transition group-hover:scale-110" style={{ background: `${c.color}1a` }}>{c.icon}</span>
+                <span className="font-display font-bold text-ink">{c.title}</span>
+                <span className="text-xs text-muted">{c.sub}</span>
+              </Link>
+            ))}
+          </div>
+        </Section>
+
         {/* Main categories (high-level groups) */}
         <Section show={S.categories.show} title={S.categories.title!} subtitle={S.categories.subtitle} to="/explore">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
