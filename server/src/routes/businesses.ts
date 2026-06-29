@@ -70,6 +70,7 @@ businessesRouter.get("/:slug", async (req, res) => {
       reviews: { where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 50 },
       offers: { where: { isActive: true }, orderBy: { createdAt: "desc" } },
       events: { where: { isPublished: true, startTime: { gte: new Date(Date.now() - 86400000) } }, orderBy: { startTime: "asc" } },
+      facilities: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
     },
   });
   if (!business || !business.isPublished) return res.status(404).json({ error: "Business not found." });
@@ -78,7 +79,12 @@ businessesRouter.get("/:slug", async (req, res) => {
   prisma.business.update({ where: { id: business.id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
   recordEvent(business.id, "PROFILE_VIEW");
 
-  res.json(outBusiness(business));
+  const { facilities, ...rest } = business as typeof business & { facilities: { id: number; name: string; type: string; description: string; image: string | null; hourlyRate: number; capacityNote: string; pricing: string }[] };
+  res.json({
+    ...outBusiness(rest),
+    hasFacilities: facilities.length > 0,
+    facilities: facilities.map((f) => ({ id: f.id, name: f.name, type: f.type, description: f.description, image: f.image, hourlyRate: f.hourlyRate, capacityNote: f.capacityNote })),
+  });
 });
 
 // GET /api/businesses/:slug/related — same category, same city.

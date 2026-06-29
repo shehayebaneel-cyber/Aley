@@ -261,6 +261,46 @@ export interface WaitlistEntry {
 
 export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";
 
+// ---- Facility (hourly rental) booking ----
+export interface Facility {
+  id: number;
+  name: string;
+  type: string;
+  description: string;
+  image: string | null;
+  hourlyRate: number;
+  capacityNote: string;
+  pricing?: { weekendRate?: number; peakRate?: number; peakStart?: string; peakEnd?: string; nightRate?: number; nightStart?: string; holidayRate?: number; minHours?: number; maxHours?: number; slotIncrementMin?: number };
+  schedule?: { workingHours?: HoursRow[]; blockedDates?: string[]; maintenance?: { from: string; to: string; reason?: string }[] };
+  isActive?: boolean;
+  sortOrder?: number;
+  durations?: number[];
+}
+export interface FacilitySlot { time: string; price: number }
+export interface FacilityBooking {
+  id: number;
+  businessId: number;
+  facilityId: number;
+  customerName: string;
+  customerPhone: string;
+  date: string;
+  startTime: string;
+  durationMin: number;
+  players: number;
+  note: string;
+  price: number;
+  facilityName: string;
+  status: "CONFIRMED" | "PENDING" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
+  checkInCode?: string;
+  arrivedAt?: string | null;
+  createdAt: string;
+  business?: { name: string; slug: string; logo: string | null };
+}
+export interface FacilityStats {
+  period: string; totalBookings: number; bookedHours: number; revenue: number; occupancyPct: number; cancelled: number;
+  busiestFacility: { name: string; count: number } | null; peakHours: { hour: string; count: number }[];
+}
+
 export interface BookingAnalytics {
   period: string;
   total: number;
@@ -342,6 +382,8 @@ export interface Business {
   bookingMode?: BookingMode;
   bookingCta?: string;
   appointmentBookable?: boolean;
+  hasFacilities?: boolean;
+  facilities?: Facility[];
   tags: string[];
   faqs: { q: string; a: string }[];
   isFeatured: boolean;

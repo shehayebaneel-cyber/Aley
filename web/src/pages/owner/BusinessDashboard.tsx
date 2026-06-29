@@ -10,9 +10,9 @@ import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../c
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember, WaitlistEntry } from "../../types";
 
-const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -90,6 +90,8 @@ export function BusinessDashboard() {
         {tab === "Orders" && <OrdersTab biz={biz} />}
         {tab === "Bookings" && <BookingsTab biz={biz} save={save} />}
         {tab === "Booking Setup" && <BookingSetupTab biz={biz} save={save} />}
+        {tab === "Facilities" && <FacilitiesTab biz={biz} />}
+        {tab === "Field Bookings" && <FieldBookingsTab biz={biz} />}
         {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
@@ -1051,6 +1053,233 @@ function BookingSetupTab({ biz, save }: { biz: Business; save: (p: Partial<Busin
 
         <SaveBar dirty onSave={saveSettings} />
       </section>
+    </div>
+  );
+}
+
+// ---- Facilities (hourly rentals) ----
+function FacilitiesTab({ biz }: { biz: Business }) {
+  const [list, setList] = useState<Facility[] | null>(null);
+  const [nf, setNf] = useState({ name: "", type: "", hourlyRate: 20, capacityNote: "" });
+  const load = () => ownerApi.get<Facility[]>(`/api/owner/businesses/${biz.id}/facilities`).then(setList).catch(() => setList([]));
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [biz.id]);
+  async function add(e: FormEvent) {
+    e.preventDefault(); if (!nf.name.trim()) return;
+    await ownerApi.post(`/api/owner/businesses/${biz.id}/facilities`, nf);
+    setNf({ name: "", type: "", hourlyRate: 20, capacityNote: "" }); load();
+  }
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-display font-bold text-ink">Facilities & courts</h3>
+        <p className="text-sm text-muted">Add each rentable space (court, field, hall). Set hourly rate, peak/weekend pricing and hours per facility.</p>
+      </div>
+      {(list ?? []).map((f) => <FacilityRow key={f.id} facility={f} biz={biz} reload={load} />)}
+      {list && list.length === 0 && <p className="text-sm text-muted">No facilities yet — add your first below.</p>}
+      <form onSubmit={add} className="card grid gap-2 p-4 sm:grid-cols-[1fr_1fr_7rem_auto]">
+        <input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} placeholder="Name (e.g. Court 1)" className="input !py-2 text-sm" />
+        <input value={nf.type} onChange={(e) => setNf({ ...nf, type: e.target.value })} placeholder="Type (e.g. Padel court)" className="input !py-2 text-sm" />
+        <input type="number" min={0} value={nf.hourlyRate} onChange={(e) => setNf({ ...nf, hourlyRate: Number(e.target.value) })} placeholder="$/hr" className="input !py-2 text-sm" />
+        <button className="btn btn-primary px-4 py-2 text-sm">Add facility</button>
+      </form>
+    </div>
+  );
+}
+
+function FacilityRow({ facility, biz, reload }: { facility: Facility; biz: Business; reload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [f, setF] = useState({ name: facility.name, type: facility.type, description: facility.description, hourlyRate: facility.hourlyRate, capacityNote: facility.capacityNote, image: facility.image });
+  const p: any = facility.pricing ?? {};
+  const [pr, setPr] = useState({ weekendRate: p.weekendRate ?? 0, peakRate: p.peakRate ?? 0, peakStart: p.peakStart ?? "17:00", peakEnd: p.peakEnd ?? "22:00", nightRate: p.nightRate ?? 0, nightStart: p.nightStart ?? "22:00", holidayRate: p.holidayRate ?? 0, minHours: p.minHours ?? 1, maxHours: p.maxHours ?? 3, slotIncrementMin: p.slotIncrementMin ?? 30 });
+  const sc: any = (facility as any).schedule ?? {};
+  const [blocked, setBlocked] = useState<string[]>(sc.blockedDates ?? []);
+  const [maint, setMaint] = useState<{ from: string; to: string; reason?: string }[]>(sc.maintenance ?? []);
+  const [newBlock, setNewBlock] = useState("");
+
+  async function save() {
+    setBusy(true);
+    try {
+      await ownerApi.patch(`/api/owner/facilities/${facility.id}`, { ...f, pricing: pr, schedule: { ...sc, blockedDates: blocked, maintenance: maint } });
+      setSaved(true); setTimeout(() => setSaved(false), 2000); reload();
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="card p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex-1 font-semibold text-ink">{facility.name} <span className="text-xs font-normal text-muted">· {facility.type || "Facility"} · ${facility.hourlyRate}/hr</span></span>
+        <button onClick={() => setOpen((o) => !o)} className="chip !text-xs">{open ? "Close" : "Edit"}</button>
+        <button onClick={async () => { await ownerApi.patch(`/api/owner/facilities/${facility.id}`, { isActive: !facility.isActive }); reload(); }} className={`chip !text-xs ${facility.isActive ? "chip-active" : ""}`}>{facility.isActive ? "Active" : "Hidden"}</button>
+        <button onClick={async () => { await ownerApi.delete(`/api/owner/facilities/${facility.id}`); reload(); }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+      </div>
+      {open && (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+            <div><ImageField value={f.image} uploadWith={ownerApi} onChange={(image) => setF({ ...f, image })} aspect="aspect-video" label="photo" /></div>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Name" className="input !py-2 text-sm" />
+                <input value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} placeholder="Type" className="input !py-2 text-sm" />
+                <input type="number" min={0} value={f.hourlyRate} onChange={(e) => setF({ ...f, hourlyRate: Number(e.target.value) })} placeholder="$/hr" className="input !py-2 text-sm" />
+                <input value={f.capacityNote} onChange={(e) => setF({ ...f, capacityNote: e.target.value })} placeholder="Capacity (e.g. 4 players)" className="input !py-2 text-sm" />
+              </div>
+              <textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} rows={2} placeholder="Description" className="input !py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-ink">Pricing</p>
+            <div className="mt-1 grid gap-2 sm:grid-cols-3 text-sm">
+              <label className="text-muted">Weekend $/hr<input type="number" min={0} value={pr.weekendRate} onChange={(e) => setPr({ ...pr, weekendRate: Number(e.target.value) })} className="input !py-1.5" /></label>
+              <label className="text-muted">Peak $/hr<input type="number" min={0} value={pr.peakRate} onChange={(e) => setPr({ ...pr, peakRate: Number(e.target.value) })} className="input !py-1.5" /></label>
+              <label className="text-muted">Peak window<span className="flex gap-1"><input type="time" value={pr.peakStart} onChange={(e) => setPr({ ...pr, peakStart: e.target.value })} className="input !py-1.5" /><input type="time" value={pr.peakEnd} onChange={(e) => setPr({ ...pr, peakEnd: e.target.value })} className="input !py-1.5" /></span></label>
+              <label className="text-muted">Night $/hr<input type="number" min={0} value={pr.nightRate} onChange={(e) => setPr({ ...pr, nightRate: Number(e.target.value) })} className="input !py-1.5" /></label>
+              <label className="text-muted">Night starts<input type="time" value={pr.nightStart} onChange={(e) => setPr({ ...pr, nightStart: e.target.value })} className="input !py-1.5" /></label>
+              <label className="text-muted">Holiday $/hr<input type="number" min={0} value={pr.holidayRate} onChange={(e) => setPr({ ...pr, holidayRate: Number(e.target.value) })} className="input !py-1.5" /></label>
+              <label className="text-muted">Min hours<input type="number" min={0.5} step={0.5} value={pr.minHours} onChange={(e) => setPr({ ...pr, minHours: Number(e.target.value) })} className="input !py-1.5" /></label>
+              <label className="text-muted">Max hours<input type="number" min={0.5} step={0.5} value={pr.maxHours} onChange={(e) => setPr({ ...pr, maxHours: Number(e.target.value) })} className="input !py-1.5" /></label>
+              <label className="text-muted">Slot step (min)<input type="number" min={15} step={15} value={pr.slotIncrementMin} onChange={(e) => setPr({ ...pr, slotIncrementMin: Number(e.target.value) })} className="input !py-1.5" /></label>
+            </div>
+            <p className="mt-1 text-xs text-muted">Leave a rate at 0 to use the base hourly rate. Facilities use the business <span className="font-semibold">Hours</span> unless you add closures below.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-ink">Closed dates / maintenance</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {blocked.map((d) => <span key={d} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink">{d}<button onClick={() => setBlocked(blocked.filter((x) => x !== d))} className="text-red-500">✕</button></span>)}
+            </div>
+            <div className="mt-1.5 flex gap-2">
+              <input type="date" value={newBlock} onChange={(e) => setNewBlock(e.target.value)} className="input !py-1.5 text-sm" />
+              <button onClick={() => { if (newBlock && !blocked.includes(newBlock)) { setBlocked([...blocked, newBlock].sort()); setNewBlock(""); } }} className="btn btn-ghost px-3 py-1.5 text-sm">Block date</button>
+            </div>
+            <div className="mt-2 space-y-1.5">
+              {maint.map((m, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input type="date" value={m.from} onChange={(e) => setMaint(maint.map((x, j) => j === i ? { ...x, from: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                  <span className="text-muted">→</span>
+                  <input type="date" value={m.to} onChange={(e) => setMaint(maint.map((x, j) => j === i ? { ...x, to: e.target.value } : x))} className="input !py-1.5 text-sm" />
+                  <input value={m.reason ?? ""} onChange={(e) => setMaint(maint.map((x, j) => j === i ? { ...x, reason: e.target.value } : x))} placeholder="reason" className="input !py-1.5 text-sm flex-1" />
+                  <button onClick={() => setMaint(maint.filter((_, j) => j !== i))} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+                </div>
+              ))}
+              <button onClick={() => setMaint([...maint, { from: "", to: "", reason: "" }])} className="chip !text-xs">+ Maintenance period</button>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={save} disabled={busy} className="btn btn-primary px-5 py-2 text-sm disabled:opacity-60">{busy ? "Saving…" : "Save facility"}</button>
+            {saved && <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600"><CheckIcon className="h-4 w-4" /> Saved</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Field Bookings: stats + weekly calendar (drag-drop) + list ----
+const FB_BADGE: Record<string, string> = { CONFIRMED: "bg-emerald-500/15 text-emerald-600", PENDING: "bg-amber-400/15 text-amber-600", CANCELLED: "bg-red-500/15 text-red-500", COMPLETED: "bg-brand-soft text-brand-dark", NO_SHOW: "bg-surface-2 text-muted" };
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function FieldBookingsTab({ biz }: { biz: Business }) {
+  const [facs, setFacs] = useState<Facility[]>([]);
+  const [facId, setFacId] = useState<number | null>(null);
+  const [bookings, setBookings] = useState<FacilityBooking[]>([]);
+  const [stats, setStats] = useState<FacilityStats | null>(null);
+  const [weekStart, setWeekStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0); return d; });
+  const [drag, setDrag] = useState<number | null>(null);
+
+  const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; });
+  const hoursRange = Array.from({ length: 16 }, (_, i) => 8 + i); // 08:00 → 23:00
+
+  const loadFacs = () => ownerApi.get<Facility[]>(`/api/owner/businesses/${biz.id}/facilities`).then((l) => { setFacs(l); if (facId == null && l[0]) setFacId(l[0].id); }).catch(() => setFacs([]));
+  const loadBookings = () => ownerApi.get<FacilityBooking[]>(`/api/owner/businesses/${biz.id}/facility-bookings?from=${ymd(week[0])}&to=${ymd(week[6])}`).then(setBookings).catch(() => setBookings([]));
+  const loadStats = () => ownerApi.get<FacilityStats>(`/api/owner/businesses/${biz.id}/facility-stats?period=month`).then(setStats).catch(() => setStats(null));
+  useEffect(() => { loadFacs(); loadStats(); /* eslint-disable-next-line */ }, [biz.id]);
+  useEffect(() => { loadBookings(); /* eslint-disable-next-line */ }, [biz.id, weekStart]);
+
+  async function move(id: number, date: string, startTime: string) {
+    try { await ownerApi.patch(`/api/owner/facility-bookings/${id}`, { date, startTime }); loadBookings(); }
+    catch (e) { window.alert(e instanceof Error ? e.message : "Couldn't move booking."); }
+  }
+  async function setStatus(id: number, status: string) { await ownerApi.patch(`/api/owner/facility-bookings/${id}`, { status }); loadBookings(); }
+
+  if (facs.length === 0) {
+    return <div className="card p-8 text-center"><p className="font-display font-bold text-ink">No facilities yet</p><p className="mt-1 text-muted">Add courts/fields in the <span className="font-semibold">Facilities</span> tab to start taking bookings.</p></div>;
+  }
+
+  const shown = bookings.filter((b) => (facId == null || b.facilityId === facId) && b.status !== "CANCELLED");
+  const cur = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+  return (
+    <div className="space-y-5">
+      {/* Stats */}
+      {stats && (
+        <section className="card p-5">
+          <h3 className="font-display font-bold text-ink">This month</h3>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[["Bookings", String(stats.totalBookings)], ["Hours booked", String(stats.bookedHours)], ["Revenue", cur(stats.revenue)], ["Occupancy", `${stats.occupancyPct}%`], ["Cancelled", String(stats.cancelled)], ["Busiest", stats.busiestFacility ? stats.busiestFacility.name : "—"]].map(([l, v]) => (
+              <div key={l} className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">{l}</p><p className="font-display text-lg font-extrabold text-ink">{v}</p></div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Calendar controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={facId ?? ""} onChange={(e) => setFacId(Number(e.target.value))} className="input !py-2 text-sm w-auto">
+          {facs.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })} className="btn btn-ghost px-3 py-1.5 text-sm">‹ Prev</button>
+          <span className="text-sm font-semibold text-ink">{week[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – {week[6].toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+          <button onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })} className="btn btn-ghost px-3 py-1.5 text-sm">Next ›</button>
+        </div>
+      </div>
+
+      {/* Weekly calendar grid (drag a booking to another cell to reschedule) */}
+      <div className="card overflow-x-auto p-3">
+        <div className="min-w-[700px]">
+          <div className="grid" style={{ gridTemplateColumns: `48px repeat(7, 1fr)` }}>
+            <div />
+            {week.map((d) => <div key={d.toISOString()} className="px-1 pb-2 text-center text-xs font-semibold text-ink">{d.toLocaleDateString(undefined, { weekday: "short" })}<br /><span className="text-muted">{d.getDate()}</span></div>)}
+            {hoursRange.map((h) => (
+              <div key={h} className="contents">
+                <div className="border-t border-border py-3 pr-1 text-right text-[10px] text-muted">{String(h).padStart(2, "0")}:00</div>
+                {week.map((d) => {
+                  const ds = ymd(d); const hh = `${String(h).padStart(2, "0")}:00`;
+                  const cell = shown.filter((b) => b.date === ds && b.startTime.slice(0, 2) === String(h).padStart(2, "0"));
+                  return (
+                    <div key={ds + h} onDragOver={(e) => e.preventDefault()} onDrop={() => { if (drag != null) { move(drag, ds, hh); setDrag(null); } }} className="min-h-[40px] border-t border-l border-border p-0.5">
+                      {cell.map((b) => (
+                        <div key={b.id} draggable onDragStart={() => setDrag(b.id)} title={`${b.facilityName} · ${b.customerName}`} className="mb-0.5 cursor-move rounded-md bg-brand/15 px-1.5 py-1 text-[10px] leading-tight text-brand-dark">
+                          <span className="font-bold">{b.startTime}</span> {b.customerName.split(" ")[0]}<br /><span className="opacity-80">{b.facilityName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted">Drag a booking to another day/time to reschedule. Times snap to the hour.</p>
+      </div>
+
+      {/* Upcoming list */}
+      <div>
+        <h3 className="font-display font-bold text-ink">This week's bookings</h3>
+        <div className="mt-2 space-y-2">
+          {shown.length === 0 && <p className="text-sm text-muted">No bookings this week.</p>}
+          {[...shown].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)).map((b) => (
+            <div key={b.id} className="card flex flex-wrap items-center gap-2 p-3">
+              <div className="flex-1">
+                <p className="font-semibold text-ink">{b.facilityName} <span className="font-normal text-muted">· {b.date} {b.startTime} ({b.durationMin / 60}h)</span></p>
+                <p className="text-sm text-muted">{b.customerName} · {b.customerPhone}{b.players ? ` · ${b.players} players` : ""} · {cur(b.price)}</p>
+              </div>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${FB_BADGE[b.status]}`}>{b.status.replace("_", "-")}</span>
+              {b.status === "CONFIRMED" && <button onClick={() => setStatus(b.id, "COMPLETED")} className="btn btn-ghost px-3 py-1.5 text-xs">Complete</button>}
+              {b.status !== "CANCELLED" && b.status !== "COMPLETED" && <button onClick={() => setStatus(b.id, "CANCELLED")} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Cancel</button>}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

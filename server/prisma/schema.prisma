@@ -131,6 +131,8 @@ model Business {
   appointments   Appointment[]
   customerProfiles CustomerProfile[]
   waitlist       Waitlist[]
+  facilities     Facility[]
+  facilityBookings FacilityBooking[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -186,6 +188,7 @@ model User {
   favorites    Favorite[]
   reservations Reservation[]
   appointments Appointment[]
+  facilityBookings FacilityBooking[]
 }
 
 // A table/booking request a visitor makes to a business. The owner confirms or
@@ -284,6 +287,56 @@ model Appointment {
   createdAt    DateTime @default(now())
 
   @@index([businessId, date])
+}
+
+// A rentable facility/court/field/room a business books by the hour.
+model Facility {
+  id           Int      @id @default(autoincrement())
+  businessId   Int
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name         String // "Court 1", "Field A", "Main Hall"
+  type         String   @default("") // "Padel court", "Football field", "Event hall"
+  description  String   @default("")
+  image        String?
+  hourlyRate   Float    @default(0)
+  capacityNote String   @default("") // "Up to 4 players", "Seats 200"
+  // JSON: { weekendRate, peakRate, peakStart, peakEnd, nightRate, nightStart, holidayRate, holidays:[date],
+  //         minHours, maxHours, slotIncrementMin }
+  pricing      String   @default("{}")
+  // JSON: { workingHours:[{day,open,close,closed}], blockedDates:[date], maintenance:[{from,to,reason}] }
+  schedule     String   @default("{}")
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  bookings     FacilityBooking[]
+}
+
+// An hourly booking of a facility.
+model FacilityBooking {
+  id            Int      @id @default(autoincrement())
+  businessId    Int
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  facilityId    Int
+  facility      Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  userId        Int?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customerName  String
+  customerPhone String
+  date          String // "2026-07-01"
+  startTime     String // "18:00"
+  durationMin   Int      @default(60)
+  players       Int      @default(0)
+  note          String   @default("")
+  price         Float    @default(0)
+  facilityName  String   @default("") // snapshot
+  // CONFIRMED | PENDING | CANCELLED | COMPLETED | NO_SHOW
+  status        String   @default("CONFIRMED")
+  checkInCode   String   @default("")
+  arrivedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([businessId, date])
+  @@index([facilityId, date])
 }
 
 // A customer waiting for a slot to open on a fully-booked day.

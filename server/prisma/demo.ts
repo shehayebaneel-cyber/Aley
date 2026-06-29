@@ -196,6 +196,15 @@ export const CATS: CatDef[] = [
   { slug: "nightlife", name: "Nightlife", icon: "🍸", color: "#7e22ce", group: "Entertainment", kind: "service", count: 3 },
   { slug: "live-music", name: "Live Music", icon: "🎤", color: "#db2777", group: "Entertainment", kind: "service", count: 3 },
 
+  // 🏟️ Sports & Recreation (hourly facility rentals)
+  { slug: "football-fields", name: "Football Fields", icon: "⚽", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "padel", name: "Padel", icon: "🎾", color: "#0ea5e9", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "tennis", name: "Tennis", icon: "🎾", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "basketball", name: "Basketball", icon: "🏀", color: "#ea580c", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "volleyball", name: "Volleyball", icon: "🏐", color: "#f59e0b", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "squash", name: "Squash", icon: "🥎", color: "#7c3aed", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "swimming-pools", name: "Swimming Pools", icon: "🏊", color: "#0891b2", group: "Sports & Recreation", kind: "service", count: 0 },
+
   // 📢 Community
   { slug: "charity-organizations", name: "Charity Organizations", icon: "🤝", color: "#16a34a", group: "Community", kind: "service", count: 3 },
   { slug: "volunteer", name: "Volunteer Opportunities", icon: "🙌", color: "#0d9488", group: "Community", kind: "service", count: 2 },
@@ -263,6 +272,8 @@ const PHOTOS: Record<string, string[]> = {
   // Mount Lebanon vibe: mountains, pine forest, green hills — no lakes/ponds/sea (Aley is a hill town inland).
   nature: ["1483728642387-6c3bdd6c93e5", "1454496522488-7a8e488e8606", "1472791108553-c9405341e398", "1458668383970-8ddd3927deed", "1464822759023-fed622ff2c3b", "1500534623283-312aade485b7", "1454942901704-3c44c11b2ad1", "1605540436563-5bca919ae766"],
   document: ["1554224155-6726b3ff858f", "1450101499163-c8848c66ca85", "1517842645767-c639042777db", "1554224154-26032ffc0d07", "1456735190827-d1262f71b8a3"],
+  // Sports facilities (football, padel/tennis, basketball, gym, pool) — validated IDs.
+  sports: ["1551958219-acbc608c6377", "1431324155629-1a6deb1dec8d", "1459865264687-595d652de67e", "1517927033932-b3d18e61fb3a", "1522778119026-d647f0596c20", "1554068865-24cecd4e34b8", "1595435934249-5df7ed86e1c0", "1546519638-68e109498ffc", "1505666287802-931dc83948e9", "1534438327276-14e5300c3a48", "1571902943202-507ec2618e8f", "1576013551627-0cc20b96c2a7", "1519315901367-f34ff9154487", "1626224583764-f87db24ac4ea"],
 };
 const unsplash = (id: string, w: number, h: number) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&h=${h}&q=70`;
 // A few categories look better with a specific pool than their generic "kind".
@@ -270,6 +281,9 @@ const POOL_OVERRIDE: Record<string, string> = {
   "real-estate": "nature", "hiking-trails": "nature", parks: "nature", camping: "nature",
   "tourist-attractions": "nature", "historical-sites": "nature", landscaping: "nature",
   "garden-centers": "nature", resorts: "hotel", "guest-houses": "hotel", apartments: "hotel",
+  // Sports & Recreation
+  "football-fields": "sports", padel: "sports", tennis: "sports", basketball: "sports",
+  volleyball: "sports", squash: "sports", "swimming-pools": "sports", "sports-clubs": "sports", gyms: "sports",
 };
 const poolFor = (slug: string): string[] => PHOTOS[POOL_OVERRIDE[slug] ?? KIND[slug] ?? "shop"] ?? PHOTOS.shop;
 // Deterministic single themed photo (business cover / offer / event).

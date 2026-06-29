@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireUser, signToken } from "../auth";
 import { prisma } from "../db";
 import { computeSlots, resolveBookingConfig } from "../lib/booking";
+import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
 import { outBusiness, parseArr, type HoursRow } from "../lib/serialize";
 import { notifyNextWaitlist } from "../lib/waitlist";
 
@@ -143,5 +144,44 @@ userRouter.patch("/bookings/:id", async (req, res) => {
     return res.json(updated);
   }
 
+  res.status(400).json({ error: "Unknown action." });
+});
+
+// GET /api/me/facility-bookings — the visitor's own court/field bookings.
+userRouter.get("/facility-bookings", async (req, res) => {
+  const bookings = await prisma.facilityBooking.findMany({
+    where: { userId: req.userId! },
+    orderBy: [{ date: "desc" }, { startTime: "desc" }],
+    take: 50,
+    include: { business: { select: { name: true, slug: true, logo: true } } },
+  });
+  res.json(bookings);
+});
+
+// PATCH /api/me/facility-bookings/:id — customer cancel or reschedule.
+userRouter.patch("/facility-bookings/:id", async (req, res) => {
+  const fb = await prisma.facilityBooking.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { business: { select: { hours: true } }, facility: true },
+  });
+  if (!fb || fb.userId !== req.userId) return res.status(404).json({ error: "Booking not found." });
+  if (["CANCELLED", "COMPLETED", "NO_SHOW"].includes(fb.status)) return res.status(400).json({ error: "This booking can't be changed anymore." });
+  const action = String(req.body?.action ?? "");
+
+  if (action === "cancel") {
+    if (hoursUntil(fb.date, fb.startTime) < 2) return res.status(400).json({ error: "Please cancel at least 2 hours before." });
+    return res.json(await prisma.facilityBooking.update({ where: { id: fb.id }, data: { status: "CANCELLED" } }));
+  }
+  if (action === "reschedule") {
+    if (hoursUntil(fb.date, fb.startTime) < 2) return res.status(400).json({ error: "Please reschedule at least 2 hours before." });
+    const date = String(req.body?.date ?? ""); const startTime = String(req.body?.time ?? req.body?.startTime ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(startTime)) return res.status(400).json({ error: "A valid new date and time are required." });
+    const pricing = resolveFacilityPricing(fb.facility.pricing);
+    const existing = await prisma.facilityBooking.findMany({ where: { facilityId: fb.facilityId, date, id: { not: fb.id } }, select: { startTime: true, durationMin: true, status: true } });
+    const free = facilitySlots({ hourlyRate: fb.facility.hourlyRate, pricing, schedule: resolveFacilitySchedule(fb.facility.schedule), businessHours: parseArr(fb.business.hours) as HoursRow[], dateStr: date, durationMin: fb.durationMin, existing, now: new Date() });
+    if (!free.some((s) => s.time === startTime)) return res.status(409).json({ error: "That slot isn't available." });
+    const price = priceFor(fb.facility.hourlyRate, pricing, date, _toMin(startTime), fb.durationMin);
+    return res.json(await prisma.facilityBooking.update({ where: { id: fb.id }, data: { date, startTime, price } }));
+  }
   res.status(400).json({ error: "Unknown action." });
 });

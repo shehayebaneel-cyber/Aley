@@ -3,7 +3,8 @@ import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
 import { prisma } from "../db";
-import { outBusiness, parseArr, parseObj, slugify, toJson } from "../lib/serialize";
+import { outBusiness, parseArr, parseObj, slugify, toJson, type HoursRow } from "../lib/serialize";
+import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
 import { notifyNextWaitlist } from "../lib/waitlist";
 import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
@@ -508,6 +509,136 @@ ownerRouter.patch("/businesses/:id/customers/:phone", async (req, res) => {
     update: { tag, notes, name },
   });
   res.json(profile);
+});
+
+// ---- Facilities (hourly rentals: courts, fields, halls) ----
+const outFacility = (f: any) => ({ ...f, pricing: parseObj(f.pricing), schedule: parseObj(f.schedule) });
+ownerRouter.get("/businesses/:id/facilities", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const list = await prisma.facility.findMany({ where: { businessId: business.id }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
+  res.json(list.map(outFacility));
+});
+ownerRouter.post("/businesses/:id/facilities", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const name = STR(req.body.name, 80).trim();
+  if (!name) return res.status(400).json({ error: "Facility name is required." });
+  const count = await prisma.facility.count({ where: { businessId: business.id } });
+  const f = await prisma.facility.create({
+    data: {
+      businessId: business.id, name, type: STR(req.body.type, 60), description: STR(req.body.description, 500),
+      image: req.body.image ? STR(req.body.image, 500) : null, hourlyRate: Math.max(0, Number(req.body.hourlyRate) || 0),
+      capacityNote: STR(req.body.capacityNote, 80),
+      pricing: req.body.pricing && typeof req.body.pricing === "object" ? JSON.stringify(req.body.pricing) : "{}",
+      schedule: req.body.schedule && typeof req.body.schedule === "object" ? JSON.stringify(req.body.schedule) : "{}",
+      isActive: req.body.isActive !== false, sortOrder: count,
+    },
+  });
+  res.status(201).json(outFacility(f));
+});
+async function ownedFacility(ownerId: number | undefined, id: number) {
+  const f = await prisma.facility.findUnique({ where: { id }, include: { business: { select: { ownerId: true } } } });
+  return f && f.business.ownerId === ownerId ? f : null;
+}
+ownerRouter.patch("/facilities/:id", async (req, res) => {
+  const f = await ownedFacility(req.ownerId, Number(req.params.id));
+  if (!f) return res.status(404).json({ error: "Facility not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("name" in b) data.name = STR(b.name, 80).trim() || f.name;
+  if ("type" in b) data.type = STR(b.type, 60);
+  if ("description" in b) data.description = STR(b.description, 500);
+  if ("image" in b) data.image = b.image ? STR(b.image, 500) : null;
+  if ("hourlyRate" in b) data.hourlyRate = Math.max(0, Number(b.hourlyRate) || 0);
+  if ("capacityNote" in b) data.capacityNote = STR(b.capacityNote, 80);
+  if ("pricing" in b && b.pricing && typeof b.pricing === "object") data.pricing = JSON.stringify(b.pricing);
+  if ("schedule" in b && b.schedule && typeof b.schedule === "object") data.schedule = JSON.stringify(b.schedule);
+  if ("isActive" in b) data.isActive = !!b.isActive;
+  if ("sortOrder" in b) data.sortOrder = Number(b.sortOrder) || 0;
+  res.json(outFacility(await prisma.facility.update({ where: { id: f.id }, data })));
+});
+ownerRouter.delete("/facilities/:id", async (req, res) => {
+  const f = await ownedFacility(req.ownerId, Number(req.params.id));
+  if (!f) return res.status(404).json({ error: "Facility not found." });
+  await prisma.facility.delete({ where: { id: f.id } });
+  res.json({ ok: true });
+});
+
+// ---- Facility bookings (list / calendar / status / reschedule) ----
+ownerRouter.get("/businesses/:id/facility-bookings", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const q = req.query as Record<string, string>;
+  const where: Record<string, unknown> = { businessId: business.id };
+  if (q.from && q.to) where.date = { gte: q.from, lte: q.to };
+  const list = await prisma.facilityBooking.findMany({ where, orderBy: [{ date: "desc" }, { startTime: "asc" }], take: 500 });
+  res.json(list);
+});
+const FB_STATUS = ["CONFIRMED", "PENDING", "CANCELLED", "COMPLETED", "NO_SHOW"];
+ownerRouter.patch("/facility-bookings/:id", async (req, res) => {
+  const fb = await prisma.facilityBooking.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true, hours: true } }, facility: true } });
+  if (!fb || fb.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Booking not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("status" in b) {
+    const status = String(b.status ?? "").toUpperCase();
+    if (!FB_STATUS.includes(status)) return res.status(400).json({ error: "Invalid status." });
+    data.status = status;
+  }
+  // Reschedule (drag-drop): move date/time and/or facility, re-checking availability.
+  const newDate = "date" in b && /^\d{4}-\d{2}-\d{2}$/.test(String(b.date)) ? String(b.date) : fb.date;
+  const newStart = "startTime" in b && /^\d{2}:\d{2}$/.test(String(b.startTime)) ? String(b.startTime) : fb.startTime;
+  const newFacilityId = "facilityId" in b ? Number(b.facilityId) : fb.facilityId;
+  const moving = newDate !== fb.date || newStart !== fb.startTime || newFacilityId !== fb.facilityId;
+  if (moving) {
+    const facility = newFacilityId === fb.facilityId ? fb.facility : await prisma.facility.findFirst({ where: { id: newFacilityId, businessId: fb.businessId } });
+    if (!facility) return res.status(400).json({ error: "Facility not found." });
+    const existing = await prisma.facilityBooking.findMany({ where: { facilityId: facility.id, date: newDate, id: { not: fb.id } }, select: { startTime: true, durationMin: true, status: true } });
+    const free = facilitySlots({
+      hourlyRate: facility.hourlyRate, pricing: resolveFacilityPricing(facility.pricing), schedule: resolveFacilitySchedule(facility.schedule),
+      businessHours: parseArr(fb.business.hours) as HoursRow[], dateStr: newDate, durationMin: fb.durationMin, existing, now: new Date(),
+    });
+    if (!free.some((s) => s.time === newStart)) return res.status(409).json({ error: "That slot isn't free." });
+    data.date = newDate; data.startTime = newStart; data.facilityId = facility.id; data.facilityName = facility.name;
+    data.price = priceFor(facility.hourlyRate, resolveFacilityPricing(facility.pricing), newDate, _toMin(newStart), fb.durationMin);
+  }
+  res.json(await prisma.facilityBooking.update({ where: { id: fb.id }, data }));
+});
+
+// ---- Facility occupancy stats ----
+ownerRouter.get("/businesses/:id/facility-stats", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const period = String(req.query.period ?? "month");
+  const now = new Date(); const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  let start: string, end: string, days: number;
+  if (period === "all") { start = "0000-01-01"; end = "9999-12-31"; days = 30; }
+  else if (period === "month") { start = ymd(new Date(now.getFullYear(), now.getMonth(), 1)); end = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)); days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(); }
+  else { const s = new Date(now); s.setDate(s.getDate() - 30); start = ymd(s); end = ymd(now); days = 30; }
+
+  const [facilities, bookings] = await Promise.all([
+    prisma.facility.count({ where: { businessId: business.id, isActive: true } }),
+    prisma.facilityBooking.findMany({ where: { businessId: business.id, date: { gte: start, lte: end } } }),
+  ]);
+  const active = bookings.filter((b) => ["CONFIRMED", "COMPLETED", "PENDING"].includes(b.status));
+  const bookedHours = Math.round((active.reduce((s, b) => s + b.durationMin, 0) / 60) * 10) / 10;
+  const revenue = Math.round(active.reduce((s, b) => s + (b.price || 0), 0) * 100) / 100;
+  // Approx available hours = facilities × avg open hours/day × days.
+  const hrs = parseArr(business.hours) as HoursRow[];
+  const open = hrs.filter((h) => !h.closed);
+  const avgOpen = open.length ? open.reduce((s, h) => s + (_toMin(h.close === "00:00" ? "24:00" : h.close) - _toMin(h.open)) / 60, 0) / open.length * (open.length / 7) : 12;
+  const availableHours = Math.max(1, facilities * avgOpen * days);
+  const byFacility = new Map<string, number>(); const byHour = new Map<string, number>();
+  for (const b of active) { byFacility.set(b.facilityName, (byFacility.get(b.facilityName) ?? 0) + 1); byHour.set(b.startTime.slice(0, 2) + ":00", (byHour.get(b.startTime.slice(0, 2) + ":00") ?? 0) + 1); }
+  const top = (m: Map<string, number>) => [...m.entries()].sort((a, c) => c[1] - a[1])[0];
+  const busiest = top(byFacility); const peak = [...byHour.entries()].map(([hour, count]) => ({ hour, count })).sort((a, c) => c.count - a.count).slice(0, 5);
+  res.json({
+    period, totalBookings: active.length, bookedHours, revenue,
+    occupancyPct: Math.min(100, Math.round((bookedHours / availableHours) * 100)),
+    cancelled: bookings.filter((b) => b.status === "CANCELLED").length,
+    busiestFacility: busiest ? { name: busiest[0], count: busiest[1] } : null, peakHours: peak,
+  });
 });
 
 // ---- Offers ----

@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BookAppointmentModal } from "../components/BookAppointmentModal";
+import { FacilityBookingModal } from "../components/FacilityBookingModal";
 import { BusinessCard } from "../components/BusinessCard";
 import { FavoriteButton } from "../components/FavoriteButton";
 import { Gallery } from "../components/Gallery";
@@ -28,6 +29,7 @@ export function BusinessProfile() {
   const { data: related } = useFetch<Business[]>(slug ? `/api/businesses/${slug}/related` : null);
   const [booking, setBooking] = useState(false);
   const [appt, setAppt] = useState(false);
+  const [facBook, setFacBook] = useState<{ open: boolean; facilityId?: number }>({ open: false });
   useTitle(b?.name);
 
   if (loading) return <div className="mx-auto max-w-5xl px-4 py-16"><div className="card h-96 animate-pulse" /></div>;
@@ -73,6 +75,7 @@ export function BusinessProfile() {
             <FavoriteButton businessId={b.id} className="!h-11 !w-11 border border-border !bg-surface" />
             {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
             {wa && <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
+            {b.hasFacilities && <button onClick={() => setFacBook({ open: true })} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> Book Now</button>}
             {b.appointmentBookable && <button onClick={() => setAppt(true)} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> {b.bookingCta ?? "Book appointment"}</button>}
             {b.bookingMode === "table" && b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
             {b.hasDelivery && <Link to={`/delivery?pickup=${encodeURIComponent(`${b.name}, ${b.address}`)}${b.lat && b.lng ? `&plat=${b.lat}&plng=${b.lng}` : ""}&businessId=${b.id}`} className="btn btn-ghost px-4 py-2.5"><TruckIcon className="h-4 w-4" /> Request delivery</Link>}
@@ -92,6 +95,31 @@ export function BusinessProfile() {
                     {b.tags.map((t) => <span key={t} className="chip !py-1 !text-xs capitalize">{t}</span>)}
                   </div>
                 )}
+              </section>
+            )}
+
+            {/* Facilities (hourly rentals) */}
+            {!!b.facilities?.length && (
+              <section className="card p-5">
+                <h2 className="font-display text-lg font-bold text-ink">Facilities & courts</h2>
+                <p className="mt-1 text-sm text-muted">Book by the hour — live availability, instant confirmation.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {b.facilities.map((f) => (
+                    <button key={f.id} onClick={() => setFacBook({ open: true, facilityId: f.id })} className="group flex items-stretch gap-3 rounded-2xl border border-border p-2.5 text-left transition hover:border-brand/60 hover:bg-surface-2">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl">
+                        {f.image ? <img src={f.image} alt={f.name} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-brand-soft text-2xl">🏟️</div>}
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="font-semibold text-ink">{f.name}</span>
+                        {(f.type || f.capacityNote) && <span className="text-xs text-muted">{[f.type, f.capacityNote].filter(Boolean).join(" · ")}</span>}
+                        <div className="mt-auto flex items-center justify-between pt-1.5">
+                          <span className="font-semibold text-ink">${f.hourlyRate}<span className="text-xs font-normal text-muted">/hr</span></span>
+                          <span className="rounded-full bg-brand px-3 py-1 text-xs font-bold text-white transition group-hover:bg-brand-dark">Book</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </section>
             )}
 
@@ -216,7 +244,9 @@ export function BusinessProfile() {
       <div className="h-20 sm:hidden" />
       <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-border bg-surface/95 p-3 backdrop-blur sm:hidden">
         {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost flex-1 py-2.5 text-sm"><PhoneIcon className="h-4 w-4" /> Call</a>}
-        {b.appointmentBookable ? (
+        {b.hasFacilities ? (
+          <button onClick={() => setFacBook({ open: true })} className="btn btn-primary flex-1 py-2.5 text-sm"><CalendarIcon className="h-4 w-4" /> Book</button>
+        ) : b.appointmentBookable ? (
           <button onClick={() => setAppt(true)} className="btn btn-primary flex-1 py-2.5 text-sm"><CalendarIcon className="h-4 w-4" /> Book</button>
         ) : b.bookingMode === "table" && b.hasReservations ? (
           <button onClick={() => setBooking(true)} className="btn flex-1 bg-accent py-2.5 text-sm text-white"><CalendarIcon className="h-4 w-4" /> Book</button>
@@ -228,6 +258,7 @@ export function BusinessProfile() {
 
       {booking && <BookingModal businessId={b.id} businessName={b.name} onClose={() => setBooking(false)} />}
       {appt && <BookAppointmentModal business={b} onClose={() => setAppt(false)} />}
+      {facBook.open && !!b.facilities?.length && <FacilityBookingModal business={b} facilities={b.facilities} initialFacilityId={facBook.facilityId} onClose={() => setFacBook({ open: false })} />}
     </div>
   );
 }

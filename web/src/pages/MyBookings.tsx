@@ -4,7 +4,7 @@ import { CalendarIcon } from "../components/icons";
 import { QRCode, checkInUrl } from "../components/QRCode";
 import { useUserAuth } from "../context/UserAuthContext";
 import { userApi } from "../lib/api";
-import type { Appointment, AppointmentStatus } from "../types";
+import type { Appointment, AppointmentStatus, FacilityBooking } from "../types";
 
 const BADGE: Record<AppointmentStatus, string> = {
   PENDING: "bg-amber-400/15 text-amber-600",
@@ -20,11 +20,30 @@ const ACTIVE: AppointmentStatus[] = ["PENDING", "CONFIRMED", "RESCHEDULED"];
 export function MyBookings() {
   const { user, loading, openAuth } = useUserAuth();
   const [items, setItems] = useState<Appointment[] | null>(null);
+  const [facItems, setFacItems] = useState<FacilityBooking[] | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [qrId, setQrId] = useState<number | null>(null);
+  const [facQrId, setFacQrId] = useState<number | null>(null);
 
   const load = () => userApi.get<Appointment[]>("/api/me/bookings").then(setItems).catch(() => setItems([]));
-  useEffect(() => { if (user) load(); }, [user]);
+  const loadFac = () => userApi.get<FacilityBooking[]>("/api/me/facility-bookings").then(setFacItems).catch(() => setFacItems([]));
+  useEffect(() => { if (user) { load(); loadFac(); } }, [user]);
+
+  async function facAct(b: FacilityBooking, action: "cancel" | "reschedule") {
+    let body: Record<string, unknown> = { action };
+    if (action === "reschedule") {
+      const date = window.prompt("New date (YYYY-MM-DD):", b.date);
+      if (!date) return;
+      const time = window.prompt("New time (HH:MM):", b.startTime);
+      if (!time) return;
+      body = { action, date, time };
+    } else if (!window.confirm("Cancel this booking?")) return;
+    setBusyId(-b.id);
+    try { await userApi.patch(`/api/me/facility-bookings/${b.id}`, body); await loadFac(); }
+    catch (e) { window.alert(e instanceof Error ? e.message : "Couldn't update the booking."); }
+    finally { setBusyId(null); }
+  }
+  const facUpcoming = (b: FacilityBooking) => new Date(`${b.date}T${b.startTime}:00`).getTime() > Date.now();
 
   async function act(a: Appointment, action: "cancel" | "reschedule") {
     let body: Record<string, unknown> = { action };
@@ -88,6 +107,39 @@ export function MyBookings() {
           </div>
         ))}
       </div>
+
+      {/* Court & facility bookings */}
+      {!!facItems?.length && (
+        <>
+          <h2 className="mt-10 font-display text-2xl font-extrabold text-ink">Court & facility bookings</h2>
+          <div className="mt-4 space-y-3">
+            {facItems.map((b) => (
+              <div key={b.id} className="card flex flex-wrap items-center gap-3 p-4">
+                {b.business?.logo ? <img src={b.business.logo} alt="" className="h-11 w-11 rounded-xl object-cover" /> : <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft text-brand-dark">🏟️</span>}
+                <div className="min-w-0 flex-1">
+                  {b.business ? <Link to={`/business/${b.business.slug}`} className="font-display font-bold text-ink hover:text-brand">{b.business.name}</Link> : <span className="font-display font-bold text-ink">Booking</span>}
+                  <p className="text-sm text-muted">{b.facilityName} · {b.durationMin / 60}h{b.players ? ` · ${b.players} players` : ""} · ${b.price}</p>
+                  <p className="text-sm text-ink">{b.date} · {b.startTime}</p>
+                  {(b.status === "CONFIRMED" || b.status === "PENDING") && facUpcoming(b) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button disabled={busyId === -b.id} onClick={() => facAct(b, "reschedule")} className="btn btn-ghost px-3 py-1.5 text-xs disabled:opacity-50">Reschedule</button>
+                      <button disabled={busyId === -b.id} onClick={() => facAct(b, "cancel")} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500 disabled:opacity-50">Cancel</button>
+                      {b.checkInCode && <button onClick={() => setFacQrId(facQrId === b.id ? null : b.id)} className="btn btn-ghost px-3 py-1.5 text-xs">{facQrId === b.id ? "Hide QR" : "Check-in QR"}</button>}
+                    </div>
+                  )}
+                  {facQrId === b.id && b.checkInCode && (
+                    <div className="mt-2 flex items-center gap-3 rounded-xl surface-2 p-3">
+                      <QRCode value={checkInUrl(b.checkInCode)} size={96} />
+                      <p className="text-xs text-muted">Show this at check-in.<br />Code: <span className="font-mono font-semibold text-ink">{b.checkInCode}</span></p>
+                    </div>
+                  )}
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${b.arrivedAt ? "bg-emerald-500/15 text-emerald-600" : BADGE[(b.status === "CONFIRMED" ? "CONFIRMED" : b.status) as AppointmentStatus] ?? "bg-surface-2 text-muted"}`}>{b.arrivedAt ? "Arrived" : b.status.replace("_", "-")}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
