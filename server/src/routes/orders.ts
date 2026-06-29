@@ -2,6 +2,7 @@ import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
 import { recordTransaction } from "../lib/ledger";
+import { chargeWallet, walletBalance } from "../lib/wallet";
 import { effectiveCommission, getMarketplaceSettings } from "../lib/marketplace";
 import { isOpenNow, parseArr, type HoursRow } from "../lib/serialize";
 
@@ -80,27 +81,43 @@ ordersRouter.post("/", optionalUser, async (req, res) => {
   }
   itemsSubtotal = round2(itemsSubtotal);
   const deliveryFee = fulfillment === "PICKUP" ? 0 : settings.freeDeliveryThreshold > 0 && itemsSubtotal >= settings.freeDeliveryThreshold ? 0 : settings.deliveryFee;
-  const paymentMethod = b.paymentMethod === "ONLINE" ? "ONLINE" : "CASH";
+  const orderTotal = round2(itemsSubtotal + deliveryFee);
+  const paymentMethod = b.paymentMethod === "ONLINE" ? "ONLINE" : b.paymentMethod === "WALLET" ? "WALLET" : "CASH";
+
+  // Wallet checkout: must be signed in and have enough balance (checked before
+  // anything is created; the actual charge happens after the order exists).
+  if (paymentMethod === "WALLET") {
+    if (!req.userId) return res.status(401).json({ error: "Please sign in to pay with your wallet." });
+    const balance = await walletBalance(req.userId);
+    if (balance < orderTotal) return res.status(402).json({ error: "Your wallet balance is too low for this order.", code: "INSUFFICIENT_FUNDS", balance, total: orderTotal });
+  }
 
   const order = await prisma.order.create({
     data: {
       number: genNumber(), cityId: aley!.id, customerId: req.userId ?? null,
       customerName: STR(b.customerName, 120), customerPhone: STR(b.customerPhone, 40), customerEmail: STR(b.customerEmail, 120),
       fulfillment, address: STR(b.address, 300), lat: Number.isFinite(Number(b.lat)) ? Number(b.lat) : null, lng: Number.isFinite(Number(b.lng)) ? Number(b.lng) : null, note: STR(b.note, 500),
-      itemsSubtotal, deliveryFee, total: round2(itemsSubtotal + deliveryFee), commissionTotal: round2(tickets.reduce((s, t) => s + t.commissionAmount, 0)),
-      paymentMethod, paid: paymentMethod === "ONLINE", // mock: online marked paid instantly
+      itemsSubtotal, deliveryFee, total: orderTotal, commissionTotal: round2(tickets.reduce((s, t) => s + t.commissionAmount, 0)),
+      paymentMethod, paid: paymentMethod === "ONLINE" || paymentMethod === "WALLET", // mock: online/wallet marked paid instantly
       businessOrders: { create: tickets.map((t) => ({ businessId: t.businessId, status: t.status, subtotal: t.subtotal, commissionRate: t.commissionRate, commissionAmount: t.commissionAmount, items: { create: t.items } })) },
     },
     include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true, logo: true } } } } },
   });
+  // Wallet checkout: debit the customer's balance now (money is collected upfront).
+  if (paymentMethod === "WALLET" && order.customerId) {
+    await chargeWallet({ userId: order.customerId, amount: order.total, source: "ORDER", refId: order.id, code: order.number, description: `Order ${order.number}` });
+  }
+
   // Ledger: record each business's share of the order with its commission snapshot.
+  // Cash = pending until collected; online/wallet = collected now.
+  const collected = paymentMethod === "ONLINE" || paymentMethod === "WALLET";
   for (const bo of order.businessOrders) {
     await recordTransaction({
       businessId: bo.businessId, source: "ORDER", refId: bo.id, code: order.number,
       description: `Order · ${bo.business?.name ?? ""}`, customerName: order.customerName, customerPhone: order.customerPhone,
       userId: order.customerId, amount: bo.subtotal, commission: bo.commissionAmount, net: round2(bo.subtotal - bo.commissionAmount),
-      status: paymentMethod === "ONLINE" ? "PAID" : "PENDING", // cash = pending until collected
-      method: paymentMethod === "ONLINE" ? "PENDING_ONLINE" : "CASH",
+      status: collected ? "PAID" : "PENDING",
+      method: paymentMethod === "ONLINE" ? "PENDING_ONLINE" : paymentMethod === "WALLET" ? "WALLET" : "CASH",
     });
   }
   res.status(201).json(order);

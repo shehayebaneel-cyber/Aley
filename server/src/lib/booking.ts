@@ -85,13 +85,26 @@ export const CATEGORY_BOOKING_MODE: Record<string, BookingMode> = {
   "tire-shops": "service", "vehicle-inspection": "appointment",
   // Home services → request a service
   plumbers: "service", electricians: "service", cleaning: "service", "pest-control": "service",
-  contractors: "service", landscaping: "service", "swimming-pools": "service",
+  contractors: "service", landscaping: "service", "pool-services": "service",
   // Professional / education → appointment
   lawyers: "appointment", accounting: "appointment", "financial-advisors": "appointment", consultants: "appointment",
   architects: "appointment", "interior-designers": "appointment", photography: "appointment", videography: "appointment",
   "translation-services": "appointment", tutors: "appointment", "language-centers": "appointment",
   "music-schools": "appointment", "dance-schools": "appointment", "driving-schools": "appointment",
 };
+
+// Sports & Recreation categories that rent by the hour. Businesses in these
+// categories use the facility-booking flow (courts/fields/lanes with live
+// availability) rather than the appointment flow — see lib/facility.ts.
+export const FACILITY_RENTAL_CATEGORIES = new Set<string>([
+  "football-fields", "mini-football", "tennis", "padel", "squash",
+  "basketball", "volleyball", "swimming-pools",
+]);
+
+/** Whether a category is an hourly facility rental (auto-supports court/field booking). */
+export function isFacilityRentalCategory(categorySlug: string | undefined): boolean {
+  return !!categorySlug && FACILITY_RENTAL_CATEGORIES.has(categorySlug);
+}
 
 /** Resolve the effective booking mode from the owner override, category, and legacy flag. */
 export function effectiveBookingMode(categorySlug: string | undefined, config: BookingConfig, hasBooking: boolean): BookingMode {

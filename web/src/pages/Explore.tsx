@@ -1,18 +1,18 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BusinessCard } from "../components/BusinessCard";
-import { ChevronRight, SearchIcon } from "../components/icons";
+import { ChevronRight, GridIcon, SearchIcon } from "../components/icons";
 import { useLang } from "../context/LanguageContext";
 import { useFetch } from "../lib/useFetch";
 import type { Business, Category } from "../types";
 
 const CITY = "aley";
-const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
+const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Sports & Recreation", "Community", "Essential Services", "More"];
 // Emoji per group, shown in the sidebar / chips.
 const GROUP_ICON: Record<string, string> = {
   "Food & Drinks": "🍴", "Shopping": "🛍️", "Health & Beauty": "💄", "Automotive": "🚗",
   "Home & Living": "🏠", "Professional Services": "💼", "Stay & Tourism": "🏨", "Education": "🎓",
-  "Entertainment": "🎭", "Community": "📢", "Essential Services": "🚨", "More": "🏷️",
+  "Entertainment": "🎭", "Sports & Recreation": "🏆", "Community": "📢", "Essential Services": "🚨", "More": "🏷️",
 };
 const groupIcon = (g: string) => GROUP_ICON[g] ?? "🏷️";
 
@@ -85,7 +85,7 @@ export function Explore() {
         <aside className="hidden lg:block">
           <div className="sticky top-24 max-h-[78vh] space-y-1 overflow-y-auto pr-1">
             <button onClick={() => choose({ category: null, group: null })} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold ${!activeCategory && !activeGroup ? "bg-brand-soft text-brand-dark" : "text-ink hover:bg-surface-2"}`}>
-              🗂️ {t("explore.allCategories")}
+              <GridIcon className="h-4 w-4 text-brand" /> {t("explore.allCategories")}
             </button>
             {grouped.map(({ group, items }) => (
               <div key={group}>

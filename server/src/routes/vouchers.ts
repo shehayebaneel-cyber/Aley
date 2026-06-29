@@ -2,6 +2,7 @@ import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
 import { recordTransaction } from "../lib/ledger";
+import { chargeWallet, walletBalance } from "../lib/wallet";
 import { notifyAdmins } from "../lib/notify";
 import { effectiveStatus, uniqueVoucherCode } from "../lib/voucher";
 
@@ -54,6 +55,14 @@ vouchersRouter.post("/buy", optionalUser, async (req, res) => {
   if (!amount) return res.status(400).json({ error: "A voucher amount is required." });
   const price = type.price > 0 ? type.price : amount;
 
+  // Payment method (mock). Wallet requires sign-in + sufficient balance.
+  const payMethod = (STR(b.paymentMethod, 20) || "CARD").toUpperCase();
+  if (payMethod === "WALLET") {
+    if (!req.userId) return res.status(401).json({ error: "Please sign in to pay with your wallet." });
+    const balance = await walletBalance(req.userId);
+    if (balance < price) return res.status(402).json({ error: "Your wallet balance is too low for this voucher.", code: "INSUFFICIENT_FUNDS", balance, total: price });
+  }
+
   // Scheduling: a future deliverAt holds the voucher until that date.
   const deliverAt = b.deliverAt ? new Date(String(b.deliverAt)) : null;
   const scheduled = deliverAt && !isNaN(deliverAt.getTime()) && deliverAt.getTime() > Date.now();
@@ -68,10 +77,13 @@ vouchersRouter.post("/buy", optionalUser, async (req, res) => {
       purchaserUserId: req.userId ?? null, purchaserName, purchaserEmail: STR(b.purchaserEmail, 120),
       recipientName, recipientEmail: STR(b.recipientEmail, 120), recipientPhone: STR(b.recipientPhone, 40),
       message: STR(b.message, 500), deliverAt: scheduled ? deliverAt : null,
-      status: scheduled ? "PENDING_DELIVERY" : "ACTIVE", expiresAt, paymentMethod: STR(b.paymentMethod, 20) || "CARD",
+      status: scheduled ? "PENDING_DELIVERY" : "ACTIVE", expiresAt, paymentMethod: payMethod,
     },
   });
   await prisma.voucherType.update({ where: { id: type.id }, data: { soldCount: { increment: 1 } } });
+  if (payMethod === "WALLET" && req.userId) {
+    await chargeWallet({ userId: req.userId, amount: price, source: "VOUCHER", refId: voucher.id, code: voucher.code, description: `Gift voucher · ${type.name}` });
+  }
   await recordTransaction({ businessId: business.id, source: "VOUCHER", refId: voucher.id, code: voucher.code, description: `Gift voucher · ${type.name}`, customerName: purchaserName || recipientName, customerPhone: STR(b.recipientPhone, 40), userId: req.userId ?? null, amount: price, method: voucher.paymentMethod });
   await notifyAdmins({
     kind: "VOUCHER_SOLD",

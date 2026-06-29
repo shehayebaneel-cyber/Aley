@@ -172,6 +172,14 @@ export const DashboardIcon = ({ className = "h-5 w-5" }: P) => (
     <rect x="3" y="16" width="7" height="5" rx="1" />
   </svg>
 );
+export const GridIcon = ({ className = "h-5 w-5" }: P) => (
+  <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+);
 export const TrashIcon = ({ className = "h-5 w-5" }: P) => (
   <svg viewBox="0 0 24 24" {...base} aria-hidden className={className}>
     <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />

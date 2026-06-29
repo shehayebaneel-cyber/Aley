@@ -4,6 +4,7 @@ import { optionalUser } from "../auth";
 import { prisma } from "../db";
 import { durationOptions, facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
 import { recordTransaction } from "../lib/ledger";
+import { chargeWallet, walletBalance } from "../lib/wallet";
 import { notifyAdmins } from "../lib/notify";
 import { parseArr, type HoursRow } from "../lib/serialize";
 
@@ -76,6 +77,15 @@ facilityRouter.post("/book", optionalUser, async (req, res) => {
   if (!free.some((s) => s.time === startTime)) return res.status(409).json({ error: "That slot was just taken — please pick another." });
 
   const price = priceFor(facility.hourlyRate, pricing, date, _toMin(startTime), durationMin);
+
+  // Optional wallet payment (requires sign-in + sufficient balance).
+  const payMethod = String(b.paymentMethod ?? "").toUpperCase();
+  if (payMethod === "WALLET") {
+    if (!req.userId) return res.status(401).json({ error: "Please sign in to pay with your wallet." });
+    const balance = await walletBalance(req.userId);
+    if (balance < price) return res.status(402).json({ error: "Your wallet balance is too low for this booking.", code: "INSUFFICIENT_FUNDS", balance, total: price });
+  }
+
   const booking = await prisma.facilityBooking.create({
     data: {
       businessId: business.id, facilityId: facility.id, userId: req.userId ?? null,
@@ -84,7 +94,10 @@ facilityRouter.post("/book", optionalUser, async (req, res) => {
       price, facilityName: facility.name, status: "CONFIRMED", checkInCode: genCode(),
     },
   });
-  await recordTransaction({ businessId: business.id, source: "FACILITY", refId: booking.id, code: booking.checkInCode, description: `${facility.name} · ${date} ${startTime}`, customerName, customerPhone, userId: req.userId ?? null, amount: price });
+  if (payMethod === "WALLET" && req.userId) {
+    await chargeWallet({ userId: req.userId, amount: price, source: "FACILITY", refId: booking.id, code: booking.checkInCode, description: `${facility.name} · ${date} ${startTime}` });
+  }
+  await recordTransaction({ businessId: business.id, source: "FACILITY", refId: booking.id, code: booking.checkInCode, description: `${facility.name} · ${date} ${startTime}`, customerName, customerPhone, userId: req.userId ?? null, amount: price, method: payMethod === "WALLET" ? "WALLET" : "CARD" });
   await notifyAdmins({
     kind: "FACILITY_BOOKING",
     title: `Court booked: ${business.name}`,

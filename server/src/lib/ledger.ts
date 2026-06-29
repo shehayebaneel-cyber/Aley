@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { getMarketplaceSettings, resolveCommissionRate } from "./marketplace";
+import { refundToWallet, type WalletSource } from "./wallet";
 
 // Marketplace accounting backbone: the Transaction table is the financial ledger
 // (one row per money event with gross/commission/net + payment & payout status).
@@ -81,6 +82,10 @@ export async function refundTransaction(id: number, amount?: number, by?: string
       else if (tx.source === "FACILITY") await prisma.facilityBooking.update({ where: { id: tx.refId }, data: { status: "CANCELLED" } });
       else if (tx.source === "ORDER") await prisma.businessOrder.update({ where: { id: tx.refId }, data: { status: "CANCELLED" } });
     } catch { /* item may already be gone */ }
+  }
+  // If the customer paid from their wallet, return the refunded amount to it.
+  if (tx.method === "WALLET" && tx.userId) {
+    await refundToWallet({ userId: tx.userId, amount: refund, source: tx.source as WalletSource, refId: tx.refId, code: tx.code, description: `Refund · ${tx.description || tx.code || tx.source}`, createdBy: by }).catch(() => {});
   }
   return { ok: true, refunded: refund, refundedAmount: updated.refundedAmount, status: updated.status };
 }

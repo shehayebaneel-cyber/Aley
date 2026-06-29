@@ -14,6 +14,7 @@ import { MyOrders } from "./pages/MyOrders";
 import { MyBookings } from "./pages/MyBookings";
 import { GiftVouchers } from "./pages/GiftVouchers";
 import { VoucherView } from "./pages/VoucherView";
+import { Wallet } from "./pages/Wallet";
 import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { Explore } from "./pages/Explore";
@@ -83,6 +84,7 @@ const TITLES: Record<string, string> = {
   "/orders": "My orders",
   "/bookings": "My appointments",
   "/gift-vouchers": "My gift vouchers",
+  "/wallet": "My wallet",
   "/saved": "Saved places",
 };
 function TitleManager() {
@@ -126,6 +128,7 @@ export default function App() {
           <Route path="/bookings" element={<MyBookings />} />
           <Route path="/gift-vouchers" element={<GiftVouchers />} />
           <Route path="/voucher/:code" element={<VoucherView />} />
+          <Route path="/wallet" element={<Wallet />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />

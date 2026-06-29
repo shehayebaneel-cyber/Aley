@@ -2,8 +2,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckIcon, CloseIcon } from "./icons";
 import { QRCode, redeemUrl } from "./QRCode";
+import { TopUpModal } from "./TopUpModal";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, userApi } from "../lib/api";
+import { useWallet } from "../lib/useWallet";
 import type { Business, VoucherType } from "../types";
 
 const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
@@ -19,6 +21,9 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState<{ code: string } | null>(null);
+  const { balance: walletBalance, reload: reloadWallet } = useWallet();
+  const [payMethod, setPayMethod] = useState("CARD");
+  const [topUp, setTopUp] = useState(false);
 
   useEffect(() => {
     api.get<{ types: VoucherType[] }>(`/api/vouchers/${business.slug}`).then((d) => { setTypes(d.types); if (d.types.length === 1) setType(d.types[0]); }).catch(() => setTypes([]));
@@ -26,6 +31,7 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
 
   const amount = type ? (type.value > 0 ? type.value : customValue) : 0;
   const price = type ? (type.price > 0 ? type.price : amount) : 0;
+  const walletShort = payMethod === "WALLET" && walletBalance < price;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -33,6 +39,7 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
     if (!form.recipientName.trim()) return setErr("Recipient name is required.");
     if (!form.recipientEmail.trim() && !form.recipientPhone.trim()) return setErr("Add the recipient's email or phone.");
     if (type.value === 0 && (!amount || amount < 1)) return setErr("Enter a voucher amount.");
+    if (payMethod === "WALLET" && walletBalance < price) return setErr("Your wallet balance is too low. Add money or pay by card.");
     setBusy(true); setErr("");
     const client = user ? userApi : api;
     try {
@@ -40,7 +47,7 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
         businessId: business.id, voucherTypeId: type.id, value: amount,
         recipientName: form.recipientName, recipientEmail: form.recipientEmail, recipientPhone: form.recipientPhone,
         message: form.message, deliverAt: form.deliverAt || null,
-        purchaserName: form.purchaserName, purchaserEmail: form.purchaserEmail, paymentMethod: "CARD",
+        purchaserName: form.purchaserName, purchaserEmail: form.purchaserEmail, paymentMethod: payMethod,
       });
       setDone({ code: r.voucher.code });
     } catch (e2) {
@@ -49,6 +56,7 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <div className="card pop-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
@@ -120,9 +128,21 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
                   <p className="text-sm font-semibold text-ink">Your details</p>
                   <input value={form.purchaserName} onChange={(e) => setForm({ ...form, purchaserName: e.target.value })} placeholder="Your name" className="input" />
                   <input value={form.purchaserEmail} onChange={(e) => setForm({ ...form, purchaserEmail: e.target.value })} placeholder="Your email" className="input" />
-                  <div className="rounded-xl border border-border p-3 text-xs text-muted">💳 Demo payment — your card is not charged. Total <span className="font-semibold text-ink">{money(price)}</span>.</div>
+                  <p className="text-sm font-semibold text-ink">Payment</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setPayMethod("CARD")} className={`chip ${payMethod === "CARD" ? "chip-active" : ""}`}>💳 Card</button>
+                    {user && <button type="button" onClick={() => setPayMethod("WALLET")} className={`chip ${payMethod === "WALLET" ? "chip-active" : ""}`}>💰 Wallet (${walletBalance.toFixed(2)})</button>}
+                  </div>
+                  {payMethod === "WALLET" && walletShort ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
+                      <span className="font-medium text-amber-700">Balance too low — needs {money(price)}.</span>
+                      <button type="button" onClick={() => setTopUp(true)} className="btn btn-ghost px-3 py-1 text-xs">+ Add money</button>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-border p-3 text-xs text-muted">💳 Demo payment — {payMethod === "WALLET" ? "paid from your wallet" : "your card is not charged"}. Total <span className="font-semibold text-ink">{money(price)}</span>.</div>
+                  )}
                   {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
-                  <button type="submit" disabled={busy} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Processing…" : `Pay ${money(price)} & send`}</button>
+                  <button type="submit" disabled={busy || walletShort} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Processing…" : `Pay ${money(price)} & send`}</button>
                   <button type="button" onClick={() => setStep(0)} className="btn btn-ghost w-full py-2 text-sm">Back</button>
                 </form>
               )}
@@ -131,5 +151,7 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
         )}
       </div>
     </div>
+    {topUp && <TopUpModal balance={walletBalance} onClose={() => setTopUp(false)} onDone={() => { reloadWallet(); setTopUp(false); }} />}
+    </>
   );
 }

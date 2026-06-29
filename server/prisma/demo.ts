@@ -36,7 +36,7 @@ export const CATS: CatDef[] = [
   { slug: "coffee-shops", name: "Coffee Shops", icon: "☕", color: "#b45309", group: "Food & Drinks", kind: "cafe", count: 12 },
   { slug: "restaurants", name: "Restaurants", icon: "🍽️", color: "#dc2626", group: "Food & Drinks", kind: "restaurant", count: 16 },
   { slug: "lebanese", name: "Lebanese Restaurants", icon: "🫓", color: "#c2410c", group: "Food & Drinks", kind: "restaurant", count: 7 },
-  { slug: "fast-food", name: "Fast Food", icon: "🍔", color: "#ea580c", group: "Food & Drinks", kind: "restaurant", count: 8 },
+  { slug: "fast-food", name: "Fast Food", icon: "🍟", color: "#ea580c", group: "Food & Drinks", kind: "restaurant", count: 8 },
   { slug: "burgers", name: "Burgers", icon: "🍔", color: "#f97316", group: "Food & Drinks", kind: "restaurant", count: 5 },
   { slug: "pizza", name: "Pizza", icon: "🍕", color: "#e11d48", group: "Food & Drinks", kind: "restaurant", count: 5 },
   { slug: "shawarma", name: "Shawarma", icon: "🌯", color: "#b91c1c", group: "Food & Drinks", kind: "restaurant", count: 6 },
@@ -136,7 +136,7 @@ export const CATS: CatDef[] = [
   { slug: "pest-control", name: "Pest Control", icon: "🐜", color: "#57534e", group: "Home & Living", kind: "service", count: 3 },
   { slug: "garden-centers", name: "Garden Centers", icon: "🌳", color: "#15803d", group: "Home & Living", kind: "shop", count: 3 },
   { slug: "landscaping", name: "Landscaping", icon: "🌿", color: "#16a34a", group: "Home & Living", kind: "service", count: 3 },
-  { slug: "swimming-pools", name: "Swimming Pools", icon: "🏊", color: "#0ea5e9", group: "Home & Living", kind: "service", count: 3 },
+  { slug: "pool-services", name: "Pool Construction & Maintenance", icon: "💧", color: "#0ea5e9", group: "Home & Living", kind: "service", count: 3 },
   { slug: "security-systems", name: "Security Systems", icon: "🔒", color: "#1e40af", group: "Home & Living", kind: "service", count: 3 },
 
   // 💼 Professional Services
@@ -164,7 +164,6 @@ export const CATS: CatDef[] = [
   { slug: "resorts", name: "Resorts", icon: "🌴", color: "#16a34a", group: "Stay & Tourism", kind: "hotel", count: 3 },
   { slug: "airbnb-hosts", name: "Airbnb Hosts", icon: "🛏️", color: "#db2777", group: "Stay & Tourism", kind: "hotel", count: 3 },
   { slug: "tourist-attractions", name: "Tourist Attractions", icon: "📸", color: "#9333ea", group: "Stay & Tourism", kind: "service", count: 3 },
-  { slug: "hiking-trails", name: "Hiking Trails", icon: "🥾", color: "#15803d", group: "Stay & Tourism", kind: "service", count: 3 },
   { slug: "parks", name: "Parks", icon: "🏞️", color: "#16a34a", group: "Stay & Tourism", kind: "service", count: 2 },
   { slug: "historical-sites", name: "Historical Sites", icon: "🏛️", color: "#a16207", group: "Stay & Tourism", kind: "service", count: 3 },
   { slug: "museums", name: "Museums", icon: "🖼️", color: "#7c3aed", group: "Stay & Tourism", kind: "service", count: 2 },
@@ -183,27 +182,39 @@ export const CATS: CatDef[] = [
   { slug: "driving-schools", name: "Driving Schools", icon: "🚸", color: "#f59e0b", group: "Education", kind: "edu", count: 3 },
   { slug: "training-centers", name: "Training Centers", icon: "📋", color: "#0f766e", group: "Education", kind: "edu", count: 3 },
 
-  // 🎭 Entertainment
+  // 🎭 Entertainment (leisure, fun & social — not playing sports)
   { slug: "cinemas", name: "Cinemas", icon: "🎬", color: "#1e40af", group: "Entertainment", kind: "service", count: 3 },
-  { slug: "escape-rooms", name: "Escape Rooms", icon: "🗝️", color: "#7c3aed", group: "Entertainment", kind: "service", count: 3 },
   { slug: "bowling", name: "Bowling", icon: "🎳", color: "#2563eb", group: "Entertainment", kind: "service", count: 2 },
-  { slug: "kids-play-areas", name: "Kids Play Areas", icon: "🎠", color: "#f59e0b", group: "Entertainment", kind: "service", count: 3 },
-  { slug: "gaming-lounges", name: "Gaming Lounges", icon: "🕹️", color: "#7c3aed", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "escape-rooms", name: "Escape Rooms", icon: "🗝️", color: "#7c3aed", group: "Entertainment", kind: "service", count: 3 },
   { slug: "pool-billiards", name: "Pool & Billiards", icon: "🎱", color: "#404040", group: "Entertainment", kind: "service", count: 2 },
-  { slug: "sports-clubs", name: "Sports Clubs", icon: "⚽", color: "#16a34a", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "gaming-lounges", name: "Gaming Lounges", icon: "🕹️", color: "#7c3aed", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "kids-play-areas", name: "Kids Play Areas", icon: "🎠", color: "#f59e0b", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "trampoline-parks", name: "Trampoline Parks", icon: "🤸", color: "#16a34a", group: "Entertainment", kind: "service", count: 0 },
+  { slug: "laser-tag", name: "Laser Tag", icon: "🔫", color: "#dc2626", group: "Entertainment", kind: "service", count: 0 },
+  { slug: "arcades", name: "Arcades", icon: "👾", color: "#7c3aed", group: "Entertainment", kind: "service", count: 0 },
   { slug: "event-venues", name: "Event Venues", icon: "🎪", color: "#db2777", group: "Entertainment", kind: "service", count: 3 },
   { slug: "wedding-venues", name: "Wedding Venues", icon: "💒", color: "#ec4899", group: "Entertainment", kind: "service", count: 3 },
+  { slug: "live-music", name: "Live Music Venues", icon: "🎤", color: "#db2777", group: "Entertainment", kind: "service", count: 3 },
   { slug: "nightlife", name: "Nightlife", icon: "🍸", color: "#7e22ce", group: "Entertainment", kind: "service", count: 3 },
-  { slug: "live-music", name: "Live Music", icon: "🎤", color: "#db2777", group: "Entertainment", kind: "service", count: 3 },
 
-  // 🏟️ Sports & Recreation (hourly facility rentals)
+  // 🏆 Sports & Recreation (places to play sports & do recreational activities)
+  // Court/field/pool categories rent by the hour → facility booking with live availability.
   { slug: "football-fields", name: "Football Fields", icon: "⚽", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
-  { slug: "padel", name: "Padel", icon: "🎾", color: "#0ea5e9", group: "Sports & Recreation", kind: "service", count: 0 },
-  { slug: "tennis", name: "Tennis", icon: "🎾", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
-  { slug: "basketball", name: "Basketball", icon: "🏀", color: "#ea580c", group: "Sports & Recreation", kind: "service", count: 0 },
-  { slug: "volleyball", name: "Volleyball", icon: "🏐", color: "#f59e0b", group: "Sports & Recreation", kind: "service", count: 0 },
-  { slug: "squash", name: "Squash", icon: "🥎", color: "#7c3aed", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "mini-football", name: "Mini Football", icon: "🥅", color: "#15803d", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "tennis", name: "Tennis Courts", icon: "🎾", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "padel", name: "Padel Courts", icon: "🏓", color: "#0ea5e9", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "squash", name: "Squash Courts", icon: "🥎", color: "#7c3aed", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "basketball", name: "Basketball Courts", icon: "🏀", color: "#ea580c", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "volleyball", name: "Volleyball Courts", icon: "🏐", color: "#f59e0b", group: "Sports & Recreation", kind: "service", count: 0 },
   { slug: "swimming-pools", name: "Swimming Pools", icon: "🏊", color: "#0891b2", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "running-tracks", name: "Running Tracks", icon: "🏃", color: "#ea580c", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "hiking-trails", name: "Hiking Trails", icon: "🥾", color: "#15803d", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "cycling-trails", name: "Cycling Trails", icon: "🚴", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "horse-riding", name: "Horse Riding", icon: "🐎", color: "#a16207", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "paintball", name: "Paintball", icon: "🎯", color: "#dc2626", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "go-karting", name: "Go-Karting", icon: "🏎️", color: "#1e40af", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "sports-clubs", name: "Sports Clubs", icon: "🏅", color: "#16a34a", group: "Sports & Recreation", kind: "service", count: 0 },
+  { slug: "sports-academies", name: "Sports Academies", icon: "🥇", color: "#ca8a04", group: "Sports & Recreation", kind: "service", count: 0 },
 
   // 📢 Community
   { slug: "charity-organizations", name: "Charity Organizations", icon: "🤝", color: "#16a34a", group: "Community", kind: "service", count: 3 },
@@ -219,7 +230,7 @@ export const CATS: CatDef[] = [
   { slug: "civil-defense", name: "Civil Defense", icon: "🚨", color: "#ea580c", group: "Essential Services", kind: "service", count: 0 },
   { slug: "fire-department", name: "Fire Department", icon: "🚒", color: "#dc2626", group: "Essential Services", kind: "service", count: 0 },
   { slug: "government-offices", name: "Government Offices", icon: "🏛️", color: "#57534e", group: "Essential Services", kind: "service", count: 0 },
-  { slug: "municipality", name: "Municipality", icon: "🏛️", color: "#0f766e", group: "Essential Services", kind: "service", count: 0 },
+  { slug: "municipality", name: "Municipality", icon: "🏢", color: "#0f766e", group: "Essential Services", kind: "service", count: 0 },
   { slug: "utilities", name: "Utilities", icon: "💡", color: "#ca8a04", group: "Essential Services", kind: "service", count: 0 },
   { slug: "postal-services", name: "Postal Services", icon: "📮", color: "#dc2626", group: "Essential Services", kind: "service", count: 0 },
 ];
@@ -282,8 +293,10 @@ const POOL_OVERRIDE: Record<string, string> = {
   "tourist-attractions": "nature", "historical-sites": "nature", landscaping: "nature",
   "garden-centers": "nature", resorts: "hotel", "guest-houses": "hotel", apartments: "hotel",
   // Sports & Recreation
-  "football-fields": "sports", padel: "sports", tennis: "sports", basketball: "sports",
-  volleyball: "sports", squash: "sports", "swimming-pools": "sports", "sports-clubs": "sports", gyms: "sports",
+  "football-fields": "sports", "mini-football": "sports", padel: "sports", tennis: "sports", basketball: "sports",
+  volleyball: "sports", squash: "sports", "swimming-pools": "sports", "running-tracks": "sports", "sports-clubs": "sports",
+  "sports-academies": "sports", "go-karting": "sports", paintball: "sports", gyms: "sports",
+  "cycling-trails": "nature", "horse-riding": "nature",
 };
 const poolFor = (slug: string): string[] => PHOTOS[POOL_OVERRIDE[slug] ?? KIND[slug] ?? "shop"] ?? PHOTOS.shop;
 // Deterministic single themed photo (business cover / offer / event).

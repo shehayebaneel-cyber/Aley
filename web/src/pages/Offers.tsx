@@ -5,7 +5,7 @@ import { useFetch } from "../lib/useFetch";
 import type { Offer } from "../types";
 
 const CITY = "aley";
-const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
+const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Sports & Recreation", "Community", "Essential Services", "More"];
 
 export function Offers() {
   const { data: offers, loading } = useFetch<Offer[]>(`/api/offers?city=${CITY}`);

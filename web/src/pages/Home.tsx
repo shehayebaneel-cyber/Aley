@@ -21,7 +21,7 @@ const CAPABILITIES = [
 ];
 
 // The high-level "main categories" (groups) + display order and icons.
-const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Community", "Essential Services", "More"];
+const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Sports & Recreation", "Community", "Essential Services", "More"];
 const GROUP_META: Record<string, { icon: string; color: string }> = {
   "Food & Drinks": { icon: "🍴", color: "#f97316" },
   "Shopping": { icon: "🛍️", color: "#a855f7" },
@@ -32,6 +32,7 @@ const GROUP_META: Record<string, { icon: string; color: string }> = {
   "Stay & Tourism": { icon: "🏨", color: "#6366f1" },
   "Education": { icon: "🎓", color: "#7c3aed" },
   "Entertainment": { icon: "🎭", color: "#db2777" },
+  "Sports & Recreation": { icon: "🏆", color: "#16a34a" },
   "Community": { icon: "📢", color: "#0d9488" },
   "Essential Services": { icon: "🚨", color: "#dc2626" },
   "More": { icon: "🏷️", color: "#64748b" },

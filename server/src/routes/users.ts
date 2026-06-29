@@ -7,6 +7,7 @@ import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedul
 import { effectiveStatus } from "../lib/voucher";
 import { outBusiness, parseArr, type HoursRow } from "../lib/serialize";
 import { notifyNextWaitlist } from "../lib/waitlist";
+import { addWalletEntry, walletSummary } from "../lib/wallet";
 
 const userToken = (id: number) => signToken({ userId: id, role: "user" });
 const safe = (u: { id: number; name: string; email: string | null; avatar: string | null }) => ({ id: u.id, name: u.name, email: u.email, avatar: u.avatar });
@@ -200,4 +201,26 @@ userRouter.patch("/facility-bookings/:id", async (req, res) => {
     return res.json(await prisma.facilityBooking.update({ where: { id: fb.id }, data: { date, startTime, price } }));
   }
   res.status(400).json({ error: "Unknown action." });
+});
+
+// ---- Wallet (prepaid balance) ----
+const TOPUP_METHODS = new Set(["CARD", "WHISH"]);
+
+// GET /api/me/wallet — balance + recent activity + lifetime totals.
+userRouter.get("/wallet", async (req, res) => {
+  res.json(await walletSummary(req.userId!));
+});
+
+// POST /api/me/wallet/topup — load money. MOCK gateway: succeeds instantly and
+// records a COMPLETED top-up. A real provider would create a PENDING entry and
+// confirm it on webhook (the ledger already supports that status).
+userRouter.post("/wallet/topup", async (req, res) => {
+  const amount = Math.round((Number(req.body?.amount) || 0) * 100) / 100;
+  const method = String(req.body?.method ?? "CARD").toUpperCase();
+  if (!(amount > 0)) return res.status(400).json({ error: "Enter an amount to load." });
+  if (amount < 1) return res.status(400).json({ error: "The minimum top-up is $1." });
+  if (amount > 1000) return res.status(400).json({ error: "The maximum top-up is $1,000 at a time." });
+  if (!TOPUP_METHODS.has(method)) return res.status(400).json({ error: "Unsupported payment method." });
+  await addWalletEntry({ userId: req.userId!, type: "TOPUP", amount, method, source: "TOPUP", description: `Wallet top-up · ${method === "WHISH" ? "Whish" : "Card"}` });
+  res.status(201).json(await walletSummary(req.userId!));
 });

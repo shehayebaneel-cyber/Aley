@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { recordEvent, recordMany } from "../lib/analytics";
 import { prisma } from "../db";
+import { isFacilityRentalCategory } from "../lib/booking";
 import { isOpenNow, outBusiness, outCard, parseArr, type HoursRow } from "../lib/serialize";
 
 export const businessesRouter = Router();
@@ -87,6 +88,8 @@ businessesRouter.get("/:slug", async (req, res) => {
   };
   res.json({
     ...outBusiness(rest),
+    // Sports & Recreation rental categories (courts/fields/pools) book by the hour.
+    facilityRental: isFacilityRentalCategory(business.category?.slug),
     hasFacilities: facilities.length > 0,
     facilities: facilities.map((f) => ({ id: f.id, name: f.name, type: f.type, description: f.description, image: f.image, hourlyRate: f.hourlyRate, capacityNote: f.capacityNote })),
     hasVouchers: voucherTypes.some((t) => t.maxQuantity === 0 || t.soldCount < t.maxQuantity),

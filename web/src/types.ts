@@ -288,6 +288,25 @@ export interface Wallet {
   pendingBalance: number; availableBalance: number; inPayout: number; paidOut: number;
   lifetimeEarnings: number; outstandingBalance: number;
 }
+// Customer prepaid wallet (distinct from the business `Wallet` above).
+export interface WalletEntry {
+  id: number;
+  type: "TOPUP" | "SPEND" | "REFUND" | "ADJUSTMENT" | "BONUS";
+  amount: number; // signed: + credit, − debit
+  status: string; // COMPLETED | PENDING | FAILED
+  method: string;
+  source: string; // ORDER | VOUCHER | FACILITY | TOPUP | REFUND | ADJUSTMENT
+  refId: number;
+  code: string;
+  description: string;
+  createdAt: string;
+}
+export interface WalletSummary {
+  balance: number;
+  toppedUp: number;
+  spent: number;
+  entries: WalletEntry[];
+}
 export interface Payout {
   id: number; businessId: number; periodStart: string; periodEnd: string;
   grossSales: number; commission: number; refunds: number; adjustments: number; net: number;
@@ -458,6 +477,7 @@ export interface Business {
   bookingCta?: string;
   appointmentBookable?: boolean;
   hasFacilities?: boolean;
+  facilityRental?: boolean;
   facilities?: Facility[];
   hasVouchers?: boolean;
   tags: string[];

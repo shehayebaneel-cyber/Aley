@@ -195,6 +195,28 @@ model User {
   appointments Appointment[]
   facilityBookings FacilityBooking[]
   purchasedVouchers Voucher[] @relation("purchasedVouchers")
+  walletEntries WalletEntry[]
+}
+
+// Customer prepaid wallet ledger: one row per money event. The balance is
+// COMPUTED from these rows (sum of COMPLETED entries) — never a stored, drifting
+// number — mirroring the business-side Transaction ledger. Gateway-agnostic:
+// top-ups record now and a real payment provider can plug in later.
+model WalletEntry {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // TOPUP | SPEND | REFUND | ADJUSTMENT | BONUS
+  amount      Float    @default(0) // signed: + credit (top-up/refund/bonus), − debit (spend)
+  status      String   @default("COMPLETED") // COMPLETED | PENDING | FAILED
+  method      String   @default("CARD") // how it was loaded: CARD | WHISH | CASH | MANUAL
+  source      String   @default("") // ORDER | VOUCHER | FACILITY | APPOINTMENT | TOPUP | REFUND | ADJUSTMENT
+  refId       Int      @default(0) // id of the related order/voucher/booking/transaction
+  code        String   @default("") // order number / voucher code / reference
+  description String   @default("")
+  createdBy   String   @default("") // admin who made a manual adjustment
+  createdAt   DateTime @default(now())
+  @@index([userId])
 }
 
 // A table/booking request a visitor makes to a business. The owner confirms or

@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { CalendarIcon, CheckIcon, CloseIcon } from "./icons";
 import { QRCode, checkInUrl } from "./QRCode";
+import { TopUpModal } from "./TopUpModal";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, userApi } from "../lib/api";
+import { useWallet } from "../lib/useWallet";
 import type { Business, Facility, FacilitySlot } from "../types";
 
 const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
@@ -23,6 +25,9 @@ export function FacilityBookingModal({ business, facilities, initialFacilityId, 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState<{ code?: string; price?: number } | null>(null);
+  const { balance: walletBalance, reload: reloadWallet } = useWallet();
+  const [payMethod, setPayMethod] = useState("VENUE");
+  const [topUp, setTopUp] = useState(false);
 
   // Fetch full facility options (durations, pricing) once.
   useEffect(() => {
@@ -47,18 +52,22 @@ export function FacilityBookingModal({ business, facilities, initialFacilityId, 
 
   const steps = facilities.length > 1 ? ["facility", "when", "details"] : ["when", "details"];
   const current = steps[step];
+  const slotPrice = slots?.find((s) => s.time === time)?.price ?? 0;
+  const walletShort = payMethod === "WALLET" && walletBalance < slotPrice;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy || !facility || !duration) return;
     if (!form.name.trim() || !form.phone.trim()) return setErr("Name and phone are required.");
     if (!time) return setErr("Please pick a time.");
+    if (payMethod === "WALLET" && walletBalance < slotPrice) return setErr("Your wallet balance is too low. Add money or pay at the venue.");
     setBusy(true); setErr("");
     const client = user ? userApi : api;
     try {
       const r = await client.post<{ booking: { checkInCode?: string; price?: number } }>("/api/facilities/book", {
         businessId: business.id, facilityId: facility.id, date, startTime: time, durationMin: duration,
         players: Number(form.players) || 0, customerName: form.name, customerPhone: form.phone, note: form.note,
+        paymentMethod: payMethod === "WALLET" ? "WALLET" : "VENUE",
       });
       setDone({ code: r.booking?.checkInCode, price: r.booking?.price });
     } catch (e2) {
@@ -71,6 +80,7 @@ export function FacilityBookingModal({ business, facilities, initialFacilityId, 
   const canNext = current === "facility" ? !!facility : current === "when" ? !!time : true;
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <div className="card pop-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-b-none p-6 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
@@ -152,8 +162,19 @@ export function FacilityBookingModal({ business, facilities, initialFacilityId, 
                   <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required placeholder="Phone number" className="input" />
                   <input type="number" min={0} max={99} value={form.players} onChange={(e) => setForm({ ...form, players: e.target.value })} placeholder="Number of players (optional)" className="input" />
                   <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} placeholder="Notes (optional)" className="input" />
+                  <p className="text-sm font-semibold text-ink">Payment</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setPayMethod("VENUE")} className={`chip ${payMethod === "VENUE" ? "chip-active" : ""}`}>🏟️ Pay at venue</button>
+                    {user && <button type="button" onClick={() => setPayMethod("WALLET")} className={`chip ${payMethod === "WALLET" ? "chip-active" : ""}`}>💰 Wallet (${walletBalance.toFixed(2)})</button>}
+                  </div>
+                  {payMethod === "WALLET" && walletShort && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
+                      <span className="font-medium text-amber-700">Balance too low — needs {money(slotPrice)}.</span>
+                      <button type="button" onClick={() => setTopUp(true)} className="btn btn-ghost px-3 py-1 text-xs">+ Add money</button>
+                    </div>
+                  )}
                   {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
-                  <button type="submit" disabled={busy} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Booking…" : "Confirm booking"}</button>
+                  <button type="submit" disabled={busy || walletShort} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Booking…" : payMethod === "WALLET" ? `Pay ${money(slotPrice)} & book` : "Confirm booking"}</button>
                 </form>
               )}
             </div>
@@ -168,5 +189,7 @@ export function FacilityBookingModal({ business, facilities, initialFacilityId, 
         )}
       </div>
     </div>
+    {topUp && <TopUpModal balance={walletBalance} onClose={() => setTopUp(false)} onDone={() => { reloadWallet(); setTopUp(false); }} />}
+    </>
   );
 }

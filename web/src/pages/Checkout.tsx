@@ -1,10 +1,12 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MapPicker } from "../components/MapPicker";
+import { TopUpModal } from "../components/TopUpModal";
 import { useCart } from "../context/CartContext";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, currency, userApi } from "../lib/api";
 import { useFetch } from "../lib/useFetch";
+import { useWallet } from "../lib/useWallet";
 
 export function Checkout() {
   const { groups, subtotal, count, clear } = useCart();
@@ -18,9 +20,13 @@ export function Checkout() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [topUp, setTopUp] = useState(false);
+  const { balance: walletBalance, reload: reloadWallet } = useWallet();
   const set = (p: Partial<typeof f>) => setF({ ...f, ...p });
   const freeOver = cfg?.freeDeliveryThreshold ?? 30;
   const fee = f.fulfillment === "PICKUP" || (freeOver > 0 && subtotal >= freeOver) || subtotal === 0 ? 0 : (cfg?.deliveryFee ?? 3);
+  const total = subtotal + fee;
+  const walletShort = f.paymentMethod === "WALLET" && walletBalance < total;
 
   if (count === 0) return <div className="mx-auto max-w-md px-4 py-24 text-center"><p className="text-muted">Your cart is empty.</p><Link to="/explore" className="btn btn-primary mt-4 px-6 py-2.5">Browse</Link></div>;
 
@@ -29,6 +35,7 @@ export function Checkout() {
     if (busy) return;
     if (!f.customerName.trim() || !f.customerPhone.trim()) return setError("Name and phone are required.");
     if (f.fulfillment === "DELIVERY" && !f.address.trim()) return setError("A delivery address is required.");
+    if (f.paymentMethod === "WALLET" && walletBalance < total) return setError("Your wallet balance is too low. Add money or choose another payment method.");
     setBusy(true); setError("");
     const client = user ? userApi : api;
     try {
@@ -84,12 +91,20 @@ export function Checkout() {
 
           <section className="card p-5">
             <h2 className="font-display font-bold text-ink">Payment</h2>
-            <div className="mt-3 flex gap-2">
-              {[["CASH", "💵 Cash on delivery"], ["ONLINE", "💳 Pay online"]].map(([v, label]) => (
-                <button key={v} type="button" onClick={() => set({ paymentMethod: v })} className={`chip ${f.paymentMethod === v ? "chip-active" : ""}`}>{label}</button>
-              ))}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => set({ paymentMethod: "CASH" })} className={`chip ${f.paymentMethod === "CASH" ? "chip-active" : ""}`}>💵 Cash on delivery</button>
+              <button type="button" onClick={() => set({ paymentMethod: "ONLINE" })} className={`chip ${f.paymentMethod === "ONLINE" ? "chip-active" : ""}`}>💳 Pay online</button>
+              {user && <button type="button" onClick={() => set({ paymentMethod: "WALLET" })} className={`chip ${f.paymentMethod === "WALLET" ? "chip-active" : ""}`}>💰 Wallet (${walletBalance.toFixed(2)})</button>}
             </div>
             {f.paymentMethod === "ONLINE" && <p className="mt-2 text-xs text-muted">Online payment is in demo mode — no real charge yet.</p>}
+            {f.paymentMethod === "WALLET" && (walletShort ? (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
+                <span className="font-medium text-amber-700">Balance too low — this order is {currency(total)}.</span>
+                <button type="button" onClick={() => setTopUp(true)} className="btn btn-ghost px-3 py-1 text-xs">+ Add money</button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted">Paid instantly from your wallet — balance after: ${(walletBalance - total).toFixed(2)}.</p>
+            ))}
           </section>
         </div>
 
@@ -106,9 +121,10 @@ export function Checkout() {
             <div className="mt-2 flex justify-between border-t border-border pt-2 text-base"><dt className="font-bold text-ink">Total</dt><dd className="font-extrabold text-ink">{currency(subtotal + fee)}</dd></div>
           </dl>
           {error && <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{error}</p>}
-          <button type="submit" disabled={busy} className="btn btn-primary mt-4 w-full py-3 disabled:opacity-60">{busy ? "Placing…" : "Place order"}</button>
+          <button type="submit" disabled={busy || walletShort} className="btn btn-primary mt-4 w-full py-3 disabled:opacity-60">{busy ? "Placing…" : f.paymentMethod === "WALLET" ? `Pay ${currency(total)} with wallet` : "Place order"}</button>
         </aside>
       </form>
+      {topUp && <TopUpModal balance={walletBalance} onClose={() => setTopUp(false)} onDone={() => { reloadWallet(); setTopUp(false); }} />}
     </div>
   );
 }
