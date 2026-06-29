@@ -23,6 +23,7 @@ const LINKS = [
   { to: "/admin/events-offers", tk: "anav.eventsoffers" },
   { to: "/admin/cities", tk: "anav.cities" },
   { to: "/admin/vouchers", tk: "anav.vouchers" },
+  { to: "/admin/payments", tk: "anav.payments" },
   { to: "/admin/marketplace", tk: "anav.marketplace" },
   { to: "/admin/users", tk: "anav.users" },
 ];

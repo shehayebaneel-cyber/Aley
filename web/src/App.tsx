@@ -46,6 +46,7 @@ import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
 import { AdminVouchers } from "./pages/admin/AdminVouchers";
+import { AdminPayments } from "./pages/admin/AdminPayments";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
 import { CheckIn } from "./pages/owner/CheckIn";
 import { RedeemVoucher } from "./pages/owner/RedeemVoucher";
@@ -165,6 +166,7 @@ export default function App() {
           <Route path="events-offers" element={<AdminEventsOffers />} />
           <Route path="cities" element={<AdminCities />} />
           <Route path="vouchers" element={<AdminVouchers />} />
+          <Route path="payments" element={<AdminPayments />} />
           <Route path="marketplace" element={<AdminMarketplace />} />
           <Route path="content" element={<AdminContent />} />
           <Route path="users" element={<AdminUsers />} />

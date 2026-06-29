@@ -10,9 +10,9 @@ import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../c
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember, Voucher, VoucherStats, VoucherType, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, LedgerSummary, Offer, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, WaitlistEntry } from "../../types";
 
-const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -85,6 +85,7 @@ export function BusinessDashboard() {
 
       <div className="mt-6">
         {tab === "Overview" && <Overview biz={biz} />}
+        {tab === "Earnings" && <EarningsTab biz={biz} />}
         {tab === "Analytics" && <AnalyticsTab biz={biz} />}
         {tab === "Assistant" && <AssistantTab biz={biz} />}
         {tab === "Orders" && <OrdersTab biz={biz} />}
@@ -1277,6 +1278,61 @@ function FieldBookingsTab({ biz }: { biz: Business }) {
               <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${FB_BADGE[b.status]}`}>{b.status.replace("_", "-")}</span>
               {b.status === "CONFIRMED" && <button onClick={() => setStatus(b.id, "COMPLETED")} className="btn btn-ghost px-3 py-1.5 text-xs">Complete</button>}
               {b.status !== "CANCELLED" && b.status !== "COMPLETED" && <button onClick={() => setStatus(b.id, "CANCELLED")} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Cancel</button>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Earnings (money ledger) ----
+const TX_LABEL: Record<string, string> = { VOUCHER: "🎁 Gift voucher", FACILITY: "🏟️ Court booking", ORDER: "🛍️ Order" };
+const TX_BADGE: Record<string, string> = { PAID: "bg-emerald-500/15 text-emerald-600", PARTIALLY_REFUNDED: "bg-amber-400/15 text-amber-600", REFUNDED: "bg-red-500/15 text-red-500" };
+function EarningsTab({ biz }: { biz: Business }) {
+  const [items, setItems] = useState<Transaction[] | null>(null);
+  const [sum, setSum] = useState<LedgerSummary | null>(null);
+  const load = () => ownerApi.get<{ items: Transaction[]; summary: LedgerSummary }>(`/api/owner/businesses/${biz.id}/transactions`).then((d) => { setItems(d.items); setSum(d.summary); }).catch(() => setItems([]));
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [biz.id]);
+  const cur = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  async function refund(t: Transaction) {
+    let amount: number | undefined;
+    if (t.source === "VOUCHER" || t.amount > 0) {
+      const def = (t.amount - t.refundedAmount).toFixed(2);
+      const v = window.prompt(`Refund amount (max $${def}):`, def);
+      if (v == null) return;
+      amount = Number(v);
+    }
+    if (!window.confirm("Record this refund? This cancels the item. (Money is sent back once a payment gateway is connected.)")) return;
+    try { await ownerApi.post(`/api/owner/transactions/${t.id}/refund`, { amount }); load(); }
+    catch (e) { window.alert(e instanceof Error ? e.message : "Couldn't refund."); }
+  }
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-ink">💡 Payments are currently in demo mode — amounts are recorded for your books, but real money moves once a payment gateway is connected. Refunds here cancel the item and log the amount.</div>
+      {sum && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[["Net earnings", cur(sum.net)], ["Gross collected", cur(sum.gross)], ["Refunded", cur(sum.refunded)], ["Transactions", String(sum.count)]].map(([l, v]) => (
+            <div key={l} className="card p-4"><p className="text-xs text-muted">{l}</p><p className="font-display text-xl font-extrabold text-ink">{v}</p></div>
+          ))}
+        </div>
+      )}
+      {sum && Object.keys(sum.bySource).length > 0 && (
+        <div className="flex flex-wrap gap-2">{Object.entries(sum.bySource).map(([s, v]) => <span key={s} className="chip">{TX_LABEL[s] ?? s}: {cur(v)}</span>)}</div>
+      )}
+      <div>
+        <h3 className="font-display font-bold text-ink">All transactions</h3>
+        <div className="mt-2 space-y-2">
+          {items === null && <div className="card h-20 animate-pulse" />}
+          {items && items.length === 0 && <div className="card p-8 text-center text-muted">No sales yet. When customers buy vouchers, book courts or order, they appear here.</div>}
+          {(items ?? []).map((t) => (
+            <div key={t.id} className="card flex flex-wrap items-center gap-2 p-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink">{TX_LABEL[t.source] ?? t.source} · {cur(t.amount)}{t.refundedAmount > 0 ? <span className="text-red-500"> (−{cur(t.refundedAmount)})</span> : null}</p>
+                <p className="text-muted">{t.description} · {t.customerName || "—"} · {new Date(t.createdAt).toLocaleDateString()}{t.code ? ` · ${t.code}` : ""}</p>
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${TX_BADGE[t.status] ?? "bg-surface-2 text-muted"}`}>{t.status.replace("_", " ").toLowerCase()}</span>
+              {t.status !== "REFUNDED" && <button onClick={() => refund(t)} className="btn btn-ghost px-3 py-1.5 text-xs text-red-500">Refund</button>}
             </div>
           ))}
         </div>

@@ -261,6 +261,27 @@ export interface WaitlistEntry {
 
 export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";
 
+// ---- Payments ledger ----
+export interface Transaction {
+  id: number;
+  source: "VOUCHER" | "FACILITY" | "ORDER";
+  refId: number;
+  code: string;
+  description: string;
+  customerName: string;
+  customerPhone: string;
+  amount: number;
+  refundedAmount: number;
+  status: "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED";
+  method: string;
+  createdAt: string;
+  refundedAt: string | null;
+  business?: { name: string; slug: string };
+}
+export interface LedgerSummary {
+  count: number; gross: number; refunded: number; net: number; bySource: Record<string, number>;
+}
+
 // ---- Gift vouchers ----
 export type VoucherKind = "FIXED" | "PRODUCT" | "SERVICE";
 export interface VoucherType {

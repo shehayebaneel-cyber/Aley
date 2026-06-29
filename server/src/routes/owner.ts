@@ -6,6 +6,7 @@ import { prisma } from "../db";
 import { outBusiness, parseArr, parseObj, slugify, toJson, type HoursRow } from "../lib/serialize";
 import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
 import { effectiveStatus } from "../lib/voucher";
+import { refundTransaction, summarize } from "../lib/ledger";
 import { notifyNextWaitlist } from "../lib/waitlist";
 import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
@@ -756,6 +757,21 @@ ownerRouter.post("/voucher-redeem", async (req, res) => {
   });
   await prisma.voucherRedemption.create({ data: { voucherId: v.id, amount, note: STR(req.body.note, 200) } });
   res.json({ ok: true, redeemed: amount, remainingBalance: updated.balance, status: updated.status, title: v.title });
+});
+
+// ---- Payments ledger (earnings + refunds) ----
+ownerRouter.get("/businesses/:id/transactions", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const txs = await prisma.transaction.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" }, take: 300 });
+  res.json({ items: txs, summary: summarize(txs) });
+});
+ownerRouter.post("/transactions/:id/refund", async (req, res) => {
+  const tx = await prisma.transaction.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!tx || tx.business?.ownerId !== req.ownerId) return res.status(404).json({ error: "Transaction not found." });
+  const r = await refundTransaction(tx.id, req.body?.amount != null ? Number(req.body.amount) : undefined);
+  if ("error" in r) return res.status(400).json(r);
+  res.json(r);
 });
 
 // ---- Offers ----

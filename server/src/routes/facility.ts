@@ -3,6 +3,7 @@ import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
 import { durationOptions, facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
+import { recordTransaction } from "../lib/ledger";
 import { notifyAdmins } from "../lib/notify";
 import { parseArr, type HoursRow } from "../lib/serialize";
 
@@ -83,6 +84,7 @@ facilityRouter.post("/book", optionalUser, async (req, res) => {
       price, facilityName: facility.name, status: "CONFIRMED", checkInCode: genCode(),
     },
   });
+  await recordTransaction({ businessId: business.id, source: "FACILITY", refId: booking.id, code: booking.checkInCode, description: `${facility.name} · ${date} ${startTime}`, customerName, customerPhone, userId: req.userId ?? null, amount: price });
   await notifyAdmins({
     kind: "FACILITY_BOOKING",
     title: `Court booked: ${business.name}`,

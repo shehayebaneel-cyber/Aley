@@ -135,6 +135,7 @@ model Business {
   facilityBookings FacilityBooking[]
   voucherTypes   VoucherType[]
   vouchers       Voucher[]
+  transactions   Transaction[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -290,6 +291,29 @@ model Appointment {
   createdAt    DateTime @default(now())
 
   @@index([businessId, date])
+}
+
+// A money-in record for every paid sale — one ledger across all channels.
+// Designed to plug into a real payment gateway later (add gatewayRef/payout fields).
+model Transaction {
+  id             Int      @id @default(autoincrement())
+  businessId     Int?
+  business       Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  source         String // VOUCHER | FACILITY | ORDER
+  refId          Int      @default(0) // id of the underlying record (voucher/booking/businessOrder)
+  code           String   @default("") // voucher code / order number / reference
+  description    String   @default("")
+  customerName   String   @default("")
+  customerPhone  String   @default("")
+  userId         Int?
+  amount         Float    @default(0)
+  refundedAmount Float    @default(0)
+  status         String   @default("PAID") // PAID | PARTIALLY_REFUNDED | REFUNDED
+  method         String   @default("CARD")
+  createdAt      DateTime @default(now())
+  refundedAt     DateTime?
+  @@index([businessId])
+  @@index([source])
 }
 
 // A gift-voucher product a business sells (template).

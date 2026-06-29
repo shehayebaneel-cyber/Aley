@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
+import { recordTransaction } from "../lib/ledger";
 import { effectiveCommission, getMarketplaceSettings } from "../lib/marketplace";
 import { isOpenNow, parseArr, type HoursRow } from "../lib/serialize";
 
@@ -92,6 +93,10 @@ ordersRouter.post("/", optionalUser, async (req, res) => {
     },
     include: { businessOrders: { include: { items: true, business: { select: { name: true, slug: true, logo: true } } } } },
   });
+  // Ledger: record each business's share of the order as a paid transaction.
+  for (const bo of order.businessOrders) {
+    await recordTransaction({ businessId: bo.businessId, source: "ORDER", refId: bo.id, code: order.number, description: `Order · ${bo.business?.name ?? ""}`, customerName: order.customerName, customerPhone: order.customerPhone, userId: order.customerId, amount: bo.subtotal, method: paymentMethod });
+  }
   res.status(201).json(order);
 });
 

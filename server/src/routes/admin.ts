@@ -7,6 +7,7 @@ import { DELIVERY_STATUSES as COURIER_STATUSES, driverEarnings, effectiveDriverC
 import { getMarketplaceSettings, saveMarketplaceSettings } from "../lib/marketplace";
 import { prisma } from "../db";
 import { recomputeProject, recomputeRating } from "../lib/ratings";
+import { refundTransaction, summarize } from "../lib/ledger";
 import { outBusiness, outProject, slugify, toJson } from "../lib/serialize";
 import { recomputeOrder } from "./orders";
 
@@ -164,6 +165,24 @@ adminRouter.post("/vouchers/:id/disable", async (req, res) => {
   if (!v) return res.status(404).json({ error: "Voucher not found." });
   const disable = req.body?.disable !== false;
   res.json(await prisma.voucher.update({ where: { id: v.id }, data: { status: disable ? "DISABLED" : "ACTIVE" } }));
+});
+
+// ---- Payments ledger (platform-wide) ----
+adminRouter.get("/transactions", async (req, res) => {
+  const q = req.query as Record<string, string>;
+  const where: Record<string, unknown> = {};
+  if (q.source) where.source = q.source;
+  if (q.q) where.OR = [{ code: { contains: q.q, mode: "insensitive" } }, { customerName: { contains: q.q, mode: "insensitive" } }, { description: { contains: q.q, mode: "insensitive" } }];
+  const [items, all] = await Promise.all([
+    prisma.transaction.findMany({ where, orderBy: { createdAt: "desc" }, take: 200, include: { business: { select: { name: true, slug: true } } } }),
+    prisma.transaction.findMany({ select: { amount: true, refundedAmount: true, source: true } }),
+  ]);
+  res.json({ items, summary: summarize(all) });
+});
+adminRouter.post("/transactions/:id/refund", async (req, res) => {
+  const r = await refundTransaction(Number(req.params.id), req.body?.amount != null ? Number(req.body.amount) : undefined);
+  if ("error" in r) return res.status(400).json(r);
+  res.json(r);
 });
 
 // ---- Business ownership claims ----

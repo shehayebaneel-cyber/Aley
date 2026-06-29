@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { optionalUser } from "../auth";
 import { prisma } from "../db";
+import { recordTransaction } from "../lib/ledger";
 import { notifyAdmins } from "../lib/notify";
 import { effectiveStatus, uniqueVoucherCode } from "../lib/voucher";
 
@@ -71,6 +72,7 @@ vouchersRouter.post("/buy", optionalUser, async (req, res) => {
     },
   });
   await prisma.voucherType.update({ where: { id: type.id }, data: { soldCount: { increment: 1 } } });
+  await recordTransaction({ businessId: business.id, source: "VOUCHER", refId: voucher.id, code: voucher.code, description: `Gift voucher · ${type.name}`, customerName: purchaserName || recipientName, customerPhone: STR(b.recipientPhone, 40), userId: req.userId ?? null, amount: price, method: voucher.paymentMethod });
   await notifyAdmins({
     kind: "VOUCHER_SOLD",
     title: `Gift voucher sold: ${business.name}`,
