@@ -18,6 +18,7 @@ businessesRouter.get("/", async (req, res) => {
   if (q.featured === "true") where.isFeatured = true;
   if (q.delivery === "true") where.hasDelivery = true;
   if (q.reservations === "true") where.hasReservations = true;
+  if (q.gift === "true") where.voucherTypes = { some: { status: "ACTIVE" } };
   if (q.priceMax) where.priceRange = { lte: Number(q.priceMax) };
   if (q.minRating) where.rating = { gte: Number(q.minRating) };
   if (q.q) {

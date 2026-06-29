@@ -54,7 +54,7 @@ export function Explore() {
   const activeGroup = params.get("group") ?? "";
 
   // Idle = nothing chosen yet → show the visual "browse by category" tiles instead of results.
-  const FILTER_KEYS = ["category", "group", "q", "openNow", "delivery", "reservations", "minRating", "priceMax", "sort"];
+  const FILTER_KEYS = ["category", "group", "q", "openNow", "delivery", "reservations", "gift", "minRating", "priceMax", "sort"];
   const hasFilter = FILTER_KEYS.some((k) => params.get(k));
 
   // Group the categories in a fixed order.
@@ -140,6 +140,7 @@ export function Explore() {
             <button onClick={() => toggle("openNow")} className={`chip ${params.get("openNow") === "true" ? "chip-active" : ""}`}>{t("filter.openNow")}</button>
             <button onClick={() => toggle("delivery")} className={`chip ${params.get("delivery") === "true" ? "chip-active" : ""}`}>{t("filter.delivery")}</button>
             <button onClick={() => toggle("reservations")} className={`chip ${params.get("reservations") === "true" ? "chip-active" : ""}`}>{t("filter.reservations")}</button>
+            <button onClick={() => toggle("gift")} className={`chip ${params.get("gift") === "true" ? "chip-active" : ""}`}>🎁 {t("filter.vouchers")}</button>
             <button onClick={() => set("minRating", params.get("minRating") === "4" ? "" : "4")} className={`chip ${params.get("minRating") === "4" ? "chip-active" : ""}`}>{t("filter.rating4")}</button>
             <select value={params.get("priceMax") ?? ""} onChange={(e) => set("priceMax", e.target.value)} className="chip cursor-pointer">
               <option value="">{t("price.any")}</option>

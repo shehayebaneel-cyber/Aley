@@ -149,6 +149,12 @@ homeRouter.get("/", async (req, res) => {
   const counts = await prisma.business.groupBy({ by: ["categoryId"], where: base, _count: { _all: true } });
   const countMap = new Map(counts.map((c) => [c.categoryId, c._count._all]));
 
+  // Businesses that sell gift vouchers (≥1 active voucher product).
+  const gift = await prisma.business.findMany({
+    where: { ...base, voucherTypes: { some: { status: "ACTIVE" } } },
+    take: 8, orderBy: [{ isFeatured: "desc" }, { rating: "desc" }], include: { category: true },
+  });
+
   const [eventsCount, offersCount, activeCategories] = await Promise.all([
     prisma.event.count({ where: { isPublished: true, ...cityWhere } }),
     prisma.offer.count({ where: { isActive: true, ...cityWhere } }),
@@ -173,6 +179,7 @@ homeRouter.get("/", async (req, res) => {
     featured: featured.map(outCard),
     newest: newest.map(outCard),
     popular: popular.map(outCard),
+    gift: gift.map(outCard),
     offers,
     events,
     categories: categories.map((c) => ({ ...c, count: countMap.get(c.id) ?? 0 })).filter((c) => c.count > 0).slice(0, 12),

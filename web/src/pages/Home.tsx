@@ -116,6 +116,13 @@ export function Home() {
           </Section>
         )}
 
+        {/* Gift vouchers */}
+        {!!data?.gift?.length && (
+          <Section title="Give the gift of Aley 🎁" subtitle="Buy a gift voucher from a local business" to="/explore?gift=true">
+            <Grid>{data.gift.map((b) => <BusinessCard key={b.id} business={b} showActions />)}</Grid>
+          </Section>
+        )}
+
         {/* Hidden Gems */}
         <Section show={S.gems.show} title={S.gems.title!} subtitle={S.gems.subtitle}>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">

@@ -667,6 +667,7 @@ export interface HomeData {
   featured: Business[];
   newest: Business[];
   popular: Business[];
+  gift?: Business[];
   offers: Offer[];
   events: EventItem[];
   categories: Category[];
