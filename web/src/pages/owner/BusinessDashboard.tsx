@@ -10,9 +10,9 @@ import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../c
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, Reservation, Review, Service, StaffMember, Voucher, VoucherStats, VoucherType, WaitlistEntry } from "../../types";
 
-const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BusinessDashboard() {
@@ -92,6 +92,7 @@ export function BusinessDashboard() {
         {tab === "Booking Setup" && <BookingSetupTab biz={biz} save={save} />}
         {tab === "Facilities" && <FacilitiesTab biz={biz} />}
         {tab === "Field Bookings" && <FieldBookingsTab biz={biz} />}
+        {tab === "Gift Vouchers" && <VouchersTab biz={biz} />}
         {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
@@ -1280,6 +1281,80 @@ function FieldBookingsTab({ biz }: { biz: Business }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- Gift Vouchers ----
+const V_BADGE: Record<string, string> = { ACTIVE: "bg-emerald-500/15 text-emerald-600", PENDING_DELIVERY: "bg-amber-400/15 text-amber-600", REDEEMED: "bg-surface-2 text-muted", EXPIRED: "bg-red-500/15 text-red-500", DISABLED: "bg-red-500/15 text-red-500" };
+function VouchersTab({ biz }: { biz: Business }) {
+  const [types, setTypes] = useState<VoucherType[] | null>(null);
+  const [sold, setSold] = useState<Voucher[]>([]);
+  const [stats, setStats] = useState<VoucherStats | null>(null);
+  const [nf, setNf] = useState({ kind: "FIXED", name: "", value: 25, price: 0, expiryDays: 365, maxQuantity: 0, terms: "" });
+  const loadTypes = () => ownerApi.get<VoucherType[]>(`/api/owner/businesses/${biz.id}/voucher-types`).then(setTypes).catch(() => setTypes([]));
+  const loadSold = () => ownerApi.get<Voucher[]>(`/api/owner/businesses/${biz.id}/vouchers`).then(setSold).catch(() => setSold([]));
+  const loadStats = () => ownerApi.get<VoucherStats>(`/api/owner/businesses/${biz.id}/voucher-stats`).then(setStats).catch(() => setStats(null));
+  useEffect(() => { loadTypes(); loadSold(); loadStats(); /* eslint-disable-next-line */ }, [biz.id]);
+  async function add(e: FormEvent) {
+    e.preventDefault(); if (!nf.name.trim()) return;
+    await ownerApi.post(`/api/owner/businesses/${biz.id}/voucher-types`, nf);
+    setNf({ kind: "FIXED", name: "", value: 25, price: 0, expiryDays: 365, maxQuantity: 0, terms: "" });
+    loadTypes();
+  }
+  const cur = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  return (
+    <div className="space-y-5">
+      {stats && (
+        <section className="card p-5">
+          <div className="flex items-center justify-between"><h3 className="font-display font-bold text-ink">Voucher performance</h3><Link to="/owner/redeem" className="btn btn-primary px-4 py-1.5 text-sm">🎟️ Redeem a voucher</Link></div>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[["Sold", String(stats.sold)], ["Revenue", cur(stats.revenue)], ["Redeemed", String(stats.redeemed)], ["Redemption", `${stats.redemptionRate}%`], ["Avg value", cur(stats.avgValue)], ["Outstanding", cur(stats.outstandingLiability)]].map(([l, v]) => (
+              <div key={l} className="rounded-xl surface-2 p-3"><p className="text-xs text-muted">{l}</p><p className="font-display text-lg font-extrabold text-ink">{v}</p></div>
+            ))}
+          </div>
+          {stats.mostPopular && <p className="mt-2 text-sm text-muted">Most popular: <span className="font-semibold text-ink">{stats.mostPopular.name}</span> ({stats.mostPopular.count})</p>}
+        </section>
+      )}
+
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Voucher products</h3>
+        <p className="text-sm text-muted">Create gift cards (fixed value), product vouchers or service vouchers. Customers buy them from your page.</p>
+        <div className="mt-3 space-y-2">
+          {(types ?? []).map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5">
+              <span className="flex-1 font-semibold text-ink">{t.name} <span className="text-xs font-normal text-muted">· {t.kind === "FIXED" ? (t.value > 0 ? `$${t.value} gift card` : "custom amount") : t.kind.toLowerCase()}{t.expiryDays ? ` · ${t.expiryDays}d` : ""} · sold {t.soldCount ?? 0}</span></span>
+              <button onClick={async () => { await ownerApi.patch(`/api/owner/voucher-types/${t.id}`, { status: t.status === "ACTIVE" ? "PAUSED" : "ACTIVE" }); loadTypes(); }} className={`chip !text-xs ${t.status === "ACTIVE" ? "chip-active" : ""}`}>{t.status === "ACTIVE" ? "Active" : "Paused"}</button>
+              <button onClick={async () => { if (confirm("Delete this voucher product?")) { await ownerApi.delete(`/api/owner/voucher-types/${t.id}`); loadTypes(); } }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
+            </div>
+          ))}
+          {types && types.length === 0 && <p className="text-sm text-muted">No voucher products yet.</p>}
+        </div>
+        <form onSubmit={add} className="mt-3 grid gap-2 sm:grid-cols-2">
+          <select value={nf.kind} onChange={(e) => setNf({ ...nf, kind: e.target.value })} className="input !py-2 text-sm"><option value="FIXED">Fixed value (gift card)</option><option value="PRODUCT">Specific product</option><option value="SERVICE">Service</option></select>
+          <input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} placeholder={nf.kind === "FIXED" ? "Name (e.g. $25 Gift Card)" : "Name (e.g. Free Haircut)"} className="input !py-2 text-sm" />
+          <label className="text-xs text-muted">Value $ <span className="font-normal">(0 = let buyer choose)</span><input type="number" min={0} value={nf.value} onChange={(e) => setNf({ ...nf, value: Number(e.target.value) })} className="input !py-2 text-sm" /></label>
+          <label className="text-xs text-muted">Price $ <span className="font-normal">(0 = same as value)</span><input type="number" min={0} value={nf.price} onChange={(e) => setNf({ ...nf, price: Number(e.target.value) })} className="input !py-2 text-sm" /></label>
+          <label className="text-xs text-muted">Expiry (days, 0 = none)<input type="number" min={0} value={nf.expiryDays} onChange={(e) => setNf({ ...nf, expiryDays: Number(e.target.value) })} className="input !py-2 text-sm" /></label>
+          <label className="text-xs text-muted">Max quantity (0 = unlimited)<input type="number" min={0} value={nf.maxQuantity} onChange={(e) => setNf({ ...nf, maxQuantity: Number(e.target.value) })} className="input !py-2 text-sm" /></label>
+          <input value={nf.terms} onChange={(e) => setNf({ ...nf, terms: e.target.value })} placeholder="Terms & conditions (optional)" className="input !py-2 text-sm sm:col-span-2" />
+          <button className="btn btn-primary px-4 py-2 text-sm sm:col-span-2">Add voucher product</button>
+        </form>
+      </section>
+
+      <section className="card p-5">
+        <h3 className="font-display font-bold text-ink">Sold vouchers</h3>
+        <div className="mt-3 space-y-2">
+          {sold.length === 0 && <p className="text-sm text-muted">No vouchers sold yet.</p>}
+          {sold.slice(0, 50).map((v) => (
+            <div key={v.code} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5 text-sm">
+              <span className="font-mono font-semibold text-ink">{v.code}</span>
+              <span className="flex-1 text-muted">{v.title} · {v.recipientName || "—"}{v.kind === "FIXED" ? ` · ${cur(v.balance)}/${cur(v.value)}` : ""}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${V_BADGE[v.status] ?? "bg-surface-2 text-muted"}`}>{v.status.replace("_", " ")}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

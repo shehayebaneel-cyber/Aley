@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BookAppointmentModal } from "../components/BookAppointmentModal";
+import { BuyVoucherModal } from "../components/BuyVoucherModal";
 import { FacilityBookingModal } from "../components/FacilityBookingModal";
 import { BusinessCard } from "../components/BusinessCard";
 import { FavoriteButton } from "../components/FavoriteButton";
@@ -30,6 +31,7 @@ export function BusinessProfile() {
   const [booking, setBooking] = useState(false);
   const [appt, setAppt] = useState(false);
   const [facBook, setFacBook] = useState<{ open: boolean; facilityId?: number }>({ open: false });
+  const [voucher, setVoucher] = useState(false);
   useTitle(b?.name);
 
   if (loading) return <div className="mx-auto max-w-5xl px-4 py-16"><div className="card h-96 animate-pulse" /></div>;
@@ -79,6 +81,7 @@ export function BusinessProfile() {
             {b.appointmentBookable && <button onClick={() => setAppt(true)} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> {b.bookingCta ?? "Book appointment"}</button>}
             {b.bookingMode === "table" && b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
             {b.hasDelivery && <Link to={`/delivery?pickup=${encodeURIComponent(`${b.name}, ${b.address}`)}${b.lat && b.lng ? `&plat=${b.lat}&plng=${b.lng}` : ""}&businessId=${b.id}`} className="btn btn-ghost px-4 py-2.5"><TruckIcon className="h-4 w-4" /> Request delivery</Link>}
+            {b.hasVouchers && <button onClick={() => setVoucher(true)} className="btn btn-ghost px-4 py-2.5">🎁 Gift Voucher</button>}
             <a href={b.lat && b.lng ? mapsLinkFromCoords(b.lat, b.lng) : mapsLinkFromText(`${b.name} ${b.address}`)} onClick={() => track(b.id, "DIRECTIONS")} target="_blank" rel="noreferrer" className="btn btn-primary px-4 py-2.5"><MapPinIcon className="h-4 w-4" /> Directions</a>
           </div>
         </div>
@@ -259,6 +262,7 @@ export function BusinessProfile() {
       {booking && <BookingModal businessId={b.id} businessName={b.name} onClose={() => setBooking(false)} />}
       {appt && <BookAppointmentModal business={b} onClose={() => setAppt(false)} />}
       {facBook.open && !!b.facilities?.length && <FacilityBookingModal business={b} facilities={b.facilities} initialFacilityId={facBook.facilityId} onClose={() => setFacBook({ open: false })} />}
+      {voucher && <BuyVoucherModal business={b} onClose={() => setVoucher(false)} />}
     </div>
   );
 }

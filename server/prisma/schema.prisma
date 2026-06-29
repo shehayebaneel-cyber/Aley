@@ -133,6 +133,8 @@ model Business {
   waitlist       Waitlist[]
   facilities     Facility[]
   facilityBookings FacilityBooking[]
+  voucherTypes   VoucherType[]
+  vouchers       Voucher[]
   analyticsEvents AnalyticsEvent[]
 }
 
@@ -189,6 +191,7 @@ model User {
   reservations Reservation[]
   appointments Appointment[]
   facilityBookings FacilityBooking[]
+  purchasedVouchers Voucher[] @relation("purchasedVouchers")
 }
 
 // A table/booking request a visitor makes to a business. The owner confirms or
@@ -287,6 +290,69 @@ model Appointment {
   createdAt    DateTime @default(now())
 
   @@index([businessId, date])
+}
+
+// A gift-voucher product a business sells (template).
+model VoucherType {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind        String   @default("FIXED") // FIXED | PRODUCT | SERVICE
+  name        String
+  description String   @default("")
+  image       String?
+  value       Float    @default(0) // face value (FIXED) / implied value
+  price       Float    @default(0) // what the buyer pays (can be < value for promos)
+  expiryDays  Int      @default(0) // 0 = no expiry
+  maxQuantity Int      @default(0) // 0 = unlimited
+  soldCount   Int      @default(0)
+  terms       String   @default("")
+  status      String   @default("ACTIVE") // ACTIVE | PAUSED
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  vouchers    Voucher[]
+}
+
+// An issued/purchased gift voucher.
+model Voucher {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  businessId     Int
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  voucherTypeId  Int?
+  voucherType    VoucherType? @relation(fields: [voucherTypeId], references: [id], onDelete: SetNull)
+  kind           String   @default("FIXED")
+  title          String   @default("") // snapshot of the voucher name
+  value          Float    @default(0) // face value
+  balance        Float    @default(0) // remaining value (FIXED); product/service redeem in one shot
+  price          Float    @default(0) // amount paid
+  purchaserUserId Int?
+  purchaser      User?    @relation("purchasedVouchers", fields: [purchaserUserId], references: [id], onDelete: SetNull)
+  purchaserName  String   @default("")
+  purchaserEmail String   @default("")
+  recipientName  String   @default("")
+  recipientEmail String   @default("")
+  recipientPhone String   @default("")
+  message        String   @default("")
+  deliverAt      DateTime? // scheduled gift delivery; null = immediate
+  // PENDING_DELIVERY | ACTIVE | REDEEMED | EXPIRED | DISABLED
+  status         String   @default("ACTIVE")
+  expiresAt      DateTime?
+  paymentMethod  String   @default("CARD")
+  redeemedAt     DateTime?
+  createdAt      DateTime @default(now())
+  redemptions    VoucherRedemption[]
+  @@index([businessId])
+}
+
+// A single redemption against a voucher (audit + partial balance tracking).
+model VoucherRedemption {
+  id        Int      @id @default(autoincrement())
+  voucherId Int
+  voucher   Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  amount    Float    @default(0)
+  note      String   @default("")
+  createdAt DateTime @default(now())
 }
 
 // A rentable facility/court/field/room a business books by the hour.

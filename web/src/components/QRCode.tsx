@@ -15,3 +15,6 @@ export function QRCode({ value, size = 160, className = "" }: { value: string; s
 
 /** Builds the check-in URL a business scans to mark the customer arrived. */
 export const checkInUrl = (code: string) => `${window.location.origin}/owner/checkin?code=${encodeURIComponent(code)}`;
+
+/** Builds the voucher-redeem URL a business scans to redeem a gift voucher. */
+export const redeemUrl = (code: string) => `${window.location.origin}/owner/redeem?code=${encodeURIComponent(code)}`;

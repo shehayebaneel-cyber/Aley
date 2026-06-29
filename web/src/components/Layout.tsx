@@ -100,6 +100,9 @@ function AccountMenu() {
           <button onClick={() => { setOpen(false); navigate("/bookings"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <CalendarIcon className="h-4 w-4 text-brand" /> {t("common.myBookings")}
           </button>
+          <button onClick={() => { setOpen(false); navigate("/gift-vouchers"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            <span className="text-base leading-none">🎁</span> {t("common.myVouchers")}
+          </button>
           <button onClick={() => { logout(); setOpen(false); navigate("/"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <LogoutIcon className="h-4 w-4" /> {t("common.logout")}
           </button>

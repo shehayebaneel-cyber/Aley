@@ -143,6 +143,29 @@ adminRouter.post("/notifications/:id/read", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Gift vouchers (oversight) ----
+adminRouter.get("/vouchers", async (req, res) => {
+  const q = req.query as Record<string, string>;
+  const where: Record<string, unknown> = {};
+  if (q.status) where.status = q.status;
+  if (q.q) where.OR = [{ code: { contains: q.q, mode: "insensitive" } }, { recipientName: { contains: q.q, mode: "insensitive" } }, { title: { contains: q.q, mode: "insensitive" } }];
+  const [items, all] = await Promise.all([
+    prisma.voucher.findMany({ where, orderBy: { createdAt: "desc" }, take: 100, include: { business: { select: { name: true, slug: true } } } }),
+    prisma.voucher.findMany({ select: { price: true, balance: true, value: true, kind: true, status: true } }),
+  ]);
+  const sold = all.length;
+  const revenue = Math.round(all.reduce((s, v) => s + (v.price || 0), 0) * 100) / 100;
+  const outstanding = Math.round(all.filter((v) => v.status === "ACTIVE").reduce((s, v) => s + (v.kind === "FIXED" ? v.balance : v.value), 0) * 100) / 100;
+  const redeemed = all.filter((v) => v.status === "REDEEMED").length;
+  res.json({ items, summary: { sold, revenue, outstanding, redeemed, redemptionRate: sold ? Math.round((redeemed / sold) * 100) : 0 } });
+});
+adminRouter.post("/vouchers/:id/disable", async (req, res) => {
+  const v = await prisma.voucher.findUnique({ where: { id: Number(req.params.id) } });
+  if (!v) return res.status(404).json({ error: "Voucher not found." });
+  const disable = req.body?.disable !== false;
+  res.json(await prisma.voucher.update({ where: { id: v.id }, data: { status: disable ? "DISABLED" : "ACTIVE" } }));
+});
+
 // ---- Business ownership claims ----
 adminRouter.get("/claims", async (req, res) => {
   const status = String(req.query.status ?? "PENDING").toUpperCase();

@@ -4,6 +4,7 @@ import { requireUser, signToken } from "../auth";
 import { prisma } from "../db";
 import { computeSlots, resolveBookingConfig } from "../lib/booking";
 import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
+import { effectiveStatus } from "../lib/voucher";
 import { outBusiness, parseArr, type HoursRow } from "../lib/serialize";
 import { notifyNextWaitlist } from "../lib/waitlist";
 
@@ -156,6 +157,21 @@ userRouter.get("/facility-bookings", async (req, res) => {
     include: { business: { select: { name: true, slug: true, logo: true } } },
   });
   res.json(bookings);
+});
+
+// GET /api/me/vouchers — gift vouchers the visitor bought or received (by email).
+userRouter.get("/vouchers", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  const where = { OR: [{ purchaserUserId: req.userId! }, ...(user?.email ? [{ recipientEmail: user.email }] : [])] };
+  const vouchers = await prisma.voucher.findMany({
+    where, orderBy: { createdAt: "desc" }, take: 50,
+    include: { business: { select: { name: true, slug: true, logo: true } } },
+  });
+  res.json(vouchers.map((v) => ({
+    code: v.code, kind: v.kind, title: v.title, value: v.value, balance: v.balance,
+    status: effectiveStatus(v), expiresAt: v.expiresAt, deliverAt: v.deliverAt, message: v.message,
+    recipientName: v.recipientName, mine: v.purchaserUserId === req.userId, business: v.business, createdAt: v.createdAt,
+  })));
 });
 
 // PATCH /api/me/facility-bookings/:id — customer cancel or reschedule.

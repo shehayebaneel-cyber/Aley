@@ -261,6 +261,43 @@ export interface WaitlistEntry {
 
 export type BookingMode = "none" | "appointment" | "service" | "table" | "choice";
 
+// ---- Gift vouchers ----
+export type VoucherKind = "FIXED" | "PRODUCT" | "SERVICE";
+export interface VoucherType {
+  id: number;
+  kind: VoucherKind;
+  name: string;
+  description: string;
+  image: string | null;
+  value: number;
+  price: number;
+  expiryDays: number;
+  maxQuantity?: number;
+  soldCount?: number;
+  status?: string;
+  terms: string;
+}
+export interface Voucher {
+  code: string;
+  kind: string;
+  title: string;
+  value: number;
+  balance: number;
+  price?: number;
+  status: string;
+  expiresAt: string | null;
+  deliverAt?: string | null;
+  message?: string;
+  recipientName?: string;
+  mine?: boolean;
+  business?: { name: string; slug: string; logo: string | null };
+  createdAt?: string;
+}
+export interface VoucherStats {
+  sold: number; revenue: number; redeemed: number; types: number;
+  redemptionRate: number; avgValue: number; mostPopular: { name: string; count: number } | null; outstandingLiability: number;
+}
+
 // ---- Facility (hourly rental) booking ----
 export interface Facility {
   id: number;
@@ -384,6 +421,7 @@ export interface Business {
   appointmentBookable?: boolean;
   hasFacilities?: boolean;
   facilities?: Facility[];
+  hasVouchers?: boolean;
   tags: string[];
   faqs: { q: string; a: string }[];
   isFeatured: boolean;

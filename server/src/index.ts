@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { signToken } from "./auth";
 import { prisma } from "./db";
+import { notifyAdmins } from "./lib/notify";
 import { adminRouter } from "./routes/admin";
 import { aiRouter } from "./routes/ai";
 import { bookingRouter } from "./routes/booking";
@@ -14,6 +15,7 @@ import { facilityRouter } from "./routes/facility";
 import { driverAuthRouter, driverRouter } from "./routes/driver";
 import { trackRouter } from "./routes/track";
 import { translateRouter } from "./routes/translate";
+import { vouchersRouter } from "./routes/vouchers";
 import { marketplaceRouter } from "./routes/marketplace";
 import { categoriesRouter, citiesRouter, eventsRouter, homeRouter, offersRouter, reservationsRouter, reviewsRouter } from "./routes/misc";
 import { ordersRouter } from "./routes/orders";
@@ -47,6 +49,7 @@ app.use("/api/reviews", reviewsRouter);
 app.use("/api/reservations", reservationsRouter);
 app.use("/api/booking", bookingRouter);
 app.use("/api/facilities", facilityRouter);
+app.use("/api/vouchers", vouchersRouter);
 app.use("/api/lost-found", lostFoundRouter);
 app.use("/api/announcements", announcementsRouter);
 app.use("/api/delivery", deliveryRouter);
@@ -80,6 +83,19 @@ app.listen(port, () => console.log(`Aley Platform API running on http://localhos
 // Keep the serverless DB (Neon) warm so it doesn't auto-suspend and force a
 // slow cold-start on the next page load. Cheap heartbeat every ~4 minutes.
 setInterval(() => { prisma.$queryRaw`SELECT 1`.catch(() => {}); }, 240_000);
+
+// Deliver scheduled gift vouchers whose send-date has arrived (every ~5 min).
+async function deliverDueVouchers() {
+  try {
+    const due = await prisma.voucher.findMany({ where: { status: "PENDING_DELIVERY", deliverAt: { lte: new Date() } }, take: 100, include: { business: { select: { name: true } } } });
+    for (const v of due) {
+      await prisma.voucher.update({ where: { id: v.id }, data: { status: "ACTIVE" } });
+      await notifyAdmins({ kind: "VOUCHER_DELIVERED", title: `Gift voucher delivered: ${v.business.name}`, body: `${v.title} for ${v.recipientName} is now active (${v.code}).`, link: "/admin/vouchers" }).catch(() => {});
+    }
+  } catch { /* ignore */ }
+}
+deliverDueVouchers();
+setInterval(deliverDueVouchers, 300_000);
 
 process.on("unhandledRejection", (e) => console.error("Unhandled rejection:", e));
 process.on("uncaughtException", (e) => console.error("Uncaught exception:", e));

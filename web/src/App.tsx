@@ -12,6 +12,8 @@ import { Delivery } from "./pages/Delivery";
 import { DeliveryTracking } from "./pages/DeliveryTracking";
 import { MyOrders } from "./pages/MyOrders";
 import { MyBookings } from "./pages/MyBookings";
+import { GiftVouchers } from "./pages/GiftVouchers";
+import { VoucherView } from "./pages/VoucherView";
 import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { Explore } from "./pages/Explore";
@@ -43,8 +45,10 @@ import { AdminMarketplace } from "./pages/admin/AdminMarketplace";
 import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
+import { AdminVouchers } from "./pages/admin/AdminVouchers";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
 import { CheckIn } from "./pages/owner/CheckIn";
+import { RedeemVoucher } from "./pages/owner/RedeemVoucher";
 import { OwnerHome } from "./pages/owner/OwnerHome";
 import { OwnerLayout } from "./pages/owner/OwnerLayout";
 import { OwnerLogin } from "./pages/owner/OwnerLogin";
@@ -76,6 +80,7 @@ const TITLES: Record<string, string> = {
   "/checkout": "Checkout",
   "/orders": "My orders",
   "/bookings": "My appointments",
+  "/gift-vouchers": "My gift vouchers",
   "/saved": "Saved places",
 };
 function TitleManager() {
@@ -117,6 +122,8 @@ export default function App() {
           <Route path="/order/:number" element={<OrderTracking />} />
           <Route path="/orders" element={<MyOrders />} />
           <Route path="/bookings" element={<MyBookings />} />
+          <Route path="/gift-vouchers" element={<GiftVouchers />} />
+          <Route path="/voucher/:code" element={<VoucherView />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
@@ -129,6 +136,7 @@ export default function App() {
           <Route index element={<OwnerHome />} />
           <Route path="b/:id" element={<BusinessDashboard />} />
           <Route path="checkin" element={<CheckIn />} />
+          <Route path="redeem" element={<RedeemVoucher />} />
         </Route>
 
         {/* Driver app (own chrome) */}
@@ -156,6 +164,7 @@ export default function App() {
           <Route path="drivers" element={<AdminDrivers />} />
           <Route path="events-offers" element={<AdminEventsOffers />} />
           <Route path="cities" element={<AdminCities />} />
+          <Route path="vouchers" element={<AdminVouchers />} />
           <Route path="marketplace" element={<AdminMarketplace />} />
           <Route path="content" element={<AdminContent />} />
           <Route path="users" element={<AdminUsers />} />

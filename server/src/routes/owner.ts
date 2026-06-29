@@ -5,6 +5,7 @@ import { businessMetrics, resolveRange } from "../lib/analytics";
 import { prisma } from "../db";
 import { outBusiness, parseArr, parseObj, slugify, toJson, type HoursRow } from "../lib/serialize";
 import { facilitySlots, priceFor, resolveFacilityPricing, resolveFacilitySchedule, _toMin } from "../lib/facility";
+import { effectiveStatus } from "../lib/voucher";
 import { notifyNextWaitlist } from "../lib/waitlist";
 import { notifyAdmins } from "../lib/notify";
 import { recomputeOrder } from "./orders";
@@ -639,6 +640,122 @@ ownerRouter.get("/businesses/:id/facility-stats", async (req, res) => {
     cancelled: bookings.filter((b) => b.status === "CANCELLED").length,
     busiestFacility: busiest ? { name: busiest[0], count: busiest[1] } : null, peakHours: peak,
   });
+});
+
+// ---- Gift vouchers ----
+ownerRouter.get("/businesses/:id/voucher-types", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.voucherType.findMany({ where: { businessId: business.id }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }));
+});
+ownerRouter.post("/businesses/:id/voucher-types", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const name = STR(req.body.name, 100).trim();
+  if (!name) return res.status(400).json({ error: "Voucher name is required." });
+  const kind = ["FIXED", "PRODUCT", "SERVICE"].includes(String(req.body.kind)) ? String(req.body.kind) : "FIXED";
+  const count = await prisma.voucherType.count({ where: { businessId: business.id } });
+  const t = await prisma.voucherType.create({
+    data: {
+      businessId: business.id, kind, name, description: STR(req.body.description, 500),
+      image: req.body.image ? STR(req.body.image, 500) : null,
+      value: Math.max(0, Number(req.body.value) || 0), price: Math.max(0, Number(req.body.price) || 0),
+      expiryDays: Math.max(0, Number(req.body.expiryDays) || 0), maxQuantity: Math.max(0, Number(req.body.maxQuantity) || 0),
+      terms: STR(req.body.terms, 1000), status: "ACTIVE", sortOrder: count,
+    },
+  });
+  res.status(201).json(t);
+});
+async function ownedVoucherType(ownerId: number | undefined, id: number) {
+  const t = await prisma.voucherType.findUnique({ where: { id }, include: { business: { select: { ownerId: true } } } });
+  return t && t.business.ownerId === ownerId ? t : null;
+}
+ownerRouter.patch("/voucher-types/:id", async (req, res) => {
+  const t = await ownedVoucherType(req.ownerId, Number(req.params.id));
+  if (!t) return res.status(404).json({ error: "Voucher not found." });
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("name" in b) data.name = STR(b.name, 100).trim() || t.name;
+  if ("kind" in b && ["FIXED", "PRODUCT", "SERVICE"].includes(String(b.kind))) data.kind = String(b.kind);
+  if ("description" in b) data.description = STR(b.description, 500);
+  if ("image" in b) data.image = b.image ? STR(b.image, 500) : null;
+  if ("value" in b) data.value = Math.max(0, Number(b.value) || 0);
+  if ("price" in b) data.price = Math.max(0, Number(b.price) || 0);
+  if ("expiryDays" in b) data.expiryDays = Math.max(0, Number(b.expiryDays) || 0);
+  if ("maxQuantity" in b) data.maxQuantity = Math.max(0, Number(b.maxQuantity) || 0);
+  if ("terms" in b) data.terms = STR(b.terms, 1000);
+  if ("status" in b && ["ACTIVE", "PAUSED"].includes(String(b.status))) data.status = String(b.status);
+  res.json(await prisma.voucherType.update({ where: { id: t.id }, data }));
+});
+ownerRouter.delete("/voucher-types/:id", async (req, res) => {
+  const t = await ownedVoucherType(req.ownerId, Number(req.params.id));
+  if (!t) return res.status(404).json({ error: "Voucher not found." });
+  await prisma.voucherType.delete({ where: { id: t.id } });
+  res.json({ ok: true });
+});
+
+// Sold vouchers list
+ownerRouter.get("/businesses/:id/vouchers", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const list = await prisma.voucher.findMany({ where: { businessId: business.id }, orderBy: { createdAt: "desc" }, take: 300 });
+  res.json(list.map((v) => ({ ...v, status: effectiveStatus(v) })));
+});
+
+// Voucher analytics
+ownerRouter.get("/businesses/:id/voucher-stats", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const [vouchers, types] = await Promise.all([
+    prisma.voucher.findMany({ where: { businessId: business.id } }),
+    prisma.voucherType.findMany({ where: { businessId: business.id } }),
+  ]);
+  const sold = vouchers.length;
+  const revenue = Math.round(vouchers.reduce((s, v) => s + (v.price || 0), 0) * 100) / 100;
+  const redeemed = vouchers.filter((v) => v.status === "REDEEMED").length;
+  const outstanding = Math.round(vouchers.filter((v) => effectiveStatus(v) === "ACTIVE").reduce((s, v) => s + (v.kind === "FIXED" ? v.balance : v.value), 0) * 100) / 100;
+  const byType = new Map<string, number>();
+  for (const v of vouchers) byType.set(v.title, (byType.get(v.title) ?? 0) + 1);
+  const top = [...byType.entries()].sort((a, b) => b[1] - a[1])[0];
+  res.json({
+    sold, revenue, redeemed, types: types.length,
+    redemptionRate: sold ? Math.round((redeemed / sold) * 100) : 0,
+    avgValue: sold ? Math.round((vouchers.reduce((s, v) => s + v.value, 0) / sold) * 100) / 100 : 0,
+    mostPopular: top ? { name: top[0], count: top[1] } : null,
+    outstandingLiability: outstanding,
+  });
+});
+
+// Redeem by code (scan or manual) — finds the voucher across the owner's businesses.
+ownerRouter.get("/voucher-lookup", async (req, res) => {
+  const code = String(req.query.code ?? "").trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: "A code is required." });
+  const v = await prisma.voucher.findFirst({ where: { code, business: { ownerId: req.ownerId } }, include: { business: { select: { name: true } } } });
+  if (!v) return res.status(404).json({ error: "No voucher matches that code." });
+  res.json({ ...v, status: effectiveStatus(v) });
+});
+ownerRouter.post("/voucher-redeem", async (req, res) => {
+  const code = String(req.body.code ?? "").trim().toUpperCase();
+  const v = await prisma.voucher.findFirst({ where: { code, business: { ownerId: req.ownerId } } });
+  if (!v) return res.status(404).json({ error: "No voucher matches that code." });
+  const status = effectiveStatus(v);
+  if (status !== "ACTIVE") return res.status(400).json({ error: `This voucher is ${status.toLowerCase().replace("_", " ")} and can't be redeemed.` });
+
+  let amount: number;
+  if (v.kind === "FIXED") {
+    amount = Math.round(Math.max(0, Math.min(v.balance, Number(req.body.amount) || v.balance)) * 100) / 100;
+    if (amount <= 0) return res.status(400).json({ error: "Enter an amount to redeem." });
+  } else {
+    amount = v.value;
+  }
+  const newBalance = v.kind === "FIXED" ? Math.round((v.balance - amount) * 100) / 100 : 0;
+  const fullyUsed = v.kind !== "FIXED" || newBalance <= 0.0001;
+  const updated = await prisma.voucher.update({
+    where: { id: v.id },
+    data: { balance: newBalance, status: fullyUsed ? "REDEEMED" : "ACTIVE", redeemedAt: fullyUsed ? new Date() : v.redeemedAt },
+  });
+  await prisma.voucherRedemption.create({ data: { voucherId: v.id, amount, note: STR(req.body.note, 200) } });
+  res.json({ ok: true, redeemed: amount, remainingBalance: updated.balance, status: updated.status, title: v.title });
 });
 
 // ---- Offers ----

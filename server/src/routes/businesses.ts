@@ -71,6 +71,7 @@ businessesRouter.get("/:slug", async (req, res) => {
       offers: { where: { isActive: true }, orderBy: { createdAt: "desc" } },
       events: { where: { isPublished: true, startTime: { gte: new Date(Date.now() - 86400000) } }, orderBy: { startTime: "asc" } },
       facilities: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      voucherTypes: { where: { status: "ACTIVE" }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
     },
   });
   if (!business || !business.isPublished) return res.status(404).json({ error: "Business not found." });
@@ -79,11 +80,15 @@ businessesRouter.get("/:slug", async (req, res) => {
   prisma.business.update({ where: { id: business.id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
   recordEvent(business.id, "PROFILE_VIEW");
 
-  const { facilities, ...rest } = business as typeof business & { facilities: { id: number; name: string; type: string; description: string; image: string | null; hourlyRate: number; capacityNote: string; pricing: string }[] };
+  const { facilities, voucherTypes, ...rest } = business as typeof business & {
+    facilities: { id: number; name: string; type: string; description: string; image: string | null; hourlyRate: number; capacityNote: string }[];
+    voucherTypes: { id: number; soldCount: number; maxQuantity: number }[];
+  };
   res.json({
     ...outBusiness(rest),
     hasFacilities: facilities.length > 0,
     facilities: facilities.map((f) => ({ id: f.id, name: f.name, type: f.type, description: f.description, image: f.image, hourlyRate: f.hourlyRate, capacityNote: f.capacityNote })),
+    hasVouchers: voucherTypes.some((t) => t.maxQuantity === 0 || t.soldCount < t.maxQuantity),
   });
 });
 
