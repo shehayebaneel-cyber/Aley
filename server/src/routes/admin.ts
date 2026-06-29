@@ -128,6 +128,60 @@ adminRouter.post("/businesses/:id/reject", async (req, res) => {
   res.json(outBusiness(updated));
 });
 
+// ---- Bulk import businesses (CSV from OSM fetcher) ----
+const normPhone = (p: unknown): string => {
+  const s = String(p ?? "").replace(/[^\d+]/g, "");
+  if (!s) return "";
+  if (s.startsWith("+")) return s;
+  if (s.startsWith("00")) return "+" + s.slice(2);
+  if (s.startsWith("0")) return "+961" + s.slice(1);
+  return s.length >= 7 ? "+961" + s : s;
+};
+adminRouter.post("/businesses/import", async (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? (req.body.rows as Record<string, unknown>[]) : [];
+  const dryRun = !!req.body?.dryRun;
+  if (!rows.length) return res.status(400).json({ error: "No rows to import." });
+  const city = await prisma.city.findUnique({ where: { slug: "aley" } });
+  if (!city) return res.status(400).json({ error: "City 'aley' not found." });
+
+  const cats = await prisma.category.findMany({ select: { id: true, slug: true, color: true } });
+  const catMap = new Map(cats.map((c) => [c.slug, c]));
+  const existing = await prisma.business.findMany({ select: { slug: true, name: true } });
+  const slugSet = new Set(existing.map((b) => b.slug));
+  const nameSet = new Set(existing.map((b) => b.name.toLowerCase().trim()));
+  const batchNames = new Set<string>();
+  const uniqueSlug = (base: string) => { let s = base || "business"; let i = 2; while (slugSet.has(s)) s = `${base}-${i++}`; slugSet.add(s); return s; };
+
+  let created = 0, duplicates = 0, unknownCategories = 0;
+  const byCategory: Record<string, number> = {};
+  const toCreate: Record<string, unknown>[] = [];
+  for (const r of rows) {
+    const name = String(r.name ?? "").trim();
+    const catSlug = String(r.category ?? "").trim();
+    if (!name) continue;
+    const cat = catMap.get(catSlug);
+    if (!cat) { unknownCategories++; continue; }
+    const key = name.toLowerCase();
+    if (nameSet.has(key) || batchNames.has(key)) { duplicates++; continue; }
+    batchNames.add(key);
+    byCategory[catSlug] = (byCategory[catSlug] ?? 0) + 1;
+    created++;
+    if (!dryRun) {
+      const phone = normPhone(r.phone);
+      toCreate.push({
+        slug: uniqueSlug(slugify(name)), cityId: city.id, categoryId: cat.id, name, phone, whatsapp: phone,
+        address: String(r.address ?? "").slice(0, 200), website: String(r.website ?? "").slice(0, 200),
+        lat: Number.isFinite(Number(r.lat)) && r.lat !== "" ? Number(r.lat) : null,
+        lng: Number.isFinite(Number(r.lng)) && r.lng !== "" ? Number(r.lng) : null,
+        logo: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${String(cat.color ?? "#0d9488").replace("#", "")}&color=fff&bold=true&size=256`,
+        isPublished: true, isVerified: false, isClaimed: false, reviewStatus: "APPROVED",
+      });
+    }
+  }
+  if (!dryRun) for (let i = 0; i < toCreate.length; i += 200) await prisma.business.createMany({ data: toCreate.slice(i, i + 200) as never });
+  res.json({ created, duplicates, unknownCategories, byCategory, total: rows.length, dryRun });
+});
+
 // ---- Notifications (admin alerts) ----
 adminRouter.get("/notifications", async (_req, res) => {
   const [items, unread] = await Promise.all([

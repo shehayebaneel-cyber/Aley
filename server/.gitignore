@@ -4,3 +4,4 @@ dev.db-journal
 .env
 uploads/
 dist/
+aley-businesses.csv

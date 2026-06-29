@@ -15,6 +15,7 @@ const LINKS = [
   { to: "/admin/delivery", tk: "anav.delivery" },
   { to: "/admin/drivers", tk: "anav.drivers" },
   { to: "/admin/businesses", tk: "anav.businesses" },
+  { to: "/admin/import", tk: "anav.import" },
   { to: "/admin/claims", tk: "anav.claims" },
   { to: "/admin/categories", tk: "anav.categories" },
   { to: "/admin/reviews", tk: "anav.reviews" },

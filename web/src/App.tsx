@@ -45,6 +45,7 @@ import { AdminMarketplace } from "./pages/admin/AdminMarketplace";
 import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
+import { AdminImport } from "./pages/admin/AdminImport";
 import { AdminVouchers } from "./pages/admin/AdminVouchers";
 import { AdminPayments } from "./pages/admin/AdminPayments";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
@@ -154,6 +155,7 @@ export default function App() {
           <Route path="ai" element={<AdminAi />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="businesses" element={<AdminBusinesses />} />
+          <Route path="import" element={<AdminImport />} />
           <Route path="businesses/:id" element={<AdminBusinessEdit />} />
           <Route path="claims" element={<AdminClaims />} />
           <Route path="notifications" element={<AdminNotifications />} />
