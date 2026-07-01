@@ -12,12 +12,15 @@ export interface User {
 interface UserAuthValue {
   user: User | null;
   favoriteIds: Set<number>;
+  savedOfferIds: Set<number>;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string }) => Promise<void>;
   logout: () => void;
   isFavorite: (businessId: number) => boolean;
   toggleFavorite: (businessId: number) => Promise<void>;
+  isSavedOffer: (offerId: number) => boolean;
+  toggleSaveOffer: (offerId: number) => Promise<void>;
   openAuth: () => void;
 }
 
@@ -26,19 +29,22 @@ const UserAuthContext = createContext<UserAuthValue | null>(null);
 export function UserAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [savedOfferIds, setSavedOfferIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(() => Boolean(getUserToken()));
   const [authOpen, setAuthOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!getUserToken()) return;
     try {
-      const data = await userApi.get<{ user: User; favoriteIds: number[] }>("/api/me");
+      const data = await userApi.get<{ user: User; favoriteIds: number[]; savedOfferIds?: number[] }>("/api/me");
       setUser(data.user);
       setFavoriteIds(new Set(data.favoriteIds));
+      setSavedOfferIds(new Set(data.savedOfferIds ?? []));
     } catch {
       setUserToken(null);
       setUser(null);
       setFavoriteIds(new Set());
+      setSavedOfferIds(new Set());
     }
   }, []);
 
@@ -53,6 +59,7 @@ export function UserAuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       favoriteIds,
+      savedOfferIds,
       loading,
       login: async (email, password) => {
         const res = await userApi.post<{ token: string; user: User }>("/api/auth/user/login", { email, password });
@@ -70,6 +77,7 @@ export function UserAuthProvider({ children }: { children: ReactNode }) {
         setUserToken(null);
         setUser(null);
         setFavoriteIds(new Set());
+        setSavedOfferIds(new Set());
       },
       isFavorite: (id) => favoriteIds.has(id),
       toggleFavorite: async (id) => {
@@ -91,9 +99,28 @@ export function UserAuthProvider({ children }: { children: ReactNode }) {
           refresh();
         }
       },
+      isSavedOffer: (id) => savedOfferIds.has(id),
+      toggleSaveOffer: async (id) => {
+        if (!getUserToken()) {
+          setAuthOpen(true);
+          return;
+        }
+        const has = savedOfferIds.has(id);
+        setSavedOfferIds((prev) => {
+          const next = new Set(prev);
+          has ? next.delete(id) : next.add(id);
+          return next;
+        });
+        try {
+          if (has) await userApi.delete(`/api/me/offers/${id}/save`);
+          else await userApi.post(`/api/me/offers/${id}/save`, {});
+        } catch {
+          refresh();
+        }
+      },
       openAuth: () => setAuthOpen(true),
     }),
-    [user, favoriteIds, loading, refresh]
+    [user, favoriteIds, savedOfferIds, loading, refresh]
   );
 
   return (

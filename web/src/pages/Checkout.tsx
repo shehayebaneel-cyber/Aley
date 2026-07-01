@@ -82,7 +82,7 @@ export function Checkout() {
             </div>
             {f.fulfillment === "DELIVERY" && (
               <>
-                <textarea value={f.address} onChange={(e) => set({ address: e.target.value })} rows={2} placeholder="Delivery address in Aley" className="input mt-3" />
+                <textarea value={f.address} onChange={(e) => set({ address: e.target.value })} rows={2} placeholder="Delivery address" className="input mt-3" />
                 <div className="mt-3"><MapPicker lat={f.lat} lng={f.lng} onChange={({ lat, lng }) => set({ lat, lng })} /></div>
               </>
             )}

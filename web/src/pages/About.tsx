@@ -27,7 +27,7 @@ export function About() {
           {[
             { n: "1", t: "Discover", d: "Search and explore every business, place, and event in the city." },
             { n: "2", t: "Support", d: "Back local businesses and fund community projects, transparently." },
-            { n: "3", t: "Experience", d: "Offers, reviews, and hidden gems bring Aley to life." },
+            { n: "3", t: "Experience", d: "Offers, reviews, and hidden gems bring your city to life." },
           ].map((s) => (
             <div key={s.n} className="card p-5">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{s.n}</span>
@@ -40,7 +40,7 @@ export function About() {
         <div className="card mt-8 flex flex-col items-start gap-3 bg-gradient-to-r from-brand to-brand-dark p-8 text-white sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="font-display text-xl font-extrabold">Love your town?</h3>
-            <p className="text-white/85">Support and shape the projects making Aley better.</p>
+            <p className="text-white/85">Support and shape the projects making your city better.</p>
           </div>
           <Link to="/projects" className="btn bg-white px-6 py-2.5 text-brand-dark">Love Aley ❤</Link>
         </div>
@@ -54,7 +54,7 @@ export function About() {
 
         <div className="card mt-12 flex flex-col items-start gap-3 p-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="font-display text-xl font-extrabold text-ink">Own a business in Aley?</h3>
+            <h3 className="font-display text-xl font-extrabold text-ink">Own a business?</h3>
             <p className="text-muted">Get your own page, publish offers and events, and reach the whole city.</p>
           </div>
           <Link to="/owner/login" className="btn btn-primary px-6 py-2.5">List your business</Link>

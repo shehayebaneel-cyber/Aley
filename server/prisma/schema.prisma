@@ -139,6 +139,11 @@ model Business {
   transactions   Transaction[]
   payouts        Payout[]
   analyticsEvents AnalyticsEvent[]
+  // Spare-parts shop profile (JSON: {brands:[], makes:[], partCategories:[], newParts, usedParts, oem, aftermarket})
+  partsProfile   String @default("{}")
+  serviceQuotes  ServiceQuote[]
+  serviceTargets ServiceRequestTarget[]
+  collectionItems CollectionItem[]
 }
 
 // A business owner account (manages one or more businesses from a dashboard).
@@ -196,6 +201,135 @@ model User {
   facilityBookings FacilityBooking[]
   purchasedVouchers Voucher[] @relation("purchasedVouchers")
   walletEntries WalletEntry[]
+  savedOffers   OfferSave[]
+  offerClaims   OfferRedemption[]
+  savedEvents   EventSave[]
+  eventRsvps    EventRSVP[]
+  eventBookings EventBooking[]
+  serviceRequests ServiceRequest[]
+  savedCollections CollectionSave[]
+  vehicles      UserVehicle[]
+  savedGiftCards VoucherSave[]
+}
+
+// A customer's saved vehicle ("garage") so they can reuse car details in requests.
+model UserVehicle {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String   @default("")
+  make      String   @default("")
+  model     String   @default("")
+  year      String   @default("")
+  engine    String   @default("")
+  vin       String   @default("")
+  plate     String   @default("")
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+// ---- Discover: curated collections of places ----
+// Admin-managed themed collections ("Worth the Drive", "Local Favorites"…).
+// Each has a cover, description, and a hand-picked, ordered set of businesses.
+model Collection {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  title       String
+  description String   @default("")
+  emoji       String   @default("✨")
+  coverImage  String?
+  cityId      Int?     // optional: a collection can be city-specific
+  isFeatured  Boolean  @default(false) // shown on the homepage Discover strip
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  items       CollectionItem[]
+  saves       CollectionSave[]
+}
+
+model CollectionItem {
+  id           Int      @id @default(autoincrement())
+  collectionId Int
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  businessId   Int
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sortOrder    Int      @default(0)
+  @@unique([collectionId, businessId])
+  @@index([collectionId])
+}
+
+model CollectionSave {
+  id           Int      @id @default(autoincrement())
+  collectionId Int
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  @@unique([collectionId, userId])
+  @@index([userId])
+}
+
+// ---- Generic request-for-quote (RFQ) system ----
+// A customer posts ONE request; it broadcasts to matching businesses, who reply
+// with quotes. Built generic (type) so it extends to mechanics/plumbers/etc.
+// `payload` holds the type-specific fields (e.g. car make/model/year for parts).
+model ServiceRequest {
+  id            Int      @id @default(autoincrement())
+  type          String   @default("SPARE_PARTS") // SPARE_PARTS | MECHANIC | PLUMBER | …
+  categorySlug  String   @default("") // target category (e.g. "auto-parts")
+  cityId        Int?
+  userId        Int?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customerName  String   @default("")
+  customerPhone String   @default("")
+  customerWhatsapp String @default("")
+  city          String   @default("")
+  payload       String   @default("{}") // JSON, type-specific (make/model/year/part…)
+  notes         String   @default("")
+  photos        String   @default("[]") // JSON array of image URLs
+  budget        Float    @default(0)
+  // SUBMITTED | SENT | REPLIES | SELECTED | COMPLETED | CANCELLED | EXPIRED
+  status        String   @default("SENT")
+  selectedQuoteId Int?
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime?
+  quotes        ServiceQuote[]
+  targets       ServiceRequestTarget[]
+  @@index([type])
+  @@index([userId])
+}
+
+// Which businesses a request was broadcast to (their per-shop read/reply state).
+model ServiceRequestTarget {
+  id         Int      @id @default(autoincrement())
+  requestId  Int
+  request    ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  status     String   @default("NEW") // NEW | VIEWED | REPLIED | DECLINED
+  createdAt  DateTime @default(now())
+  @@unique([requestId, businessId])
+  @@index([businessId])
+}
+
+// A shop's reply to a request (price + availability).
+model ServiceQuote {
+  id            Int      @id @default(autoincrement())
+  requestId     Int
+  request       ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  businessId    Int
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  available     Boolean  @default(true)
+  price         Float    @default(0)
+  eta           String   @default("") // estimated completion time, e.g. "2-3 days"
+  offersDelivery Boolean @default(false) // delivery / on-site / mobile service
+  note          String   @default("")
+  photos        String   @default("[]") // JSON array of image URLs
+  status        String   @default("SENT") // SENT | ACCEPTED | DECLINED
+  createdAt     DateTime @default(now())
+  @@unique([requestId, businessId])
+  @@index([requestId])
+  @@index([businessId])
 }
 
 // Customer prepaid wallet ledger: one row per money event. The balance is
@@ -392,9 +526,23 @@ model VoucherType {
   soldCount   Int      @default(0)
   terms       String   @default("")
   status      String   @default("ACTIVE") // ACTIVE | PAUSED
+  isFeatured  Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   vouchers    Voucher[]
+  saves       VoucherSave[]
+}
+
+// A customer bookmarking a gift-card product.
+model VoucherSave {
+  id            Int      @id @default(autoincrement())
+  voucherTypeId Int
+  voucherType   VoucherType @relation(fields: [voucherTypeId], references: [id], onDelete: Cascade)
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  @@unique([voucherTypeId, userId])
+  @@index([userId])
 }
 
 // An issued/purchased gift voucher.
@@ -543,13 +691,93 @@ model Event {
   business    Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   title       String
   description String   @default("")
-  category    String   @default("") // Live Music, Sports, Community, Promotion...
+  category    String   @default("") // taxonomy in lib/events.ts EVENT_CATEGORIES
   image       String?
-  location    String   @default("")
+  gallery     String   @default("[]") // JSON array of {url, caption?}
+  location    String   @default("") // venue / address text
+  lat         Float?
+  lng         Float?
+  organizerName  String @default("")
+  organizerPhone String @default("")
+  organizerEmail String @default("")
   startTime   DateTime
   endTime     DateTime?
+  capacity    Int      @default(0) // total attendee cap (0 = unlimited)
+  isFeatured  Boolean  @default(false)
   isPublished Boolean  @default(true)
+  viewCount   Int      @default(0)
   createdAt   DateTime @default(now())
+  ticketTypes EventTicketType[]
+  bookings    EventBooking[]
+  rsvps       EventRSVP[]
+  saves       EventSave[]
+}
+
+// A ticket tier for an event. A free event has none (or a FREE tier); paid events
+// can offer GENERAL / VIP / EARLY_BIRD / STUDENT / FAMILY tiers.
+model EventTicketType {
+  id          Int      @id @default(autoincrement())
+  eventId     Int
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  kind        String   @default("GENERAL") // GENERAL | VIP | EARLY_BIRD | STUDENT | FAMILY | FREE
+  price       Float    @default(0)
+  quantity    Int      @default(0) // 0 = unlimited
+  soldCount   Int      @default(0)
+  description String   @default("")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  bookings    EventBooking[]
+  @@index([eventId])
+}
+
+// A ticket reservation/purchase (free reserve or paid). Code/QR shown at the door.
+model EventBooking {
+  id            Int      @id @default(autoincrement())
+  eventId       Int
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketTypeId  Int?
+  ticketType    EventTicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
+  businessId    Int?
+  userId        Int?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customerName  String   @default("")
+  customerPhone String   @default("")
+  customerEmail String   @default("")
+  quantity      Int      @default(1)
+  amount        Float    @default(0) // total paid
+  method        String   @default("FREE") // FREE | WALLET | CARD | PAY_AT_VENUE
+  status        String   @default("CONFIRMED") // CONFIRMED | CANCELLED | CHECKED_IN
+  code          String   @unique
+  checkedInAt   DateTime?
+  createdAt     DateTime @default(now())
+  @@index([eventId])
+  @@index([userId])
+}
+
+// Going / Interested / Maybe.
+model EventRSVP {
+  id        Int      @id @default(autoincrement())
+  eventId   Int
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("INTERESTED") // INTERESTED | GOING | MAYBE
+  createdAt DateTime @default(now())
+  @@unique([eventId, userId])
+  @@index([eventId])
+}
+
+// Bookmarked event.
+model EventSave {
+  id        Int      @id @default(autoincrement())
+  eventId   Int
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([eventId, userId])
+  @@index([userId])
 }
 
 // A promotion / discount published by a business.
@@ -561,12 +789,54 @@ model Offer {
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   title       String
   description String   @default("")
-  type        String   @default("DISCOUNT") // DISCOUNT | BOGO | HAPPY_HOUR | SEASONAL
+  // PERCENT | BOGO | FREE_ITEM | HAPPY_HOUR | PACKAGE | STUDENT | BIRTHDAY | SEASONAL | FIRST_VISIT | LOYALTY | DISCOUNT(legacy)
+  type        String   @default("PERCENT")
+  badge       String   @default("") // big promo label, e.g. "50% OFF", "Buy 1 Get 1", "Free Dessert"
+  terms       String   @default("") // terms & conditions
+  redeemInfo  String   @default("") // how to redeem (shown to the customer)
   image       String?
   startDate   DateTime?
   endDate     DateTime?
   isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  maxRedemptions Int   @default(0) // 0 = unlimited
+  redeemedCount  Int   @default(0)
+  viewCount   Int      @default(0)
   createdAt   DateTime @default(now())
+  saves       OfferSave[]
+  redemptions OfferRedemption[]
+}
+
+// A customer bookmarking an offer ("save deal").
+model OfferSave {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId   Int
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, offerId])
+  @@index([userId])
+}
+
+// A customer claiming/redeeming an offer at a business. Claim → unique code/QR the
+// staff scans; owner marks it REDEEMED (mirrors the gift-voucher redemption flow).
+model OfferRedemption {
+  id            Int      @id @default(autoincrement())
+  offerId       Int
+  offer         Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  businessId    Int
+  userId        Int?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  code          String   @unique
+  status        String   @default("CLAIMED") // CLAIMED | REDEEMED | EXPIRED | CANCELLED
+  customerName  String   @default("")
+  customerPhone String   @default("")
+  createdAt     DateTime @default(now())
+  redeemedAt    DateTime?
+  @@index([offerId])
+  @@index([userId])
+  @@index([businessId])
 }
 
 // Key/value store for homepage content, ads, feature flags, etc.

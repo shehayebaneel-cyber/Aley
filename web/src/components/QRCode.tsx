@@ -18,3 +18,6 @@ export const checkInUrl = (code: string) => `${window.location.origin}/owner/che
 
 /** Builds the voucher-redeem URL a business scans to redeem a gift voucher. */
 export const redeemUrl = (code: string) => `${window.location.origin}/owner/redeem?code=${encodeURIComponent(code)}`;
+
+/** Builds the offer-redeem URL a business scans to redeem a claimed offer. */
+export const redeemOfferUrl = (code: string) => `${window.location.origin}/owner/redeem-offer?code=${encodeURIComponent(code)}`;

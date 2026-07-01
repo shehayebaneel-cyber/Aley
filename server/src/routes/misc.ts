@@ -3,6 +3,8 @@ import { optionalUser } from "../auth";
 import { prisma } from "../db";
 import { notifyAdmins } from "../lib/notify";
 import { outBusiness, outCard } from "../lib/serialize";
+import { outVoucherCard, voucherAvailable } from "../lib/voucher";
+import { eventCountsFor, outEvent } from "../lib/events";
 
 // Cities, categories, events, offers, reviews, and the homepage aggregate.
 
@@ -36,44 +38,6 @@ categoriesRouter.get("/", async (req, res) => {
     return categories.map((c) => ({ ...c, count: map.get(c.id) ?? 0 }));
   });
   res.json(data);
-});
-
-export const eventsRouter = Router();
-eventsRouter.get("/", async (req, res) => {
-  const q = req.query as Record<string, string>;
-  const where: Record<string, unknown> = { isPublished: true };
-  if (q.city) where.city = { is: { slug: q.city } };
-  if (q.category) where.category = q.category;
-  if (q.upcoming !== "false") where.startTime = { gte: new Date(Date.now() - 86400000) };
-  const events = await prisma.event.findMany({
-    where,
-    orderBy: { startTime: "asc" },
-    include: { business: { select: { slug: true, name: true, logo: true } } },
-  });
-  res.json(events);
-});
-
-export const offersRouter = Router();
-offersRouter.get("/", async (req, res) => {
-  const q = req.query as Record<string, string>;
-  const where: Record<string, unknown> = { isActive: true };
-  if (q.city) where.city = { is: { slug: q.city } };
-  const offers = await prisma.offer.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: {
-      business: {
-        select: {
-          slug: true,
-          name: true,
-          logo: true,
-          cover: true,
-          category: { select: { slug: true, name: true, group: true, icon: true, color: true } },
-        },
-      },
-    },
-  });
-  res.json(offers);
 });
 
 export const reviewsRouter = Router();
@@ -127,12 +91,13 @@ reservationsRouter.post("/", optionalUser, async (req, res) => {
   res.status(201).json({ ok: true, reservation, message: "Request sent! The venue will confirm your booking shortly." });
 });
 
-// GET /api/home?city=aley — everything the homepage needs in one call.
+// GET /api/home[?city=slug] — everything the homepage needs in one call.
+// No city = nationwide (all of Lebanon); a city slug scopes it to that city.
 export const homeRouter = Router();
 homeRouter.get("/", async (req, res) => {
-  const city = String(req.query.city ?? "aley");
-  const data = await cached(`home:${city}`, 60_000, async () => {
-  const cityWhere = { city: { is: { slug: city } } };
+  const city = String(req.query.city ?? "");
+  const data = await cached(`home:${city || "all"}`, 60_000, async () => {
+  const cityWhere = city ? { city: { is: { slug: city } } } : {};
   const base = { isPublished: true, ...cityWhere };
 
   const [featured, newest, popular, offers, events, categories, cityRow, totalBusinesses] = await Promise.all([
@@ -140,20 +105,23 @@ homeRouter.get("/", async (req, res) => {
     prisma.business.findMany({ where: base, take: 8, orderBy: { createdAt: "desc" }, include: { category: true } }),
     prisma.business.findMany({ where: base, take: 8, orderBy: [{ reviewCount: "desc" }, { rating: "desc" }], include: { category: true } }),
     prisma.offer.findMany({ where: { isActive: true, ...cityWhere }, take: 6, orderBy: { createdAt: "desc" }, include: { business: { select: { slug: true, name: true, logo: true, cover: true } } } }),
-    prisma.event.findMany({ where: { isPublished: true, startTime: { gte: new Date(Date.now() - 86400000) }, ...cityWhere }, take: 6, orderBy: { startTime: "asc" }, include: { business: { select: { slug: true, name: true } } } }),
+    prisma.event.findMany({ where: { isPublished: true, startTime: { gte: new Date(Date.now() - 21600000) }, ...cityWhere }, take: 6, orderBy: [{ isFeatured: "desc" }, { startTime: "asc" }], include: { business: { select: { slug: true, name: true, logo: true, cover: true, category: { select: { slug: true, name: true, group: true, icon: true, color: true } } } }, ticketTypes: true } }),
     prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
-    prisma.city.findUnique({ where: { slug: city } }),
+    city ? prisma.city.findUnique({ where: { slug: city } }) : Promise.resolve(null),
     prisma.business.count({ where: base }),
   ]);
 
   const counts = await prisma.business.groupBy({ by: ["categoryId"], where: base, _count: { _all: true } });
   const countMap = new Map(counts.map((c) => [c.categoryId, c._count._all]));
 
-  // Businesses that sell gift vouchers (≥1 active voucher product).
-  const gift = await prisma.business.findMany({
-    where: { ...base, voucherTypes: { some: { status: "ACTIVE" } } },
-    take: 8, orderBy: [{ isFeatured: "desc" }, { rating: "desc" }], include: { category: true },
+  // Gift-card marketplace: the most popular buyable voucher PRODUCTS (not businesses).
+  const giftRows = await prisma.voucherType.findMany({
+    where: { status: "ACTIVE", business: { is: base } },
+    take: 16, orderBy: [{ soldCount: "desc" }, { id: "desc" }],
+    include: { business: { select: { slug: true, name: true, logo: true, cover: true, category: { select: { slug: true, name: true, group: true, icon: true, color: true } } } } },
   });
+  const gift = giftRows.filter(voucherAvailable).slice(0, 8).map(outVoucherCard);
+  const eventCounts = await eventCountsFor(events.map((e) => e.id));
 
   const [eventsCount, offersCount, activeCategories] = await Promise.all([
     prisma.event.count({ where: { isPublished: true, ...cityWhere } }),
@@ -179,9 +147,9 @@ homeRouter.get("/", async (req, res) => {
     featured: featured.map(outCard),
     newest: newest.map(outCard),
     popular: popular.map(outCard),
-    gift: gift.map(outCard),
+    gift,
     offers,
-    events,
+    events: events.map((e) => outEvent(e, { counts: eventCounts.get(e.id) })),
     categories: categories.map((c) => ({ ...c, count: countMap.get(c.id) ?? 0 })).filter((c) => c.count > 0).slice(0, 12),
     groups: [...groupMap.values()],
   };

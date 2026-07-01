@@ -74,7 +74,7 @@ async function main() {
   for (let i = 0; i < reviewRows.length; i += 500) await prisma.review.createMany({ data: reviewRows.slice(i, i + 500) });
 
   // ---- Offers + events (bulk) ----
-  const offerRows = businesses.filter((b) => b.offer).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.offer!.title, description: b.offer!.description, type: b.offer!.type, image: photo(`${b.slug}-offer`, b.category, 800, 500), isActive: true }));
+  const offerRows = businesses.filter((b) => b.offer).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.offer!.title, description: b.offer!.description, type: b.offer!.type, badge: b.offer!.badge ?? "", terms: b.offer!.terms ?? "", redeemInfo: "Show your claim code at the counter to redeem.", isFeatured: !!b.offer!.featured, endDate: b.offer!.endDays ? new Date(Date.now() + b.offer!.endDays * 86400000) : null, image: photo(`${b.slug}-offer`, b.category, 800, 500), isActive: true }));
   await prisma.offer.createMany({ data: offerRows });
 
   const eventRows = businesses.filter((b) => b.event).map((b) => ({ businessId: bizId.get(b.slug)!, cityId: aley.id, title: b.event!.title, category: b.event!.category, description: b.event!.description, location: b.name, image: photo(`${b.slug}-event`, b.category, 1000, 600), startTime: new Date(Date.now() + b.event!.days * 86400000), isPublished: true }));

@@ -88,6 +88,8 @@ export function outCard<T extends Record<string, unknown>>(b: T) {
     address: b.address,
     phone: b.phone,
     whatsapp: b.whatsapp,
+    lat: b.lat,
+    lng: b.lng,
     city: b.city,
     openNow: isOpenNow(parseArr(b.hours) as HoursRow[]),
   };

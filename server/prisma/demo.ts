@@ -8,7 +8,7 @@
 export interface HoursRow { day: number; open: string; close: string; closed: boolean }
 export interface ReviewSeed { authorName: string; rating: number; comment: string }
 export interface ProductSection { title: string; items: { name: string; price?: number; description?: string }[] }
-export interface OfferSeed { title: string; description: string; type: string }
+export interface OfferSeed { title: string; description: string; type: string; badge?: string; terms?: string; featured?: boolean; endDays?: number }
 export interface EventSeed { title: string; category: string; description: string; days: number }
 
 export interface BizSeed {
@@ -518,13 +518,19 @@ function faqsFor(kind: Kind): { q: string; a: string }[] {
 
 function offerFor(kind: Kind): OfferSeed | undefined {
   const map: Partial<Record<Kind, OfferSeed[]>> = {
-    cafe: [{ title: "Buy 1 Get 1 Coffee", description: "Weekdays 3–5pm.", type: "HAPPY_HOUR" }],
-    restaurant: [{ title: "20% Off Family Platters", description: "Weekends, dine-in or delivery.", type: "DISCOUNT" }],
-    fashion: [{ title: "End of Season Sale", description: "Up to 40% off selected items.", type: "SEASONAL" }],
-    shop: [{ title: "Weekend Deals", description: "Special prices all weekend.", type: "DISCOUNT" }],
-    service: [{ title: "First Visit 15% Off", description: "New customers only.", type: "DISCOUNT" }],
-    sweets: [{ title: "Free Box with every 2", description: "Limited-time loyalty deal.", type: "BOGO" }],
-    health: [{ title: "Free First Consultation", description: "For new patients.", type: "DISCOUNT" }],
+    cafe: [
+      { title: "Buy 1 Get 1 Coffee", description: "Every weekday, 3–5pm.", type: "HAPPY_HOUR", badge: "Buy 1 Get 1", featured: true, endDays: 14 },
+      { title: "Free Dessert with Brunch", description: "Order any brunch and pick a dessert on us.", type: "FREE_ITEM", badge: "Free Dessert" },
+    ],
+    restaurant: [
+      { title: "20% Off Family Platters", description: "Weekends, dine-in or delivery.", type: "PERCENT", badge: "20% OFF", featured: true, endDays: 10 },
+      { title: "Lunch Combo Deal", description: "Main + side + drink, one great price.", type: "PACKAGE", badge: "Combo Deal" },
+    ],
+    fashion: [{ title: "End of Season Sale", description: "Up to 40% off selected items.", type: "SEASONAL", badge: "Up to 40% OFF", featured: true, endDays: 21 }],
+    shop: [{ title: "Weekend Deals", description: "Special prices all weekend.", type: "PERCENT", badge: "Weekend Deal", endDays: 4 }],
+    service: [{ title: "First Visit 15% Off", description: "New customers only.", type: "FIRST_VISIT", badge: "15% OFF" }],
+    sweets: [{ title: "Free Box with Every 2", description: "Limited-time loyalty deal.", type: "BOGO", badge: "Buy 2 Get 1" }],
+    health: [{ title: "Free First Consultation", description: "For new patients.", type: "FIRST_VISIT", badge: "Free Consult" }],
   };
   const arr = map[kind];
   return arr ? rand(arr) : undefined;
@@ -557,7 +563,13 @@ function buildOne(name: string, category: string, opts: { real?: boolean } = {})
     isFeatured: opts.real ? chance(0.5) : chance(0.12), isVerified: opts.real ? true : chance(0.55),
     rating, reviewCount: reviews.length, reviews,
     offer: chance(0.3) ? offerFor(kind) : undefined,
-    event: chance(0.1) ? { title: rand(["Live Music Night", "Weekend Special", "Community Day", "Grand Opening", "Tasting Event"]), category: rand(["Live Music", "Community", "Promotion"]), description: "Join us — everyone's welcome!", days: randInt(2, 20) } : undefined,
+    event: chance(0.1) ? rand([
+      { title: "Live Music Night", category: "live-music", description: "An evening of live music — everyone's welcome!", days: randInt(2, 20) },
+      { title: "Weekend Food Festival", category: "food-drinks", description: "Tastings, stalls and family fun all weekend.", days: randInt(2, 9) },
+      { title: "Community Day", category: "community", description: "Join your neighbours for a day of activities.", days: randInt(2, 20) },
+      { title: "Hands-on Workshop", category: "workshops", description: "Learn something new with our team.", days: randInt(2, 20) },
+      { title: "Art & Culture Evening", category: "art-culture", description: "Local art, music and culture under one roof.", days: randInt(2, 20) },
+    ]) : undefined,
   };
 }
 

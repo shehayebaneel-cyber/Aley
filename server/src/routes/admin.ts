@@ -465,7 +465,11 @@ adminRouter.get("/events", async (_req, res) => {
   res.json(await prisma.event.findMany({ orderBy: { startTime: "desc" }, include: { business: { select: { name: true, slug: true } } } }));
 });
 adminRouter.patch("/events/:id", async (req, res) => {
-  res.json(await prisma.event.update({ where: { id: Number(req.params.id) }, data: { isPublished: !!req.body.isPublished } }));
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("isPublished" in b) data.isPublished = !!b.isPublished;
+  if ("isFeatured" in b) data.isFeatured = !!b.isFeatured;
+  res.json(await prisma.event.update({ where: { id: Number(req.params.id) }, data }));
 });
 adminRouter.delete("/events/:id", async (req, res) => {
   await prisma.event.delete({ where: { id: Number(req.params.id) } });
@@ -476,10 +480,74 @@ adminRouter.get("/offers", async (_req, res) => {
   res.json(await prisma.offer.findMany({ orderBy: { createdAt: "desc" }, include: { business: { select: { name: true, slug: true } } } }));
 });
 adminRouter.patch("/offers/:id", async (req, res) => {
-  res.json(await prisma.offer.update({ where: { id: Number(req.params.id) }, data: { isActive: !!req.body.isActive } }));
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("isActive" in b) data.isActive = !!b.isActive;
+  if ("isFeatured" in b) data.isFeatured = !!b.isFeatured;
+  res.json(await prisma.offer.update({ where: { id: Number(req.params.id) }, data }));
 });
 adminRouter.delete("/offers/:id", async (req, res) => {
   await prisma.offer.delete({ where: { id: Number(req.params.id) } });
+  res.json({ ok: true });
+});
+
+// ---- Discover collections ----
+adminRouter.get("/collections", async (_req, res) => {
+  const cols = await prisma.collection.findMany({
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    include: { _count: { select: { items: true } } },
+  });
+  res.json(cols.map((c) => ({ id: c.id, slug: c.slug, title: c.title, description: c.description, emoji: c.emoji, coverImage: c.coverImage, isFeatured: c.isFeatured, isActive: c.isActive, sortOrder: c.sortOrder, count: c._count.items })));
+});
+// Full detail incl. ordered member businesses (for the editor).
+adminRouter.get("/collections/:id", async (req, res) => {
+  const c = await prisma.collection.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { items: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }], include: { business: { select: { id: true, name: true, slug: true, logo: true, category: { select: { name: true, icon: true } } } } } } },
+  });
+  if (!c) return res.status(404).json({ error: "Not found." });
+  res.json({ ...c, businesses: c.items.map((i) => ({ id: i.business.id, name: i.business.name, slug: i.business.slug, logo: i.business.logo, category: i.business.category })) });
+});
+async function uniqueColSlug(base: string) {
+  let slug = base || "collection"; let n = 1;
+  while (await prisma.collection.findUnique({ where: { slug } })) slug = `${base}-${++n}`;
+  return slug;
+}
+adminRouter.post("/collections", async (req, res) => {
+  const title = STR(req.body.title, 120);
+  if (!title) return res.status(400).json({ error: "Title is required." });
+  const max = await prisma.collection.aggregate({ _max: { sortOrder: true } });
+  const c = await prisma.collection.create({
+    data: {
+      slug: await uniqueColSlug(slugify(title)), title, description: STR(req.body.description, 500),
+      emoji: STR(req.body.emoji, 8) || "✨", coverImage: req.body.coverImage ? STR(req.body.coverImage, 500) : null,
+      isFeatured: !!req.body.isFeatured, sortOrder: (max._max.sortOrder ?? 0) + 1,
+    },
+  });
+  res.status(201).json(c);
+});
+adminRouter.patch("/collections/:id", async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const data: Record<string, unknown> = {};
+  if ("title" in b) data.title = STR(b.title, 120);
+  if ("description" in b) data.description = STR(b.description, 500);
+  if ("emoji" in b) data.emoji = STR(b.emoji, 8) || "✨";
+  if ("coverImage" in b) data.coverImage = b.coverImage ? STR(b.coverImage, 500) : null;
+  if ("isFeatured" in b) data.isFeatured = !!b.isFeatured;
+  if ("isActive" in b) data.isActive = !!b.isActive;
+  if ("sortOrder" in b) data.sortOrder = Math.round(Number(b.sortOrder) || 0);
+  res.json(await prisma.collection.update({ where: { id: Number(req.params.id) }, data }));
+});
+// Replace the collection's businesses with an ordered list of ids.
+adminRouter.put("/collections/:id/items", async (req, res) => {
+  const id = Number(req.params.id);
+  const ids = (Array.isArray(req.body.businessIds) ? req.body.businessIds : []).map(Number).filter(Boolean);
+  await prisma.collectionItem.deleteMany({ where: { collectionId: id } });
+  if (ids.length) await prisma.collectionItem.createMany({ data: ids.map((businessId: number, i: number) => ({ collectionId: id, businessId, sortOrder: i })), skipDuplicates: true });
+  res.json({ ok: true, count: ids.length });
+});
+adminRouter.delete("/collections/:id", async (req, res) => {
+  await prisma.collection.delete({ where: { id: Number(req.params.id) } });
   res.json({ ok: true });
 });
 

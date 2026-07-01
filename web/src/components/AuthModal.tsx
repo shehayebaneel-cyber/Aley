@@ -46,7 +46,7 @@ export function AuthModal({
         <h2 className="mt-4 font-display text-2xl font-extrabold text-ink">
           {mode === "login" ? "Welcome back" : "Create your account"}
         </h2>
-        <p className="mt-1 text-sm text-muted">Save your favourite places, write reviews, and follow what's new in Aley.</p>
+        <p className="mt-1 text-sm text-muted">Save your favourite places, write reviews, and follow what's new near you.</p>
 
         <form onSubmit={submit} className="mt-5 space-y-3">
           {mode === "register" && (
@@ -67,7 +67,7 @@ export function AuthModal({
         <p className="mt-1 text-center text-[11px] text-muted">Social login coming soon</p>
 
         <p className="mt-4 text-center text-sm text-muted">
-          {mode === "login" ? "New to Aley? " : "Already have an account? "}
+          {mode === "login" ? "New here? " : "Already have an account? "}
           <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} className="font-semibold text-brand">
             {mode === "login" ? "Create an account" : "Log in"}
           </button>

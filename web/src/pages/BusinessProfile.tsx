@@ -30,7 +30,7 @@ function ShareButton({ name, tagline }: { name: string; tagline: string }) {
   async function share() {
     const url = window.location.href;
     if (navigator.share) {
-      try { await navigator.share({ title: `${name} · Aley`, text: tagline || `Check out ${name} on Aley`, url }); } catch { /* cancelled */ }
+      try { await navigator.share({ title: `${name} · Aley`, text: tagline || `Check out ${name}`, url }); } catch { /* cancelled */ }
       return;
     }
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
@@ -158,16 +158,17 @@ export function BusinessProfile() {
             {/* Offers */}
             {!!b.offers?.length && (
               <section className="card p-5">
-                <h2 className="font-display text-lg font-bold text-ink">Offers</h2>
+                <h2 className="font-display text-lg font-bold text-ink">Offers & deals</h2>
                 <div className="mt-3 space-y-3">
                   {b.offers.map((o) => (
-                    <div key={o.id} className="flex items-center gap-3 rounded-xl surface-2 p-3">
-                      <TagIcon className="h-5 w-5 shrink-0 text-accent" />
-                      <div>
+                    <Link key={o.id} to={`/offer/${o.id}`} className="group flex items-center gap-3 rounded-xl surface-2 p-3 transition hover:bg-surface">
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-xs font-extrabold text-white">{o.badge || o.type?.replace(/_/g, " ")}</span>
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold text-ink">{o.title}</p>
-                        <p className="text-sm text-muted">{o.description}</p>
+                        <p className="line-clamp-1 text-sm text-muted">{o.description}</p>
                       </div>
-                    </div>
+                      <span className="shrink-0 text-sm font-semibold text-brand opacity-0 transition group-hover:opacity-100">View →</span>
+                    </Link>
                   ))}
                 </div>
               </section>

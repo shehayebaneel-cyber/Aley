@@ -25,7 +25,7 @@ export function AdminPayments() {
   const loadTxs = () => adminApi.get<{ items: Transaction[] }>(`/api/admin/transactions?q=${encodeURIComponent(q)}&source=${source}`).then((d) => setTxs(d.items)).catch(() => setTxs([]));
   const loadPayouts = () => adminApi.get<Payout[]>("/api/admin/payouts").then(setPayouts).catch(() => setPayouts([]));
   const loadComm = () => adminApi.get<{ global: number; fixedFee: number; categories: Cat[] }>("/api/admin/commission").then(setComm).catch(() => {});
-  useEffect(() => { loadFin(); loadPayouts(); loadComm(); adminApi.get<Cat[]>("/api/categories?city=aley").then(setCats).catch(() => {}); adminApi.get<Biz[]>("/api/admin/businesses").then((b: any) => setBizes(Array.isArray(b) ? b : b.items ?? [])).catch(() => {}); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { loadFin(); loadPayouts(); loadComm(); adminApi.get<Cat[]>("/api/categories").then(setCats).catch(() => {}); adminApi.get<Biz[]>("/api/admin/businesses").then((b: any) => setBizes(Array.isArray(b) ? b : b.items ?? [])).catch(() => {}); /* eslint-disable-next-line */ }, []);
   useEffect(() => { loadTxs(); /* eslint-disable-next-line */ }, [source]);
 
   async function refund(t: Transaction) {

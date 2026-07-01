@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MapPinIcon, StarIcon } from "../components/icons";
+import { useCity, cityQuery } from "../context/CityContext";
 import { hasMapsKey, loadGoogleMaps, mapsLinkFromCoords } from "../lib/maps";
 import { useFetch } from "../lib/useFetch";
 import type { MapPin } from "../types";
 
-const CITY = "aley";
 const ALEY = { lat: 33.8056, lng: 35.6011 };
 
 const hasTag = (p: MapPin, ...terms: string[]) => (p.tags ?? []).some((t) => terms.some((term) => t.toLowerCase().includes(term)));
@@ -29,7 +29,8 @@ const GROUPS: [string, string][] = [
 ];
 
 export function MapPage() {
-  const { data: pins } = useFetch<MapPin[]>(`/api/businesses/data/map?city=${CITY}`);
+  const { city } = useCity();
+  const { data: pins } = useFetch<MapPin[]>(`/api/businesses/data/map${cityQuery(city)}`);
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(hasMapsKey() ? "loading" : "unavailable");
@@ -82,7 +83,7 @@ export function MapPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="font-display text-3xl font-extrabold text-ink">Map of Aley</h1>
+      <h1 className="font-display text-3xl font-extrabold text-ink">Map</h1>
       <p className="mt-1 text-muted">{filtered.length} of {pins?.length ?? 0} businesses · tap a pin for details.</p>
 
       {/* Category groups */}

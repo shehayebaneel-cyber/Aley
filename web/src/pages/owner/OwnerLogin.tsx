@@ -43,7 +43,7 @@ export function OwnerLogin() {
           {mode === "login" ? "Welcome back" : "Create your business account"}
         </h1>
         <p className="mt-1 text-center text-sm text-muted">
-          {mode === "login" ? "Manage your business on Aley." : "List and manage your business on Aley."}
+          {mode === "login" ? "Manage your business." : "List and manage your business."}
         </p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">

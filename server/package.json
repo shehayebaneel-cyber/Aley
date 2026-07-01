@@ -12,6 +12,7 @@
     "seed:vouchers": "tsx prisma/seed-vouchers.ts",
     "seed:finance": "tsx prisma/seed-finance.ts",
     "sync:categories": "tsx prisma/sync-categories.ts",
+    "seed:collections": "tsx prisma/seed-collections.ts",
     "fetch:aley": "tsx scripts/fetch-aley.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",

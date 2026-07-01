@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BusinessCard } from "../components/BusinessCard";
+import { SparePartsPanel } from "../components/SparePartsPanel";
+import { RequestQuoteModal } from "../components/RequestQuoteModal";
+import { supportsQuote } from "../lib/requestForms";
 import { ChevronRight, GridIcon, SearchIcon } from "../components/icons";
+import { useCity, cityQuery } from "../context/CityContext";
 import { useLang } from "../context/LanguageContext";
 import { useFetch } from "../lib/useFetch";
 import type { Business, Category } from "../types";
 
-const CITY = "aley";
 const GROUP_ORDER = ["Food & Drinks", "Shopping", "Health & Beauty", "Automotive", "Home & Living", "Professional Services", "Stay & Tourism", "Education", "Entertainment", "Sports & Recreation", "Community", "Essential Services", "More"];
 // Emoji per group, shown in the sidebar / chips.
 const GROUP_ICON: Record<string, string> = {
@@ -15,6 +18,14 @@ const GROUP_ICON: Record<string, string> = {
   "Entertainment": "🎭", "Sports & Recreation": "🏆", "Community": "📢", "Essential Services": "🚨", "More": "🏷️",
 };
 const groupIcon = (g: string) => GROUP_ICON[g] ?? "🏷️";
+
+// Which optional filters make sense per top-level group (open-now / rating / price
+// / sort are universal and always shown). Empty group (browse-all) shows everything.
+const FILTER_GROUPS: Record<string, string[]> = {
+  delivery: ["Food & Drinks", "Shopping"],
+  reservations: ["Food & Drinks"],
+  gift: ["Food & Drinks", "Health & Beauty", "Shopping", "Entertainment", "Sports & Recreation"],
+};
 
 const SORTS = [
   { key: "", tk: "sort.recommended" },
@@ -26,8 +37,9 @@ const SORTS = [
 
 export function Explore() {
   const { t } = useLang();
+  const { city } = useCity();
   const [params, setParams] = useSearchParams();
-  const { data: categories } = useFetch<Category[]>(`/api/categories?city=${CITY}`);
+  const { data: categories } = useFetch<Category[]>(`/api/categories${cityQuery(city)}`);
   const cats = categories ?? [];
 
   const set = (key: string, value: string) => {
@@ -45,9 +57,9 @@ export function Explore() {
 
   const query = useMemo(() => {
     const p = new URLSearchParams(params);
-    p.set("city", CITY);
+    if (city) p.set("city", city); else p.delete("city");
     return p.toString();
-  }, [params]);
+  }, [params, city]);
 
   const { data: businesses, loading } = useFetch<Business[]>(`/api/businesses?${query}`);
   const activeCategory = params.get("category") ?? "";
@@ -70,8 +82,19 @@ export function Explore() {
     return ordered;
   }, [cats]);
 
+  const [quoteCat, setQuoteCat] = useState<{ slug: string; name: string } | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const activeCatGroup = cats.find((c) => c.slug === activeCategory)?.group;
+  // Filters adapt to the selected category's group (empty = show all).
+  const filterGroup = activeCatGroup || activeGroup || "";
+  const showFilter = (key: string) => !filterGroup || (FILTER_GROUPS[key] ?? []).includes(filterGroup);
+  // Drop a filter that no longer applies after switching category (avoids 0-result confusion).
+  useEffect(() => {
+    const next = new URLSearchParams(params);
+    let changed = false;
+    for (const k of ["delivery", "reservations", "gift"]) if (next.get(k) === "true" && filterGroup && !(FILTER_GROUPS[k] ?? []).includes(filterGroup)) { next.delete(k); changed = true; }
+    if (changed) setParams(next, { replace: true });
+  }, [filterGroup]); // eslint-disable-line react-hooks/exhaustive-deps
   const isOpen = (g: string) => open.has(g) || g === activeGroup || g === activeCatGroup;
   const toggleGroup = (g: string) => setOpen((prev) => { const n = new Set(prev); n.has(g) ? n.delete(g) : n.add(g); return n; });
 
@@ -135,12 +158,28 @@ export function Explore() {
             )}
           </div>
 
+          {activeCategory === "auto-parts" ? (
+            <div className="mt-6"><SparePartsPanel gridCols="sm:grid-cols-2 xl:grid-cols-2" /></div>
+          ) : (<>
+          {/* Request a Quote CTA for supported service categories */}
+          {activeCategory && supportsQuote(activeCategory) && (() => {
+            const cn = cats.find((c) => c.slug === activeCategory)?.name ?? "these businesses";
+            return (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft/50 p-4">
+                <div>
+                  <p className="font-display font-bold text-ink">💬 Don't call around — request one quote</p>
+                  <p className="text-sm text-muted">Send one request to all {cn} and compare their offers.</p>
+                </div>
+                <button onClick={() => setQuoteCat({ slug: activeCategory, name: cn })} className="btn btn-primary shrink-0 px-5 py-2.5 text-sm">Request a quote</button>
+              </div>
+            );
+          })()}
           {/* Filters + sort */}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button onClick={() => toggle("openNow")} className={`chip ${params.get("openNow") === "true" ? "chip-active" : ""}`}>{t("filter.openNow")}</button>
-            <button onClick={() => toggle("delivery")} className={`chip ${params.get("delivery") === "true" ? "chip-active" : ""}`}>{t("filter.delivery")}</button>
-            <button onClick={() => toggle("reservations")} className={`chip ${params.get("reservations") === "true" ? "chip-active" : ""}`}>{t("filter.reservations")}</button>
-            <button onClick={() => toggle("gift")} className={`chip ${params.get("gift") === "true" ? "chip-active" : ""}`}>🎁 {t("filter.vouchers")}</button>
+            {showFilter("delivery") && <button onClick={() => toggle("delivery")} className={`chip ${params.get("delivery") === "true" ? "chip-active" : ""}`}>{t("filter.delivery")}</button>}
+            {showFilter("reservations") && <button onClick={() => toggle("reservations")} className={`chip ${params.get("reservations") === "true" ? "chip-active" : ""}`}>{t("filter.reservations")}</button>}
+            {showFilter("gift") && <button onClick={() => toggle("gift")} className={`chip ${params.get("gift") === "true" ? "chip-active" : ""}`}>🎁 {t("filter.vouchers")}</button>}
             <button onClick={() => set("minRating", params.get("minRating") === "4" ? "" : "4")} className={`chip ${params.get("minRating") === "4" ? "chip-active" : ""}`}>{t("filter.rating4")}</button>
             <select value={params.get("priceMax") ?? ""} onChange={(e) => set("priceMax", e.target.value)} className="chip cursor-pointer">
               <option value="">{t("price.any")}</option>
@@ -188,8 +227,10 @@ export function Explore() {
               </div>
             )}
           </div>
+          </>)}
         </div>
       </div>
+      {quoteCat && <RequestQuoteModal categorySlug={quoteCat.slug} categoryName={quoteCat.name} onClose={() => setQuoteCat(null)} />}
     </div>
   );
 }

@@ -2,12 +2,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { MapPicker } from "../components/MapPicker";
 import { CheckIcon, TruckIcon } from "../components/icons";
+import { useCity } from "../context/CityContext";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, userApi } from "../lib/api";
 import { useTitle } from "../lib/useTitle";
 import type { DeliveryEstimate } from "../types";
-
-const CITY = "aley";
 
 const TYPES = [
   { key: "ALEY_TO_ALEY", icon: "🏘️", title: "Aley → Aley", desc: "Pick up and drop off, both inside Aley." },
@@ -27,6 +26,7 @@ type Coord = { lat: number; lng: number } | null;
 export function Delivery() {
   useTitle("Delivery Service");
   const { user } = useUserAuth();
+  const { city } = useCity();
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
@@ -80,7 +80,7 @@ export function Delivery() {
     setBusy(true);
     try {
       const { number } = await userApi.post<{ number: string }>("/api/delivery", {
-        ...form, type, city: CITY,
+        ...form, type, city: city || "aley",
         pickupLat: pickup?.lat, pickupLng: pickup?.lng,
         dropoffLat: dropoff?.lat, dropoffLng: dropoff?.lng,
         businessId: businessId ? Number(businessId) : undefined,

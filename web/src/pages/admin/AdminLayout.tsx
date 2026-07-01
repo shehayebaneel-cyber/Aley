@@ -22,6 +22,7 @@ const LINKS = [
   { to: "/admin/lost-found", tk: "anav.lostfound" },
   { to: "/admin/announcements", tk: "anav.notices" },
   { to: "/admin/events-offers", tk: "anav.eventsoffers" },
+  { to: "/admin/collections", tk: "anav.collections" },
   { to: "/admin/cities", tk: "anav.cities" },
   { to: "/admin/vouchers", tk: "anav.vouchers" },
   { to: "/admin/payments", tk: "anav.payments" },

@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
 import { CartProvider } from "./context/CartContext";
+import { CityProvider } from "./context/CityContext";
 import { ContentProvider } from "./context/ContentContext";
 import { DriverAuthProvider } from "./context/DriverAuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
@@ -18,17 +19,19 @@ createRoot(document.getElementById("root")!).render(
       <LanguageProvider>
       <BrowserRouter>
         <ContentProvider>
-          <AdminAuthProvider>
-            <UserAuthProvider>
-              <OwnerAuthProvider>
-                <DriverAuthProvider>
-                  <CartProvider>
-                    <App />
-                  </CartProvider>
-                </DriverAuthProvider>
-              </OwnerAuthProvider>
-            </UserAuthProvider>
-          </AdminAuthProvider>
+          <CityProvider>
+            <AdminAuthProvider>
+              <UserAuthProvider>
+                <OwnerAuthProvider>
+                  <DriverAuthProvider>
+                    <CartProvider>
+                      <App />
+                    </CartProvider>
+                  </DriverAuthProvider>
+                </OwnerAuthProvider>
+              </UserAuthProvider>
+            </AdminAuthProvider>
+          </CityProvider>
         </ContentProvider>
       </BrowserRouter>
       </LanguageProvider>

@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { BellIcon } from "../components/icons";
+import { useCity } from "../context/CityContext";
 import { api, timeAgo } from "../lib/api";
 import { useTitle } from "../lib/useTitle";
 import type { Announcement } from "../types";
-
-const CITY = "aley";
 
 // Display metadata per notice category.
 export const NOTICE_META: Record<string, { label: string; emoji: string; cls: string }> = {
@@ -22,14 +21,16 @@ const CATEGORIES = Object.keys(NOTICE_META);
 
 export function Announcements() {
   useTitle("Public Notices");
+  const { city } = useCity();
   const [items, setItems] = useState<Announcement[]>([]);
   const [category, setCategory] = useState("");
 
   useEffect(() => {
-    const p = new URLSearchParams({ city: CITY });
+    const p = new URLSearchParams();
+    if (city) p.set("city", city);
     if (category) p.set("category", category);
     api.get<Announcement[]>(`/api/announcements?${p}`).then(setItems);
-  }, [category]);
+  }, [category, city]);
 
   return (
     <div>

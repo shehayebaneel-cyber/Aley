@@ -4,6 +4,7 @@ import { AiWidget } from "./AiWidget";
 import { AutoTranslate } from "./AutoTranslate";
 import { useCart } from "../context/CartContext";
 import { useContent } from "../context/ContentContext";
+import { useCity } from "../context/CityContext";
 import { useLang } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserAuth } from "../context/UserAuthContext";
@@ -100,6 +101,15 @@ function AccountMenu() {
           <button onClick={() => { setOpen(false); navigate("/bookings"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <CalendarIcon className="h-4 w-4 text-brand" /> {t("common.myBookings")}
           </button>
+          <button onClick={() => { setOpen(false); navigate("/my-events"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            <span className="text-base leading-none">🎟️</span> {t("common.myEvents")}
+          </button>
+          <button onClick={() => { setOpen(false); navigate("/my-requests"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            <span className="text-base leading-none">🔧</span> {t("common.myRequests")}
+          </button>
+          <button onClick={() => { setOpen(false); navigate("/my-offers"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            <span className="text-base leading-none">🏷️</span> {t("common.myOffers")}
+          </button>
           <button onClick={() => { setOpen(false); navigate("/gift-vouchers"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <span className="text-base leading-none">🎁</span> {t("common.myVouchers")}
           </button>
@@ -125,6 +135,33 @@ function CartButton() {
   );
 }
 
+function CitySelector() {
+  const { city, setCity, cities, cityName } = useCity();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1 rounded-full surface-2 px-3 py-1.5 text-xs font-semibold text-ink" aria-label="Filter by city">
+        <MapPinIcon className="h-3.5 w-3.5 text-brand" /> <span className="max-w-[7rem] truncate">{cityName}</span> <span className="text-muted">▾</span>
+      </button>
+      {open && (
+        <div className="menu-in absolute left-0 z-50 mt-2 max-h-80 w-52 overflow-y-auto rounded-2xl border border-border bg-surface p-2 shadow-xl">
+          <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-muted">Filter by city</p>
+          <button onClick={() => { setCity(""); setOpen(false); }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold ${!city ? "bg-brand-soft text-brand-dark" : "text-ink hover:surface-2"}`}>🇱🇧 All Lebanon</button>
+          {cities.map((c) => (
+            <button key={c.slug} onClick={() => { setCity(c.slug); setOpen(false); }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold ${city === c.slug ? "bg-brand-soft text-brand-dark" : "text-ink hover:surface-2"}`}>📍 {c.name}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Layout() {
   const { theme, toggle } = useTheme();
   const { brand, contact } = useContent();
@@ -135,11 +172,9 @@ export function Layout() {
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-surface/85 backdrop-blur-lg">
         <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3">
-          {/* Left: logo + location */}
+          {/* Left: logo + city filter */}
           <Logo />
-          <span className="hidden items-center gap-1 rounded-full surface-2 px-3 py-1 text-xs font-semibold text-muted sm:inline-flex">
-            <MapPinIcon className="h-3.5 w-3.5 text-brand" /> {t("common.aley")}
-          </span>
+          <CitySelector />
 
           {/* Center: primary navigation */}
           <nav className="hidden flex-1 items-center justify-center gap-0.5 lg:flex">

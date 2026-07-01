@@ -1,12 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ImageField } from "../components/ImageField";
 import { CheckIcon, CloseIcon, MapPinIcon, PhoneIcon, SearchIcon } from "../components/icons";
+import { useCity } from "../context/CityContext";
 import { useUserAuth } from "../context/UserAuthContext";
 import { api, timeAgo, userApi } from "../lib/api";
 import { useTitle } from "../lib/useTitle";
 import type { LostFoundItem } from "../types";
 
-const CITY = "aley";
 const CATEGORIES = ["Phone", "Keys", "Wallet", "Pet", "Document", "Jewelry", "Bag", "Other"];
 const TYPES: { key: string; label: string }[] = [
   { key: "", label: "All" },
@@ -16,6 +16,7 @@ const TYPES: { key: string; label: string }[] = [
 
 export function LostFound() {
   useTitle("Lost & Found");
+  const { city } = useCity();
   const { user } = useUserAuth();
   const [items, setItems] = useState<LostFoundItem[]>([]);
   const [type, setType] = useState("");
@@ -24,13 +25,14 @@ export function LostFound() {
   const [postOpen, setPostOpen] = useState(false);
 
   const load = () => {
-    const p = new URLSearchParams({ city: CITY, status: "ALL" });
+    const p = new URLSearchParams({ status: "ALL" });
+    if (city) p.set("city", city);
     if (type) p.set("type", type);
     if (category) p.set("category", category);
     if (q.trim()) p.set("q", q.trim());
     api.get<LostFoundItem[]>(`/api/lost-found?${p}`).then(setItems);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [type, category]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [type, category, city]);
   useEffect(() => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
@@ -45,7 +47,7 @@ export function LostFound() {
           <span className="chip"><MapPinIcon className="h-4 w-4 text-brand" /> Community board · Aley</span>
           <h1 className="mt-4 font-display text-4xl font-extrabold text-ink sm:text-5xl">Lost &amp; Found</h1>
           <p className="mx-auto mt-3 max-w-xl text-lg text-muted">
-            Lost something in Aley? Found something that isn't yours? Post it here and help reunite it with its owner.
+            Lost something? Found something that isn't yours? Post it here and help reunite it with its owner.
           </p>
           <button onClick={() => setPostOpen(true)} className="btn btn-primary mt-6 px-6 py-3">+ Post a listing</button>
         </div>

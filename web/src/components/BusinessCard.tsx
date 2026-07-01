@@ -50,9 +50,9 @@ export function BusinessCard({ business: b, showActions = false }: { business: B
             {b.rating > 0 ? b.rating.toFixed(1) : "New"}
             <span className="font-normal text-muted">({b.reviewCount})</span>
           </span>
-          {b.address && (
+          {(b.city?.name || b.address) && (
             <span className="inline-flex items-center gap-1 truncate text-muted">
-              <MapPinIcon className="h-4 w-4" /> {b.address}
+              <MapPinIcon className="h-4 w-4" /> {b.city?.name ? `${b.city.name}${b.address ? ` · ${b.address}` : ""}` : b.address}
             </span>
           )}
         </div>

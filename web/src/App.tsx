@@ -13,16 +13,26 @@ import { DeliveryTracking } from "./pages/DeliveryTracking";
 import { MyOrders } from "./pages/MyOrders";
 import { MyBookings } from "./pages/MyBookings";
 import { GiftVouchers } from "./pages/GiftVouchers";
+import { GiftCards } from "./pages/GiftCards";
+import { GiftCardDetail } from "./pages/GiftCardDetail";
 import { VoucherView } from "./pages/VoucherView";
 import { Wallet } from "./pages/Wallet";
 import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
+import { EventDetail } from "./pages/EventDetail";
+import { MyEvents } from "./pages/MyEvents";
 import { Explore } from "./pages/Explore";
 import { Home } from "./pages/Home";
 import { LostFound } from "./pages/LostFound";
 import { MapPage } from "./pages/MapPage";
 import { NotFound } from "./pages/NotFound";
 import { Offers } from "./pages/Offers";
+import { OfferDetail } from "./pages/OfferDetail";
+import { MyOffers } from "./pages/MyOffers";
+import { SpareParts } from "./pages/SpareParts";
+import { MyRequests } from "./pages/MyRequests";
+import { Collections } from "./pages/Collections";
+import { CollectionDetail } from "./pages/CollectionDetail";
 import { CommunitySoon } from "./pages/CommunitySoon";
 import { Saved } from "./pages/Saved";
 import { AdminAi } from "./pages/admin/AdminAi";
@@ -31,6 +41,7 @@ import { AdminAnnouncements } from "./pages/admin/AdminAnnouncements";
 import { AdminBusinesses } from "./pages/admin/AdminBusinesses";
 import { AdminBusinessEdit } from "./pages/admin/AdminBusinessEdit";
 import { AdminCategories } from "./pages/admin/AdminCategories";
+import { AdminCollections } from "./pages/admin/AdminCollections";
 import { AdminLostFound } from "./pages/admin/AdminLostFound";
 import { AdminCities } from "./pages/admin/AdminCities";
 import { AdminClaims } from "./pages/admin/AdminClaims";
@@ -52,6 +63,7 @@ import { AdminPayments } from "./pages/admin/AdminPayments";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
 import { CheckIn } from "./pages/owner/CheckIn";
 import { RedeemVoucher } from "./pages/owner/RedeemVoucher";
+import { RedeemOffer } from "./pages/owner/RedeemOffer";
 import { OwnerHome } from "./pages/owner/OwnerHome";
 import { OwnerLayout } from "./pages/owner/OwnerLayout";
 import { OwnerLogin } from "./pages/owner/OwnerLogin";
@@ -68,29 +80,35 @@ function ScrollToTop() {
 // Per-route browser/SEO title for static pages. Dynamic pages (business, project,
 // order) set their own title via useTitle once their data loads.
 const TITLES: Record<string, string> = {
-  "/explore": "Explore Aley",
-  "/events": "Events in Aley",
+  "/explore": "Explore",
+  "/events": "Events",
   "/offers": "Offers & deals",
-  "/community": "Improve Aley",
+  "/community": "Community Projects",
   "/lost-found": "Lost & Found",
   "/notices": "Public Notices",
   "/delivery": "Delivery Service",
   "/ai": "Aley AI",
-  "/map": "Map of Aley",
+  "/map": "Map",
   "/about": "About",
   "/contact": "Contact",
   "/cart": "Your cart",
   "/checkout": "Checkout",
   "/orders": "My orders",
   "/bookings": "My appointments",
+  "/gift-cards": "Gift Cards & Experiences",
   "/gift-vouchers": "My gift vouchers",
   "/wallet": "My wallet",
+  "/my-offers": "My offers",
+  "/my-events": "My events",
+  "/spare-parts": "Spare Parts",
+  "/my-requests": "My part requests",
+  "/collections": "Discover",
   "/saved": "Saved places",
 };
 function TitleManager() {
   const { pathname } = useLocation();
   useEffect(() => {
-    if (pathname === "/") document.title = "Aley — your city, online";
+    if (pathname === "/") document.title = "Aley — discover Lebanon";
     else if (TITLES[pathname]) document.title = `${TITLES[pathname]} · Aley`;
   }, [pathname]);
   return null;
@@ -109,7 +127,15 @@ export default function App() {
           <Route path="/categories" element={<Navigate to="/explore" replace />} />
           <Route path="/business/:slug" element={<BusinessProfile />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/event/:id" element={<EventDetail />} />
+          <Route path="/my-events" element={<MyEvents />} />
           <Route path="/offers" element={<Offers />} />
+          <Route path="/offer/:id" element={<OfferDetail />} />
+          <Route path="/my-offers" element={<MyOffers />} />
+          <Route path="/spare-parts" element={<SpareParts />} />
+          <Route path="/my-requests" element={<MyRequests />} />
+          <Route path="/collections" element={<Collections />} />
+          <Route path="/collections/:slug" element={<CollectionDetail />} />
           <Route path="/map" element={<MapPage />} />
           {/* Community Projects moved to a future dedicated non-profit site. */}
           <Route path="/community" element={<CommunitySoon />} />
@@ -126,6 +152,8 @@ export default function App() {
           <Route path="/order/:number" element={<OrderTracking />} />
           <Route path="/orders" element={<MyOrders />} />
           <Route path="/bookings" element={<MyBookings />} />
+          <Route path="/gift-cards" element={<GiftCards />} />
+          <Route path="/gift-card/:id" element={<GiftCardDetail />} />
           <Route path="/gift-vouchers" element={<GiftVouchers />} />
           <Route path="/voucher/:code" element={<VoucherView />} />
           <Route path="/wallet" element={<Wallet />} />
@@ -142,6 +170,7 @@ export default function App() {
           <Route path="b/:id" element={<BusinessDashboard />} />
           <Route path="checkin" element={<CheckIn />} />
           <Route path="redeem" element={<RedeemVoucher />} />
+          <Route path="redeem-offer" element={<RedeemOffer />} />
         </Route>
 
         {/* Driver app (own chrome) */}
@@ -169,6 +198,7 @@ export default function App() {
           <Route path="delivery" element={<AdminDelivery />} />
           <Route path="drivers" element={<AdminDrivers />} />
           <Route path="events-offers" element={<AdminEventsOffers />} />
+          <Route path="collections" element={<AdminCollections />} />
           <Route path="cities" element={<AdminCities />} />
           <Route path="vouchers" element={<AdminVouchers />} />
           <Route path="payments" element={<AdminPayments />} />

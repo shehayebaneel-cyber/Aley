@@ -8,8 +8,14 @@ import { effectiveStatus } from "../lib/voucher";
 import { outBusiness, parseArr, type HoursRow } from "../lib/serialize";
 import { notifyNextWaitlist } from "../lib/waitlist";
 import { addWalletEntry, walletSummary } from "../lib/wallet";
+import { outOffer } from "../lib/offers";
+import { eventCountsFor, outEvent } from "../lib/events";
+import { requestStatus } from "../lib/parts";
+import { outVoucherCard, voucherAvailable } from "../lib/voucher";
+import { parseObj } from "../lib/serialize";
 
 const userToken = (id: number) => signToken({ userId: id, role: "user" });
+const STR = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const safe = (u: { id: number; name: string; email: string | null; avatar: string | null }) => ({ id: u.id, name: u.name, email: u.email, avatar: u.avatar });
 
 // ---- Visitor authentication ----
@@ -43,8 +49,11 @@ userRouter.use(requireUser);
 userRouter.get("/", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
   if (!user) return res.status(404).json({ error: "Account not found." });
-  const favorites = await prisma.favorite.findMany({ where: { userId: user.id }, select: { businessId: true } });
-  res.json({ user: safe(user), favoriteIds: favorites.map((f) => f.businessId) });
+  const [favorites, savedOffers] = await Promise.all([
+    prisma.favorite.findMany({ where: { userId: user.id }, select: { businessId: true } }),
+    prisma.offerSave.findMany({ where: { userId: user.id }, select: { offerId: true } }),
+  ]);
+  res.json({ user: safe(user), favoriteIds: favorites.map((f) => f.businessId), savedOfferIds: savedOffers.map((s) => s.offerId) });
 });
 
 // GET /api/me/favorites — full saved businesses
@@ -223,4 +232,168 @@ userRouter.post("/wallet/topup", async (req, res) => {
   if (!TOPUP_METHODS.has(method)) return res.status(400).json({ error: "Unsupported payment method." });
   await addWalletEntry({ userId: req.userId!, type: "TOPUP", amount, method, source: "TOPUP", description: `Wallet top-up · ${method === "WHISH" ? "Whish" : "Card"}` });
   res.status(201).json(await walletSummary(req.userId!));
+});
+
+// ---- Saved & claimed offers ----
+const OFFER_BIZ = { slug: true, name: true, logo: true, cover: true, address: true, rating: true, reviewCount: true, category: { select: { slug: true, name: true, group: true, icon: true, color: true } } } as const;
+
+// GET /api/me/offers — saved deals + claimed deals (with codes).
+userRouter.get("/offers", async (req, res) => {
+  const [saves, claims] = await Promise.all([
+    prisma.offerSave.findMany({ where: { userId: req.userId! }, orderBy: { createdAt: "desc" }, include: { offer: { include: { business: { select: OFFER_BIZ } } } } }),
+    prisma.offerRedemption.findMany({ where: { userId: req.userId! }, orderBy: { createdAt: "desc" }, take: 50, include: { offer: { include: { business: { select: OFFER_BIZ } } } } }),
+  ]);
+  res.json({
+    saved: saves.filter((s) => s.offer?.isActive).map((s) => outOffer(s.offer, { saved: true })),
+    claimed: claims.map((c) => ({ code: c.code, status: c.status, createdAt: c.createdAt, redeemedAt: c.redeemedAt, offer: c.offer ? outOffer(c.offer) : null })),
+  });
+});
+
+// POST /api/me/offers/:id/save — bookmark a deal.
+userRouter.post("/offers/:id/save", async (req, res) => {
+  const offerId = Number(req.params.id);
+  const offer = await prisma.offer.findUnique({ where: { id: offerId } });
+  if (!offer) return res.status(404).json({ error: "Offer not found." });
+  await prisma.offerSave.upsert({ where: { userId_offerId: { userId: req.userId!, offerId } }, create: { userId: req.userId!, offerId }, update: {} });
+  res.json({ ok: true, saved: true });
+});
+
+// DELETE /api/me/offers/:id/save — remove bookmark.
+userRouter.delete("/offers/:id/save", async (req, res) => {
+  await prisma.offerSave.deleteMany({ where: { userId: req.userId!, offerId: Number(req.params.id) } });
+  res.json({ ok: true, saved: false });
+});
+
+// ---- Events: saved, going & tickets ----
+const EVENT_BIZ = { slug: true, name: true, logo: true, cover: true, category: { select: { slug: true, name: true, group: true, icon: true, color: true } } } as const;
+
+// GET /api/me/events — saved events, events I'm going to, and my ticket bookings.
+userRouter.get("/events", async (req, res) => {
+  const [saves, rsvps, bookings] = await Promise.all([
+    prisma.eventSave.findMany({ where: { userId: req.userId! }, orderBy: { createdAt: "desc" }, include: { event: { include: { business: { select: EVENT_BIZ }, ticketTypes: true } } } }),
+    prisma.eventRSVP.findMany({ where: { userId: req.userId!, status: { in: ["GOING", "MAYBE"] } }, include: { event: { include: { business: { select: EVENT_BIZ }, ticketTypes: true } } } }),
+    prisma.eventBooking.findMany({ where: { userId: req.userId! }, orderBy: { createdAt: "desc" }, take: 50, include: { event: { include: { business: { select: EVENT_BIZ }, ticketTypes: true } }, ticketType: { select: { name: true, kind: true } } } }),
+  ]);
+  const ids = [...new Set([...saves.map((s) => s.eventId), ...rsvps.map((r) => r.eventId)])];
+  const counts = await eventCountsFor(ids);
+  res.json({
+    saved: saves.filter((s) => s.event?.isPublished).map((s) => outEvent(s.event, { counts: counts.get(s.eventId), saved: true })),
+    going: rsvps.filter((r) => r.event?.isPublished).map((r) => outEvent(r.event, { counts: counts.get(r.eventId), myRsvp: r.status })),
+    bookings: bookings.map((b) => ({ code: b.code, quantity: b.quantity, amount: b.amount, method: b.method, status: b.status, ticket: b.ticketType, createdAt: b.createdAt, event: b.event ? outEvent(b.event, {}) : null })),
+  });
+});
+
+// POST/DELETE /api/me/events/:id/save — bookmark an event.
+userRouter.post("/events/:id/save", async (req, res) => {
+  const eventId = Number(req.params.id);
+  if (!(await prisma.event.findUnique({ where: { id: eventId } }))) return res.status(404).json({ error: "Event not found." });
+  await prisma.eventSave.upsert({ where: { eventId_userId: { eventId, userId: req.userId! } }, create: { eventId, userId: req.userId! }, update: {} });
+  res.json({ ok: true, saved: true });
+});
+userRouter.delete("/events/:id/save", async (req, res) => {
+  await prisma.eventSave.deleteMany({ where: { userId: req.userId!, eventId: Number(req.params.id) } });
+  res.json({ ok: true, saved: false });
+});
+
+// ---- Saved gift cards ----
+const VCARD_BIZ = { slug: true, name: true, logo: true, cover: true, category: { select: { slug: true, name: true, group: true, icon: true, color: true } } } as const;
+userRouter.get("/gift-cards", async (req, res) => {
+  const saves = await prisma.voucherSave.findMany({ where: { userId: req.userId! }, orderBy: { createdAt: "desc" }, include: { voucherType: { include: { business: { select: VCARD_BIZ } } } } });
+  res.json(saves.filter((s) => s.voucherType?.status === "ACTIVE" && voucherAvailable(s.voucherType)).map((s) => outVoucherCard(s.voucherType)));
+});
+userRouter.post("/gift-cards/:id/save", async (req, res) => {
+  const voucherTypeId = Number(req.params.id);
+  if (!(await prisma.voucherType.findUnique({ where: { id: voucherTypeId } }))) return res.status(404).json({ error: "Gift card not found." });
+  await prisma.voucherSave.upsert({ where: { voucherTypeId_userId: { voucherTypeId, userId: req.userId! } }, create: { voucherTypeId, userId: req.userId! }, update: {} });
+  res.json({ ok: true, saved: true });
+});
+userRouter.delete("/gift-cards/:id/save", async (req, res) => {
+  await prisma.voucherSave.deleteMany({ where: { userId: req.userId!, voucherTypeId: Number(req.params.id) } });
+  res.json({ ok: true, saved: false });
+});
+
+// ---- Saved vehicles (garage) ----
+userRouter.get("/vehicles", async (req, res) => {
+  res.json(await prisma.userVehicle.findMany({ where: { userId: req.userId! }, orderBy: { id: "asc" } }));
+});
+userRouter.post("/vehicles", async (req, res) => {
+  const b = req.body ?? {};
+  const make = STR(b.make, 40);
+  if (!make) return res.status(400).json({ error: "Car make is required to save a vehicle." });
+  const v = await prisma.userVehicle.create({ data: {
+    userId: req.userId!, label: STR(b.label, 40), make, model: STR(b.model, 60), year: STR(b.year, 8),
+    engine: STR(b.engine, 40), vin: STR(b.vin, 40), plate: STR(b.plate, 20),
+  } });
+  res.status(201).json(v);
+});
+userRouter.delete("/vehicles/:id", async (req, res) => {
+  await prisma.userVehicle.deleteMany({ where: { id: Number(req.params.id), userId: req.userId! } });
+  res.json({ ok: true });
+});
+
+// ---- Saved Discover collections ----
+userRouter.get("/collections", async (req, res) => {
+  const saves = await prisma.collectionSave.findMany({
+    where: { userId: req.userId! }, orderBy: { createdAt: "desc" },
+    include: { collection: { include: { items: { include: { business: { select: { cover: true } } }, take: 1 }, _count: { select: { items: true } } } } },
+  });
+  res.json(saves.filter((s) => s.collection?.isActive).map((s) => {
+    const c = s.collection;
+    return { id: c.id, slug: c.slug, title: c.title, description: c.description, emoji: c.emoji, coverImage: c.coverImage || c.items[0]?.business?.cover || null, count: c._count.items };
+  }));
+});
+userRouter.post("/collections/:id/save", async (req, res) => {
+  const collectionId = Number(req.params.id);
+  if (!(await prisma.collection.findUnique({ where: { id: collectionId } }))) return res.status(404).json({ error: "Collection not found." });
+  await prisma.collectionSave.upsert({ where: { collectionId_userId: { collectionId, userId: req.userId! } }, create: { collectionId, userId: req.userId! }, update: {} });
+  res.json({ ok: true, saved: true });
+});
+userRouter.delete("/collections/:id/save", async (req, res) => {
+  await prisma.collectionSave.deleteMany({ where: { userId: req.userId!, collectionId: Number(req.params.id) } });
+  res.json({ ok: true, saved: false });
+});
+
+// ---- Spare-parts (RFQ) requests the customer submitted ----
+const QUOTE_BIZ = { slug: true, name: true, logo: true, rating: true, reviewCount: true, phone: true, whatsapp: true } as const;
+
+// GET /api/me/part-requests — my requests + the quotes shops sent back.
+userRouter.get("/part-requests", async (req, res) => {
+  const reqs = await prisma.serviceRequest.findMany({
+    where: { userId: req.userId! }, orderBy: { createdAt: "desc" }, take: 50,
+    include: { quotes: { orderBy: { createdAt: "asc" }, include: { business: { select: QUOTE_BIZ } } }, _count: { select: { targets: true } } },
+  });
+  res.json(reqs.map((r) => ({
+    id: r.id, type: r.type, categorySlug: r.categorySlug, payload: parseObj(r.payload), notes: r.notes, photos: parseArr(r.photos),
+    city: r.city, budget: r.budget, status: requestStatus(r), selectedQuoteId: r.selectedQuoteId,
+    createdAt: r.createdAt, expiresAt: r.expiresAt, sentTo: r._count.targets,
+    quotes: r.quotes.map((q) => ({ id: q.id, available: q.available, price: q.price, eta: q.eta, offersDelivery: q.offersDelivery, note: q.note, photos: parseArr(q.photos), status: q.status, createdAt: q.createdAt, business: q.business })),
+  })));
+});
+
+// POST /api/me/part-requests/:id/accept { quoteId } — choose a shop's offer.
+userRouter.post("/part-requests/:id/accept", async (req, res) => {
+  const id = Number(req.params.id);
+  const r = await prisma.serviceRequest.findFirst({ where: { id, userId: req.userId! } });
+  if (!r) return res.status(404).json({ error: "Request not found." });
+  const quoteId = Number(req.body?.quoteId);
+  const quote = await prisma.serviceQuote.findFirst({ where: { id: quoteId, requestId: id } });
+  if (!quote) return res.status(404).json({ error: "Offer not found." });
+  await prisma.$transaction([
+    prisma.serviceQuote.update({ where: { id: quote.id }, data: { status: "ACCEPTED" } }),
+    prisma.serviceQuote.updateMany({ where: { requestId: id, id: { not: quote.id } }, data: { status: "DECLINED" } }),
+    prisma.serviceRequest.update({ where: { id }, data: { status: "SELECTED", selectedQuoteId: quote.id } }),
+  ]);
+  res.json({ ok: true, status: "SELECTED", selectedQuoteId: quote.id });
+});
+
+// POST /api/me/part-requests/:id/:action — complete | cancel.
+userRouter.post("/part-requests/:id/:action", async (req, res) => {
+  const id = Number(req.params.id);
+  const action = req.params.action;
+  const status = action === "complete" ? "COMPLETED" : action === "cancel" ? "CANCELLED" : null;
+  if (!status) return res.status(400).json({ error: "Unknown action." });
+  const r = await prisma.serviceRequest.findFirst({ where: { id, userId: req.userId! } });
+  if (!r) return res.status(404).json({ error: "Request not found." });
+  await prisma.serviceRequest.update({ where: { id }, data: { status } });
+  res.json({ ok: true, status });
 });

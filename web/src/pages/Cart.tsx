@@ -17,7 +17,7 @@ export function Cart() {
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-brand-dark"><CartIcon className="h-8 w-8" /></span>
         <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">Your cart is empty</h1>
-        <p className="mt-2 text-muted">Add items from any business in Aley — you can order from several at once.</p>
+        <p className="mt-2 text-muted">Add items from any business near you — you can order from several at once.</p>
         <Link to="/explore" className="btn btn-primary mt-6 px-6 py-3">Browse businesses</Link>
       </div>
     );

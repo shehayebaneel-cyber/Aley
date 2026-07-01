@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-const SUFFIX = "Aley — your city, online";
+const SUFFIX = "Aley — discover Lebanon";
 
 /** Set the document <title>. Pass a page name; falls back to the brand line. */
 export function useTitle(title?: string) {

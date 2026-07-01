@@ -11,7 +11,7 @@ import type { Business, VoucherType } from "../types";
 const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 const KIND_LABEL: Record<string, string> = { FIXED: "Gift card", PRODUCT: "Product voucher", SERVICE: "Service voucher" };
 
-export function BuyVoucherModal({ business, onClose }: { business: Business; onClose: () => void }) {
+export function BuyVoucherModal({ business, initialTypeId, onClose }: { business: Business; initialTypeId?: number; onClose: () => void }) {
   const { user } = useUserAuth();
   const [types, setTypes] = useState<VoucherType[] | null>(null);
   const [type, setType] = useState<VoucherType | null>(null);
@@ -20,18 +20,25 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
   const [step, setStep] = useState(0); // 0 choose, 1 details+pay
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [done, setDone] = useState<{ code: string } | null>(null);
+  const [done, setDone] = useState<{ code: string; count: number } | null>(null);
+  const [qty, setQty] = useState(1);
   const { balance: walletBalance, reload: reloadWallet } = useWallet();
   const [payMethod, setPayMethod] = useState("CARD");
   const [topUp, setTopUp] = useState(false);
 
   useEffect(() => {
-    api.get<{ types: VoucherType[] }>(`/api/vouchers/${business.slug}`).then((d) => { setTypes(d.types); if (d.types.length === 1) setType(d.types[0]); }).catch(() => setTypes([]));
-  }, [business.slug]);
+    api.get<{ types: VoucherType[] }>(`/api/vouchers/${business.slug}`).then((d) => {
+      setTypes(d.types);
+      const pre = initialTypeId ? d.types.find((t) => t.id === initialTypeId) : null;
+      if (pre) { setType(pre); setStep(1); }
+      else if (d.types.length === 1) setType(d.types[0]);
+    }).catch(() => setTypes([]));
+  }, [business.slug, initialTypeId]);
 
   const amount = type ? (type.value > 0 ? type.value : customValue) : 0;
   const price = type ? (type.price > 0 ? type.price : amount) : 0;
-  const walletShort = payMethod === "WALLET" && walletBalance < price;
+  const total = price * qty;
+  const walletShort = payMethod === "WALLET" && walletBalance < total;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -39,17 +46,17 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
     if (!form.recipientName.trim()) return setErr("Recipient name is required.");
     if (!form.recipientEmail.trim() && !form.recipientPhone.trim()) return setErr("Add the recipient's email or phone.");
     if (type.value === 0 && (!amount || amount < 1)) return setErr("Enter a voucher amount.");
-    if (payMethod === "WALLET" && walletBalance < price) return setErr("Your wallet balance is too low. Add money or pay by card.");
+    if (payMethod === "WALLET" && walletBalance < total) return setErr("Your wallet balance is too low. Add money or pay by card.");
     setBusy(true); setErr("");
     const client = user ? userApi : api;
     try {
-      const r = await client.post<{ voucher: { code: string } }>("/api/vouchers/buy", {
-        businessId: business.id, voucherTypeId: type.id, value: amount,
+      const r = await client.post<{ voucher: { code: string }; count?: number }>("/api/vouchers/buy", {
+        businessId: business.id, voucherTypeId: type.id, value: amount, quantity: qty,
         recipientName: form.recipientName, recipientEmail: form.recipientEmail, recipientPhone: form.recipientPhone,
         message: form.message, deliverAt: form.deliverAt || null,
         purchaserName: form.purchaserName, purchaserEmail: form.purchaserEmail, paymentMethod: payMethod,
       });
-      setDone({ code: r.voucher.code });
+      setDone({ code: r.voucher.code, count: r.count ?? 1 });
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Couldn't complete the purchase.");
     } finally { setBusy(false); }
@@ -68,11 +75,11 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
         {done ? (
           <div className="mt-6 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"><CheckIcon className="h-7 w-7" /></span>
-            <p className="mt-3 font-display text-lg font-bold text-ink">{form.deliverAt ? "Gift scheduled! 🎉" : "Voucher purchased! 🎉"}</p>
-            <p className="mt-1 text-muted">{form.deliverAt ? `It'll be delivered to ${form.recipientName} on ${form.deliverAt}.` : `Ready for ${form.recipientName}.`}</p>
+            <p className="mt-3 font-display text-lg font-bold text-ink">{form.deliverAt ? "Gift scheduled! 🎉" : done.count > 1 ? `${done.count} gift cards purchased! 🎉` : "Voucher purchased! 🎉"}</p>
+            <p className="mt-1 text-muted">{form.deliverAt ? `It'll be delivered to ${form.recipientName} on ${form.deliverAt}.` : `Ready for ${form.recipientName}.`}{done.count > 1 ? " All codes are in My Gift Vouchers." : ""}</p>
             <div className="mt-4 flex flex-col items-center">
               <QRCode value={redeemUrl(done.code)} size={150} />
-              <p className="mt-2 text-xs text-muted">Voucher code</p>
+              <p className="mt-2 text-xs text-muted">{done.count > 1 ? "First code" : "Voucher code"}</p>
               <p className="font-mono text-lg font-bold text-ink">{done.code}</p>
             </div>
             <Link to="/gift-vouchers" onClick={onClose} className="btn btn-ghost mt-4 px-4 py-2 text-sm">View in My Gift Vouchers</Link>
@@ -122,6 +129,13 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
                     <input value={form.recipientPhone} onChange={(e) => setForm({ ...form, recipientPhone: e.target.value })} placeholder="Phone" className="input" />
                   </div>
                   <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} rows={2} placeholder="Personal message (optional)" className="input" />
+                  <label className="flex items-center justify-between text-sm font-semibold text-ink">Quantity
+                    <span className="flex items-center gap-2">
+                      <button type="button" onClick={() => setQty((n) => Math.max(1, n - 1))} className="btn btn-ghost h-8 w-8 !p-0">−</button>
+                      <span className="w-6 text-center">{qty}</span>
+                      <button type="button" onClick={() => setQty((n) => Math.min(20, n + 1))} className="btn btn-ghost h-8 w-8 !p-0">+</button>
+                    </span>
+                  </label>
                   <label className="block text-sm font-semibold text-ink">Schedule delivery <span className="font-normal text-muted">(optional — birthday, holiday…)</span>
                     <input type="date" value={form.deliverAt} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setForm({ ...form, deliverAt: e.target.value })} className="input mt-1" />
                   </label>
@@ -135,14 +149,14 @@ export function BuyVoucherModal({ business, onClose }: { business: Business; onC
                   </div>
                   {payMethod === "WALLET" && walletShort ? (
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
-                      <span className="font-medium text-amber-700">Balance too low — needs {money(price)}.</span>
+                      <span className="font-medium text-amber-700">Balance too low — needs {money(total)}.</span>
                       <button type="button" onClick={() => setTopUp(true)} className="btn btn-ghost px-3 py-1 text-xs">+ Add money</button>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-border p-3 text-xs text-muted">💳 Demo payment — {payMethod === "WALLET" ? "paid from your wallet" : "your card is not charged"}. Total <span className="font-semibold text-ink">{money(price)}</span>.</div>
+                    <div className="rounded-xl border border-border p-3 text-xs text-muted">💳 Demo payment — {payMethod === "WALLET" ? "paid from your wallet" : "your card is not charged"}. Total{qty > 1 ? ` (${qty}×)` : ""} <span className="font-semibold text-ink">{money(total)}</span>.</div>
                   )}
                   {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
-                  <button type="submit" disabled={busy || walletShort} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Processing…" : `Pay ${money(price)} & send`}</button>
+                  <button type="submit" disabled={busy || walletShort} className="btn btn-primary w-full py-3 disabled:opacity-60">{busy ? "Processing…" : `Pay ${money(total)} & send`}</button>
                   <button type="button" onClick={() => setStep(0)} className="btn btn-ghost w-full py-2 text-sm">Back</button>
                 </form>
               )}

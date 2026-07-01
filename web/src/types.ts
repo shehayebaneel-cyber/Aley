@@ -332,6 +332,7 @@ export interface VoucherType {
   maxQuantity?: number;
   soldCount?: number;
   status?: string;
+  isFeatured?: boolean;
   terms: string;
 }
 export interface Voucher {
@@ -498,33 +499,165 @@ export interface Business {
   events?: EventItem[];
 }
 
+export interface EventTicketOption {
+  id: number;
+  name: string;
+  kind: string;
+  price: number;
+  description: string;
+  remaining: number | null;
+  soldOut: boolean;
+}
 export interface EventItem {
   id: number;
   title: string;
   description: string;
   category: string;
+  categoryLabel?: string;
+  categoryEmoji?: string;
   image: string | null;
+  gallery?: { url: string; caption?: string }[];
   location: string;
+  lat?: number | null;
+  lng?: number | null;
+  organizerName?: string;
+  organizerPhone?: string;
+  organizerEmail?: string;
   startTime: string;
   endTime: string | null;
-  business?: { slug: string; name: string; logo?: string | null } | null;
+  capacity?: number;
+  remaining?: number | null;
+  isFeatured?: boolean;
+  viewCount?: number;
+  createdAt?: string;
+  isFree?: boolean;
+  priceFrom?: number;
+  interested?: number;
+  going?: number;
+  maybe?: number;
+  attending?: number;
+  saved?: boolean;
+  myRsvp?: string | null;
+  business?: OfferBusiness | null;
+}
+export interface EventDetailT extends EventItem {
+  ticketTypes?: EventTicketOption[];
+  similar?: EventItem[];
+  nearby?: { slug: string; name: string; logo: string | null; rating: number; category?: { name: string; icon: string } | null }[];
+}
+export interface MyEventBooking {
+  code: string;
+  quantity: number;
+  amount: number;
+  method: string;
+  status: string;
+  ticket?: { name: string; kind: string } | null;
+  createdAt: string;
+  event: EventItem | null;
 }
 
+// ---- Spare parts (RFQ) ----
+export interface PartsMeta { makes: string[]; partCategories: string[]; conditions: string[]; sourcing: string[] }
+export interface PartsShop {
+  id: number; slug: string; name: string; logo: string | null; cover: string | null;
+  phone: string; whatsapp: string; address: string; rating: number; reviewCount: number; hasDelivery: boolean;
+  city: { slug: string; name: string } | null;
+  brands: string[]; makes: string[]; partCategories: string[];
+  newParts: boolean; usedParts: boolean; oem: boolean; aftermarket: boolean;
+}
+// ---- Discover collections ----
+export interface CollectionCard {
+  id: number; slug: string; title: string; description: string; emoji: string;
+  coverImage: string | null; isFeatured?: boolean; count: number;
+}
+export interface CollectionDetailT {
+  id: number; slug: string; title: string; description: string; emoji: string;
+  coverImage: string | null; saved: boolean; businesses: Business[];
+}
+
+export type RequestPayload = Record<string, string>;
+export interface PartQuote {
+  id: number; available: boolean; price: number; eta: string; offersDelivery: boolean; note: string; photos: string[];
+  status: string; createdAt: string; business: { slug: string; name: string; logo: string | null; rating: number; reviewCount: number; phone: string; whatsapp: string };
+}
+export interface PartRequest {
+  id: number; type: string; categorySlug: string; payload: RequestPayload; notes: string; photos: string[]; city: string; budget: number;
+  status: string; selectedQuoteId: number | null; createdAt: string; expiresAt: string | null; sentTo: number; quotes: PartQuote[];
+}
+export interface OwnerPartLead {
+  targetId: number; targetStatus: string; requestId: number; categorySlug: string; payload: RequestPayload; notes: string; photos: string[];
+  city: string; budget: number; customerName: string; customerPhone: string; customerWhatsapp: string;
+  status: string; selectedQuoteId: number | null; createdAt: string;
+  myQuote: { id: number; available: boolean; price: number; eta: string; offersDelivery: boolean; note: string; photos: string[]; status: string } | null;
+}
+
+export interface OfferBusiness {
+  slug: string;
+  name: string;
+  logo?: string | null;
+  cover?: string | null;
+  address?: string | null;
+  rating?: number;
+  reviewCount?: number;
+  phone?: string;
+  whatsapp?: string;
+  category?: { slug: string; name: string; group: string; icon: string; color: string } | null;
+}
 export interface Offer {
   id: number;
   title: string;
   description: string;
   type: string;
+  typeLabel?: string;
+  badge?: string;
+  terms?: string;
+  redeemInfo?: string;
   image: string | null;
   startDate: string | null;
   endDate: string | null;
-  business?: {
-    slug: string;
-    name: string;
-    logo?: string | null;
-    cover?: string | null;
-    category?: { slug: string; name: string; group: string; icon: string; color: string } | null;
-  } | null;
+  isFeatured?: boolean;
+  isNew?: boolean;
+  isExpiringSoon?: boolean;
+  daysLeft?: number | null;
+  redeemedCount?: number;
+  remaining?: number | null;
+  soldOut?: boolean;
+  viewCount?: number;
+  saved?: boolean;
+  createdAt?: string;
+  business?: OfferBusiness | null;
+}
+export interface OfferDetail extends Offer {
+  similar?: Offer[];
+}
+// A buyable gift-card / voucher product for the marketplace cards.
+export interface GiftCardProduct {
+  id: number;
+  businessId: number;
+  kind: "FIXED" | "PRODUCT" | "SERVICE";
+  name: string;
+  description: string;
+  terms?: string;
+  image: string | null;
+  value: number;
+  price: number;
+  discounted?: boolean;
+  expiryDays: number;
+  soldCount?: number;
+  isFeatured?: boolean;
+  createdAt?: string | null;
+  saved?: boolean;
+  business: OfferBusiness | null;
+}
+export interface GiftCardDetailT extends GiftCardProduct {
+  similar?: GiftCardProduct[];
+}
+export interface ClaimedOffer {
+  code: string;
+  status: "CLAIMED" | "REDEEMED" | "EXPIRED" | "CANCELLED";
+  createdAt: string;
+  redeemedAt: string | null;
+  offer: Offer | null;
 }
 
 export interface MapPin {
@@ -725,7 +858,7 @@ export interface HomeData {
   featured: Business[];
   newest: Business[];
   popular: Business[];
-  gift?: Business[];
+  gift?: GiftCardProduct[];
   offers: Offer[];
   events: EventItem[];
   categories: Category[];

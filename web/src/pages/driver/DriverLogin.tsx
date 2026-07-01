@@ -37,7 +37,7 @@ export function DriverLogin() {
           {mode === "login" ? "Driver login" : "Become a driver"}
         </h1>
         <p className="mt-1 text-center text-sm text-muted">
-          {mode === "login" ? "Log in to pick up and complete deliveries." : "Apply to deliver in Aley — admin approves new drivers."}
+          {mode === "login" ? "Log in to pick up and complete deliveries." : "Apply to deliver — admin approves new drivers."}
         </p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">

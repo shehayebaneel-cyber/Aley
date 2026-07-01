@@ -4,6 +4,9 @@ import { AiChat, type AiMessage } from "../../components/AiChat";
 import { BarChart, StatCard } from "../../components/Charts";
 import { GalleryManager } from "../../components/GalleryManager";
 import { ImageField } from "../../components/ImageField";
+import { MapPicker } from "../../components/MapPicker";
+import { EVENT_CATEGORIES } from "../../lib/events";
+import { fieldLabel } from "../../lib/requestForms";
 import { MenuEditor } from "../../components/MenuEditor";
 import { Stars } from "../../components/Stars";
 import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../components/icons";
@@ -11,16 +14,16 @@ import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
 import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
-const TABS = ["Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 // Group the tabs into a tidy 2-level nav so the dashboard isn't an 18-tab wall.
 const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
   { label: "Overview", icon: "🏠", tabs: ["Overview"] },
   { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
-  { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers"] },
+  { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers", "Requests"] },
   { label: "Bookings", icon: "📅", tabs: ["Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations"] },
   { label: "Page", icon: "✏️", tabs: ["Profile", "Photos", "Hours", "Events", "Reviews"] },
   { label: "Assistant", icon: "✨", tabs: ["Assistant"] },
@@ -119,6 +122,7 @@ export function BusinessDashboard() {
         {tab === "Facilities" && <FacilitiesTab biz={biz} />}
         {tab === "Field Bookings" && <FieldBookingsTab biz={biz} />}
         {tab === "Gift Vouchers" && <VouchersTab biz={biz} />}
+        {tab === "Requests" && <PartRequestsTab biz={biz} />}
         {tab === "Reservations" && <ReservationsTab biz={biz} save={save} />}
         {tab === "Profile" && <ProfileTab biz={biz} save={save} />}
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
@@ -430,7 +434,7 @@ function ReservationsTab({ biz, save }: { biz: Business; save: (p: Partial<Busin
 
 // ---- Profile ----
 function ProfileTab({ biz, save }: { biz: Business; save: (p: Partial<Business>) => Promise<Business> }) {
-  const { data: categories } = useFetch<Category[]>("/api/categories?city=aley");
+  const { data: categories } = useFetch<Category[]>("/api/categories");
   const [f, setF] = useState({
     name: biz.name, tagline: biz.tagline, categoryId: biz.category.id, description: biz.description,
     phone: biz.phone, whatsapp: biz.whatsapp, instagram: biz.instagram, facebook: biz.facebook,
@@ -1430,6 +1434,7 @@ function VouchersTab({ biz }: { biz: Business }) {
           {(types ?? []).map((t) => (
             <div key={t.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2.5">
               <span className="flex-1 font-semibold text-ink">{t.name} <span className="text-xs font-normal text-muted">· {t.kind === "FIXED" ? (t.value > 0 ? `$${t.value} gift card` : "custom amount") : t.kind.toLowerCase()}{t.expiryDays ? ` · ${t.expiryDays}d` : ""} · sold {t.soldCount ?? 0}</span></span>
+              <button onClick={async () => { await ownerApi.patch(`/api/owner/voucher-types/${t.id}`, { isFeatured: !t.isFeatured }); loadTypes(); }} className={`chip !text-xs ${t.isFeatured ? "chip-active" : ""}`}>{t.isFeatured ? "★ Featured" : "Feature"}</button>
               <button onClick={async () => { await ownerApi.patch(`/api/owner/voucher-types/${t.id}`, { status: t.status === "ACTIVE" ? "PAUSED" : "ACTIVE" }); loadTypes(); }} className={`chip !text-xs ${t.status === "ACTIVE" ? "chip-active" : ""}`}>{t.status === "ACTIVE" ? "Active" : "Paused"}</button>
               <button onClick={async () => { if (confirm("Delete this voucher product?")) { await ownerApi.delete(`/api/owner/voucher-types/${t.id}`); loadTypes(); } }} className="text-red-500"><TrashIcon className="h-4 w-4" /></button>
             </div>
@@ -1466,10 +1471,96 @@ function VouchersTab({ biz }: { biz: Business }) {
 }
 
 // ---- Offers ----
-const OFFER_TYPES = ["DISCOUNT", "BOGO", "HAPPY_HOUR", "SEASONAL"];
+const OFFER_TYPE_OPTIONS: { key: string; label: string }[] = [
+  { key: "PERCENT", label: "Percentage discount" }, { key: "BOGO", label: "Buy One Get One" }, { key: "FREE_ITEM", label: "Free item" },
+  { key: "HAPPY_HOUR", label: "Happy hour" }, { key: "PACKAGE", label: "Package deal" }, { key: "STUDENT", label: "Student discount" },
+  { key: "BIRTHDAY", label: "Birthday offer" }, { key: "SEASONAL", label: "Seasonal offer" }, { key: "FIRST_VISIT", label: "First visit offer" }, { key: "LOYALTY", label: "Loyalty offer" },
+];
+const BLANK_OFFER = { title: "", description: "", type: "PERCENT", badge: "", terms: "", redeemInfo: "", endDate: "", maxRedemptions: 0, isFeatured: false, image: null as string | null };
+// ---- Part Requests (spare-parts RFQ leads) ----
+const LEAD_HEADLINE = ["partNeeded", "serviceNeeded", "item", "problem", "tireSize"];
+function PartLead({ lead, bizId, onChanged }: { lead: OwnerPartLead; bizId: number; onChanged: () => void }) {
+  const p = lead.payload;
+  const headline = LEAD_HEADLINE.map((k) => p[k]).find(Boolean) || lead.categorySlug.replace(/-/g, " ");
+  const details = Object.entries(p).filter(([k, v]) => v && !LEAD_HEADLINE.includes(k));
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState({ available: lead.myQuote?.available ?? true, price: String(lead.myQuote?.price ?? ""), eta: lead.myQuote?.eta ?? "", offersDelivery: lead.myQuote?.offersDelivery ?? false, note: lead.myQuote?.note ?? "" });
+  const [busy, setBusy] = useState(false);
+  const wa = lead.customerWhatsapp.replace(/[^\d]/g, "") || lead.customerPhone.replace(/[^\d]/g, "");
+  async function reply(e: FormEvent) {
+    e.preventDefault(); setBusy(true);
+    try { await ownerApi.post(`/api/owner/part-requests/${lead.requestId}/quote`, { businessId: bizId, available: q.available, price: Number(q.price) || 0, eta: q.eta, offersDelivery: q.offersDelivery, note: q.note }); onChanged(); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-display font-bold text-ink">{headline}</p>
+          {!!details.length && <p className="text-sm text-muted">{details.map(([k, v]) => `${fieldLabel(lead.categorySlug, k)}: ${v}`).join(" · ")}</p>}
+          <p className="text-xs text-muted">{lead.city || "—"} · {timeAgo(lead.createdAt)}</p>
+          {lead.notes && <p className="mt-1 text-sm text-muted">"{lead.notes}"</p>}
+          {!!lead.photos.length && <div className="mt-2 flex gap-2">{lead.photos.map((ph, i) => <img key={i} src={ph} alt="" className="h-14 w-14 rounded-lg object-cover" />)}</div>}
+        </div>
+        <div className="shrink-0 text-right">
+          {lead.myQuote ? <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${lead.myQuote.status === "ACCEPTED" ? "bg-emerald-500/15 text-emerald-600" : lead.myQuote.status === "DECLINED" ? "bg-red-500/15 text-red-500" : "bg-sky-500/15 text-sky-600"}`}>{lead.myQuote.status === "ACCEPTED" ? "✓ You won this!" : lead.myQuote.status === "DECLINED" ? "Not selected" : "Replied"}</span>
+                        : <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-600">New lead</span>}
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a href={`tel:${lead.customerPhone}`} className="btn btn-ghost px-3 py-1.5 text-xs">📞 {lead.customerName}</a>
+        {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="btn bg-emerald-500 px-3 py-1.5 text-xs text-white">WhatsApp</a>}
+        {lead.myQuote?.status !== "ACCEPTED" && <button onClick={() => setOpen((o) => !o)} className="btn btn-primary px-3 py-1.5 text-xs">{lead.myQuote ? "Update reply" : "Reply with quote"}</button>}
+        {!lead.myQuote && <button onClick={async () => { await ownerApi.patch(`/api/owner/part-targets/${lead.targetId}`, { status: "DECLINED" }); onChanged(); }} className="btn btn-ghost px-3 py-1.5 text-xs text-muted">Skip</button>}
+      </div>
+      {open && (
+        <form onSubmit={reply} className="mt-3 space-y-2 rounded-xl surface-2 p-3">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setQ({ ...q, available: true })} className={`chip ${q.available ? "chip-active" : ""}`}>✓ Available</button>
+            <button type="button" onClick={() => setQ({ ...q, available: false })} className={`chip ${!q.available ? "chip-active" : ""}`}>✗ Not available</button>
+            <button type="button" onClick={() => setQ({ ...q, offersDelivery: !q.offersDelivery })} className={`chip ${q.offersDelivery ? "chip-active" : ""}`}>🛵 I can deliver</button>
+          </div>
+          {q.available && (
+            <div className="grid grid-cols-2 gap-2">
+              <input type="number" min={0} value={q.price} onChange={(e) => setQ({ ...q, price: e.target.value })} placeholder="Your price ($)" className="input !py-1.5 text-sm" />
+              <input value={q.eta} onChange={(e) => setQ({ ...q, eta: e.target.value })} placeholder="Completion time (e.g. 2 days)" className="input !py-1.5 text-sm" />
+            </div>
+          )}
+          <textarea value={q.note} onChange={(e) => setQ({ ...q, note: e.target.value })} rows={2} placeholder="Note to customer (condition, warranty, timing…)" className="input !py-1.5 text-sm" />
+          <button disabled={busy} className="btn btn-primary w-full py-2 text-sm disabled:opacity-60">{busy ? "Sending…" : "Send reply to customer"}</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function PartRequestsTab({ biz }: { biz: Business }) {
+  const [leads, setLeads] = useState<OwnerPartLead[] | null>(null);
+  const [q, setQ] = useState("");
+  const load = () => ownerApi.get<OwnerPartLead[]>(`/api/owner/businesses/${biz.id}/part-requests`).then(setLeads);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [biz.id]);
+  const shown = (leads ?? []).filter((l) => { const ql = q.trim().toLowerCase(); return !ql || `${Object.values(l.payload).join(" ")} ${l.categorySlug}`.toLowerCase().includes(ql); });
+  const newCount = (leads ?? []).filter((l) => !l.myQuote && l.targetStatus !== "DECLINED").length;
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-display text-lg font-bold text-ink">Requests <span className="text-muted">· {newCount} new</span></h3>
+          <p className="text-sm text-muted">Customer requests sent to your business. Reply fast with price, timing &amp; availability to win the job.</p>
+        </div>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search requests…" className="input max-w-xs" />
+      </div>
+      {leads && shown.length === 0 && <div className="card mt-4 p-10 text-center text-muted">No requests yet. New leads show up here automatically.</div>}
+      <div className="mt-4 space-y-3">
+        {shown.map((l) => <PartLead key={l.targetId} lead={l} bizId={biz.id} onChanged={load} />)}
+      </div>
+    </div>
+  );
+}
+
 function OffersTab({ biz }: { biz: Business }) {
   const [offers, setOffers] = useState<Offer[] | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", type: "DISCOUNT", image: null as string | null });
+  const [form, setForm] = useState({ ...BLANK_OFFER });
   const reload = () => ownerApi.get<Offer[]>(`/api/owner/businesses/${biz.id}/offers`).then(setOffers);
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [biz.id]);
 
@@ -1477,27 +1568,39 @@ function OffersTab({ biz }: { biz: Business }) {
     e.preventDefault();
     if (!form.title.trim()) return;
     await ownerApi.post(`/api/owner/businesses/${biz.id}/offers`, form);
-    setForm({ title: "", description: "", type: "DISCOUNT", image: null });
+    setForm({ ...BLANK_OFFER });
     reload();
   }
   return (
-    <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
+    <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
       <form onSubmit={add} className="card h-fit space-y-3 p-5">
         <h3 className="font-display font-bold text-ink">New offer</h3>
-        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title (e.g. 20% off)" className="input" />
-        <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Details" className="input" />
-        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="input">{OFFER_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title (e.g. 50% off all pizzas)" className="input" />
+        <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" className="input" />
+        <label className="block text-xs font-semibold text-muted">Offer type
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="input mt-1">{OFFER_TYPE_OPTIONS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select>
+        </label>
+        <input value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} placeholder='Badge — big label e.g. "50% OFF" (optional)' className="input" />
+        <label className="block text-xs font-semibold text-muted">Ends on (optional)
+          <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className="input mt-1" />
+        </label>
+        <input type="number" min={0} value={form.maxRedemptions} onChange={(e) => setForm({ ...form, maxRedemptions: Number(e.target.value) })} placeholder="Max claims (0 = unlimited)" className="input" />
+        <textarea rows={2} value={form.redeemInfo} onChange={(e) => setForm({ ...form, redeemInfo: e.target.value })} placeholder="How to redeem (shown to customer)" className="input" />
+        <textarea rows={2} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} placeholder="Terms & conditions" className="input" />
+        <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /> Feature this deal</label>
         <ImageField value={form.image} onChange={(image) => setForm({ ...form, image })} label="offer image" />
         <button className="btn btn-primary w-full py-2.5">Add offer</button>
       </form>
       <div className="space-y-3">
+        <Link to="/owner/redeem-offer" className="flex items-center justify-between rounded-xl bg-brand-soft px-4 py-3 text-sm font-semibold text-brand-dark hover:bg-brand-soft/70">🎟️ Redeem a customer's offer code →</Link>
         {offers?.length === 0 && <div className="card p-8 text-center text-muted">No offers yet.</div>}
         {(offers ?? []).map((o) => (
           <div key={o.id} className="card flex items-center gap-4 p-4">
             {o.image && <img src={o.image} alt="" className="h-16 w-16 rounded-lg object-cover" />}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-ink">{o.title} <span className="chip !py-0 !text-[10px]">{o.type.replace("_", " ")}</span></p>
+              <p className="font-semibold text-ink">{o.title} <span className="chip !py-0 !text-[10px]">{(o.badge || o.type).replace(/_/g, " ")}</span>{o.isFeatured && <span className="ml-1 chip !py-0 !text-[10px] chip-active">Featured</span>}</p>
               <p className="line-clamp-1 text-sm text-muted">{o.description}</p>
+              <p className="mt-0.5 text-xs text-muted">{o.redeemedCount ?? 0} claimed{o.endDate ? ` · ends ${new Date(o.endDate).toLocaleDateString()}` : ""}</p>
             </div>
             <button onClick={async () => { await ownerApi.delete(`/api/owner/offers/${o.id}`); reload(); }} className="btn btn-ghost px-3 py-2 text-sm text-red-500">Delete</button>
           </div>
@@ -1508,9 +1611,70 @@ function OffersTab({ biz }: { biz: Business }) {
 }
 
 // ---- Events ----
+const TICKET_KINDS = ["GENERAL", "VIP", "EARLY_BIRD", "STUDENT", "FAMILY"];
+const BLANK_EVENT = { title: "", description: "", category: "festivals", location: "", lat: null as number | null, lng: null as number | null, startTime: "", endTime: "", capacity: 0, isFeatured: false, image: null as string | null };
+
+function EventTicketsManager({ eventId }: { eventId: number }) {
+  const [tickets, setTickets] = useState<{ id: number; name: string; kind: string; price: number; quantity: number; soldCount: number }[]>([]);
+  const [f, setF] = useState({ name: "", kind: "GENERAL", price: 0, quantity: 0, description: "" });
+  const load = () => ownerApi.get<typeof tickets>(`/api/owner/events/${eventId}/tickets`).then(setTickets);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [eventId]);
+  async function add(e: FormEvent) { e.preventDefault(); if (!f.name.trim()) return; await ownerApi.post(`/api/owner/events/${eventId}/tickets`, f); setF({ name: "", kind: "GENERAL", price: 0, quantity: 0, description: "" }); load(); }
+  return (
+    <div className="mt-3 rounded-xl surface-2 p-3">
+      <p className="text-sm font-bold text-ink">Ticket types <span className="font-normal text-muted">(none = free RSVP event)</span></p>
+      <div className="mt-2 space-y-1.5">
+        {tickets.map((t) => (
+          <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2 text-sm">
+            <span className="text-ink">{t.name} <span className="text-muted">· {t.kind} · {t.price ? `$${t.price}` : "Free"}{t.quantity ? ` · ${t.soldCount}/${t.quantity} sold` : ` · ${t.soldCount} sold`}</span></span>
+            <button onClick={async () => { await ownerApi.delete(`/api/owner/event-tickets/${t.id}`); load(); }} className="text-xs font-semibold text-red-500">Remove</button>
+          </div>
+        ))}
+      </div>
+      <form onSubmit={add} className="mt-2 grid grid-cols-2 gap-2">
+        <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Name (e.g. VIP)" className="input !py-1.5 text-sm" />
+        <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} className="input !py-1.5 text-sm">{TICKET_KINDS.map((k) => <option key={k} value={k}>{k.replace("_", " ")}</option>)}</select>
+        <input type="number" min={0} value={f.price} onChange={(e) => setF({ ...f, price: Number(e.target.value) })} placeholder="Price (0 = free)" className="input !py-1.5 text-sm" />
+        <input type="number" min={0} value={f.quantity} onChange={(e) => setF({ ...f, quantity: Number(e.target.value) })} placeholder="Qty (0 = ∞)" className="input !py-1.5 text-sm" />
+        <button className="btn btn-ghost col-span-2 py-1.5 text-sm">+ Add ticket type</button>
+      </form>
+    </div>
+  );
+}
+
+function EventBookingsView({ eventId }: { eventId: number }) {
+  const [data, setData] = useState<{ bookings: { id: number; customerName: string; quantity: number; amount: number; method: string; status: string; code: string; ticketType?: { name: string } | null }[]; summary: { bookings: number; attendees: number; checkedIn: number; revenue: number } } | null>(null);
+  const load = () => ownerApi.get<NonNullable<typeof data>>(`/api/owner/events/${eventId}/bookings`).then(setData);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [eventId]);
+  if (!data) return <p className="mt-3 text-sm text-muted">Loading bookings…</p>;
+  const act = async (id: number, action: string) => { await ownerApi.patch(`/api/owner/event-bookings/${id}`, { action }); load(); };
+  return (
+    <div className="mt-3 rounded-xl surface-2 p-3">
+      <div className="grid grid-cols-4 gap-2 text-center">
+        {[["Bookings", data.summary.bookings], ["Attendees", data.summary.attendees], ["Checked in", data.summary.checkedIn], ["Revenue", `$${data.summary.revenue}`]].map(([l, v]) => (
+          <div key={l as string} className="rounded-lg bg-surface p-2"><p className="font-display text-lg font-extrabold text-ink">{v}</p><p className="text-[10px] uppercase text-muted">{l}</p></div>
+        ))}
+      </div>
+      <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+        {data.bookings.length === 0 && <p className="py-3 text-center text-sm text-muted">No bookings yet.</p>}
+        {data.bookings.map((b) => (
+          <div key={b.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2 text-sm">
+            <span className="min-w-0"><span className="font-semibold text-ink">{b.customerName || "Guest"}</span> <span className="text-muted">· {b.quantity}× {b.ticketType?.name ?? "spot"} · {b.code}</span></span>
+            <span className="flex shrink-0 items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${b.status === "CHECKED_IN" ? "bg-brand-soft text-brand-dark" : b.status === "CANCELLED" ? "bg-red-500/15 text-red-500" : "bg-emerald-500/15 text-emerald-600"}`}>{b.status.replace("_", " ")}</span>
+              {b.status === "CONFIRMED" && <button onClick={() => act(b.id, "checkin")} className="text-xs font-semibold text-brand">Check in</button>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EventsTab({ biz }: { biz: Business }) {
   const [events, setEvents] = useState<EventItem[] | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", category: "Community", location: "", startTime: "", image: null as string | null });
+  const [form, setForm] = useState({ ...BLANK_EVENT });
+  const [open, setOpen] = useState<{ id: number; view: "tickets" | "bookings" } | null>(null);
   const reload = () => ownerApi.get<EventItem[]>(`/api/owner/businesses/${biz.id}/events`).then(setEvents);
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [biz.id]);
 
@@ -1518,31 +1682,47 @@ function EventsTab({ biz }: { biz: Business }) {
     e.preventDefault();
     if (!form.title.trim() || !form.startTime) return;
     await ownerApi.post(`/api/owner/businesses/${biz.id}/events`, form);
-    setForm({ title: "", description: "", category: "Community", location: "", startTime: "", image: null });
+    setForm({ ...BLANK_EVENT });
     reload();
   }
   return (
-    <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
+    <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
       <form onSubmit={add} className="card h-fit space-y-3 p-5">
         <h3 className="font-display font-bold text-ink">New event</h3>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Event title" className="input" />
-        <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (Live Music…)" className="input" />
+        <label className="block text-xs font-semibold text-muted">Category
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input mt-1">{EVENT_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>)}</select>
+        </label>
         <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Details" className="input" />
-        <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Location" className="input" />
-        <label className="block text-sm font-semibold text-ink">Start<input type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className="input mt-1" /></label>
-        <ImageField value={form.image} onChange={(image) => setForm({ ...form, image })} label="event image" />
+        <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Venue / location" className="input" />
+        <MapPicker lat={form.lat} lng={form.lng} onChange={({ lat, lng }) => setForm({ ...form, lat, lng })} />
+        <label className="block text-xs font-semibold text-muted">Starts<input type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className="input mt-1" /></label>
+        <label className="block text-xs font-semibold text-muted">Ends (optional)<input type="datetime-local" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className="input mt-1" /></label>
+        <input type="number" min={0} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} placeholder="Capacity (0 = unlimited)" className="input" />
+        <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /> Feature this event</label>
+        <ImageField value={form.image} onChange={(image) => setForm({ ...form, image })} label="event poster" />
         <button className="btn btn-primary w-full py-2.5">Add event</button>
+        <p className="text-xs text-muted">After creating, add ticket types (VIP, early bird, etc.) below — or leave none for a free RSVP event.</p>
       </form>
       <div className="space-y-3">
         {events?.length === 0 && <div className="card p-8 text-center text-muted">No events yet.</div>}
         {(events ?? []).map((ev) => (
-          <div key={ev.id} className="card flex items-center gap-4 p-4">
-            {ev.image && <img src={ev.image} alt="" className="h-16 w-16 rounded-lg object-cover" />}
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-ink">{ev.title} <span className="chip !py-0 !text-[10px]">{ev.category}</span></p>
-              <p className="text-sm text-muted">{formatEventDate(ev.startTime)} · {ev.location}</p>
+          <div key={ev.id} className="card p-4">
+            <div className="flex items-center gap-4">
+              {ev.image && <img src={ev.image} alt="" className="h-16 w-16 rounded-lg object-cover" />}
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink">{ev.title} <span className="chip !py-0 !text-[10px]">{ev.categoryLabel ?? ev.category}</span>{ev.isFeatured && <span className="ml-1 chip !py-0 !text-[10px] chip-active">Featured</span>}</p>
+                <p className="text-sm text-muted">{formatEventDate(ev.startTime)} · {ev.location}</p>
+                <p className="text-xs text-muted">{ev.attending ?? 0} going · {ev.interested ?? 0} interested · {ev.viewCount ?? 0} views</p>
+              </div>
+              <button onClick={async () => { await ownerApi.delete(`/api/owner/events/${ev.id}`); reload(); }} className="btn btn-ghost px-3 py-2 text-sm text-red-500">Delete</button>
             </div>
-            <button onClick={async () => { await ownerApi.delete(`/api/owner/events/${ev.id}`); reload(); }} className="btn btn-ghost px-3 py-2 text-sm text-red-500">Delete</button>
+            <div className="mt-2 flex gap-2">
+              <button onClick={() => setOpen(open?.id === ev.id && open.view === "tickets" ? null : { id: ev.id, view: "tickets" })} className={`chip ${open?.id === ev.id && open.view === "tickets" ? "chip-active" : ""}`}>🎟️ Tickets</button>
+              <button onClick={() => setOpen(open?.id === ev.id && open.view === "bookings" ? null : { id: ev.id, view: "bookings" })} className={`chip ${open?.id === ev.id && open.view === "bookings" ? "chip-active" : ""}`}>📋 Bookings & revenue</button>
+            </div>
+            {open?.id === ev.id && open.view === "tickets" && <EventTicketsManager eventId={ev.id} />}
+            {open?.id === ev.id && open.view === "bookings" && <EventBookingsView eventId={ev.id} />}
           </div>
         ))}
       </div>

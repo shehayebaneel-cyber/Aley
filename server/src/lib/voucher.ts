@@ -29,3 +29,37 @@ export function effectiveStatus(v: { status: string; expiresAt: Date | null }): 
 }
 
 export const isRedeemable = (v: { status: string; expiresAt: Date | null }) => effectiveStatus(v) === "ACTIVE";
+
+// ---- Gift-card marketplace ----
+type VoucherTypeRow = {
+  id: number; businessId: number; kind: string; name: string; description: string; image: string | null;
+  value: number; price: number; expiryDays: number; maxQuantity: number; soldCount: number;
+  terms?: string; isFeatured?: boolean; createdAt?: Date;
+  business?: { slug: string; name: string; logo: string | null; cover: string | null; category?: { slug: string; name: string; group: string; icon: string; color: string } | null } | null;
+};
+
+/** Is a voucher product still buyable (not sold out)? */
+export const voucherAvailable = (t: { maxQuantity: number; soldCount: number }) => t.maxQuantity === 0 || t.soldCount < t.maxQuantity;
+
+/** Shape a voucher product as a gift-card for the marketplace cards. */
+export function outVoucherCard(t: VoucherTypeRow) {
+  const b = t.business;
+  const price = t.price > 0 ? t.price : t.value;
+  return {
+    id: t.id,
+    businessId: t.businessId,
+    kind: t.kind,
+    name: t.name,
+    description: t.description,
+    terms: t.terms ?? "",
+    image: t.image || b?.cover || b?.logo || null,
+    value: t.value,
+    price,
+    discounted: t.value > 0 && price < t.value,
+    expiryDays: t.expiryDays,
+    soldCount: t.soldCount,
+    isFeatured: !!t.isFeatured,
+    createdAt: t.createdAt ?? null,
+    business: b ? { slug: b.slug, name: b.name, logo: b.logo, cover: b.cover, category: b.category ?? null } : null,
+  };
+}

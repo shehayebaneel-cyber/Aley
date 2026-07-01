@@ -21,7 +21,7 @@ export function Saved() {
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-brand-dark"><HeartIcon filled className="h-8 w-8" /></span>
         <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">Save your favourite places</h1>
-        <p className="mt-2 text-muted">Log in to keep a list of the businesses you love in Aley.</p>
+        <p className="mt-2 text-muted">Log in to keep a list of the businesses you love.</p>
         <button onClick={openAuth} className="btn btn-primary mt-6 px-6 py-3">Log in or sign up</button>
       </div>
     );
@@ -40,7 +40,7 @@ export function Saved() {
         <div className="card mt-6 p-16 text-center">
           <p className="text-lg font-semibold text-ink">Nothing saved yet.</p>
           <p className="mt-1 text-muted">Tap the heart on any business to save it here.</p>
-          <Link to="/explore" className="btn btn-primary mt-4 px-6 py-2.5">Explore Aley</Link>
+          <Link to="/explore" className="btn btn-primary mt-4 px-6 py-2.5">Explore</Link>
         </div>
       )}
     </div>

@@ -8,7 +8,7 @@ import type { Category, ClaimableBusiness } from "../../types";
 
 export function OwnerHome() {
   const { owner, businesses, refresh } = useOwnerAuth();
-  const { data: categories } = useFetch<Category[]>("/api/categories?city=aley");
+  const { data: categories } = useFetch<Category[]>("/api/categories");
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", tagline: "", categoryId: 0 });
   const [busy, setBusy] = useState(false);
@@ -46,7 +46,7 @@ export function OwnerHome() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-extrabold text-ink">Hi, {owner?.name?.split(" ")[0]} 👋</h1>
-          <p className="mt-1 text-muted">Manage your {businesses.length === 1 ? "business" : "businesses"} on Aley.</p>
+          <p className="mt-1 text-muted">Manage your {businesses.length === 1 ? "business" : "businesses"}.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setClaiming(true)} className="btn btn-ghost px-5 py-2.5">Claim an existing business</button>
@@ -177,7 +177,7 @@ function ClaimModal({ initialId, initialName, onClose }: { initialId: string | n
           </div>
         ) : (
           <>
-            <p className="mt-1 text-sm text-muted">Find your existing listing on Aley and request ownership. An admin verifies claims before handing over the page.</p>
+            <p className="mt-1 text-sm text-muted">Find your existing listing and request ownership. An admin verifies claims before handing over the page.</p>
             <div className="relative mt-4">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setSelected(null); }} placeholder="Search your business name…" className="input !pl-9" />
