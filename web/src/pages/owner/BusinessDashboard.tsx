@@ -472,6 +472,17 @@ function ShareTab({ biz }: { biz: Business }) {
 interface Metric { value: number; prev: number; delta: number }
 interface Metrics {
   business: { hasReservations: boolean; hasDelivery: boolean };
+  advanced: {
+    giftCards: { sales: { count: number; revenue: number }; redemptions: number };
+    offerRedemptions: number;
+    aov: number;
+    customers: { total: number; repeat: number; repeatRate: number; active: number; new: number; returning: number; retentionRate: number };
+    conversion: { rate: number; booking: number; quote: number };
+    quotes: { received: number; replied: number };
+    peakHours: number[];
+    popularItems: { name: string; count: number }[];
+    popularServices: { name: string; count: number }[];
+  };
   cards: {
     profileViews: Metric; searchAppearances: Metric; ctr: number;
     phoneViews: Metric; calls: Metric; whatsapp: Metric; website: Metric; directions: Metric;
@@ -489,6 +500,22 @@ const PERIODS: { key: string; label: string }[] = [
   { key: "30d", label: "Last 30 days" }, { key: "90d", label: "Last 90 days" }, { key: "year", label: "This year" }, { key: "custom", label: "Custom" },
 ];
 
+function PeakHours({ hours }: { hours: number[] }) {
+  const max = Math.max(1, ...hours);
+  const total = hours.reduce((s, h) => s + h, 0);
+  const peak = hours.indexOf(Math.max(...hours));
+  if (total === 0) return <p className="mt-3 text-sm text-muted">Not enough bookings or orders yet to show peak hours.</p>;
+  return (
+    <div className="mt-3">
+      <div className="flex h-24 items-end gap-0.5">
+        {hours.map((h, i) => <div key={i} className={`flex-1 rounded-t ${i === peak ? "bg-brand" : "bg-brand/40"}`} style={{ height: `${Math.max(2, (h / max) * 100)}%` }} title={`${i}:00 — ${h}`} />)}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-muted"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+      <p className="mt-2 text-sm text-muted">Busiest around <span className="font-semibold text-ink">{peak}:00–{(peak + 1) % 24}:00</span>.</p>
+    </div>
+  );
+}
+
 function AnalyticsTab({ biz }: { biz: Business }) {
   const [period, setPeriod] = useState("30d");
   const [from, setFrom] = useState("");
@@ -505,6 +532,7 @@ function AnalyticsTab({ biz }: { biz: Business }) {
   }, [biz.id, period, from, to]);
 
   const c = m?.cards;
+  const a = m?.advanced;
   return (
     <div className="space-y-6">
       {/* Time filter */}
@@ -542,6 +570,53 @@ function AnalyticsTab({ biz }: { biz: Business }) {
             <StatCard label="Revenue (orders)" value={currency(c.orders.revenue)} />
             <StatCard label="Deliveries" value={c.deliveries} />
           </div>
+
+          {/* Business insights (sales, customers, conversion, peak hours, popular) */}
+          {a && (
+            <>
+              <div>
+                <h3 className="mb-3 font-display font-bold text-ink">📈 Business insights</h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <StatCard label="Gift card sales" value={currency(a.giftCards.sales.revenue)} hint={`${a.giftCards.sales.count} sold`} />
+                  <StatCard label="Gift cards redeemed" value={a.giftCards.redemptions} />
+                  <StatCard label="Offer redemptions" value={a.offerRedemptions} />
+                  <StatCard label="Avg order value" value={currency(a.aov)} />
+                  <StatCard label="Repeat customers" value={a.customers.repeat} hint={`${a.customers.repeatRate}% of all`} />
+                  <StatCard label="Retention" value={`${a.customers.retentionRate}%`} hint={`${a.customers.returning} returning`} />
+                  <StatCard label="New customers" value={a.customers.new} hint="this period" />
+                  <StatCard label="Conversion rate" value={`${a.conversion.rate}%`} hint="actions per 100 views" />
+                  <StatCard label="Booking conversion" value={`${a.conversion.booking}%`} hint="kept vs booked" />
+                  <StatCard label="Quote conversion" value={`${a.conversion.quote}%`} hint={`${a.quotes.replied}/${a.quotes.received} replied`} />
+                  <StatCard label="Active customers" value={a.customers.active} hint="this period" />
+                  <StatCard label="Total customers" value={a.customers.total} hint="all-time" />
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="card p-5">
+                  <h3 className="font-display font-bold text-ink">⏰ Peak business hours</h3>
+                  <PeakHours hours={a.peakHours} />
+                </div>
+                <div className="card p-5">
+                  <h3 className="font-display font-bold text-ink">🔥 Most popular</h3>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Products</p>
+                      {a.popularItems.length ? (
+                        <ul className="mt-1.5 space-y-1 text-sm">{a.popularItems.map((it) => <li key={it.name} className="flex justify-between gap-2"><span className="truncate text-ink">{it.name}</span><span className="shrink-0 text-muted">{it.count}</span></li>)}</ul>
+                      ) : <p className="mt-1.5 text-sm text-muted">No orders yet.</p>}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Services</p>
+                      {a.popularServices.length ? (
+                        <ul className="mt-1.5 space-y-1 text-sm">{a.popularServices.map((s) => <li key={s.name} className="flex justify-between gap-2"><span className="truncate text-ink">{s.name}</span><span className="shrink-0 text-muted">{s.count}</span></li>)}</ul>
+                      ) : <p className="mt-1.5 text-sm text-muted">No bookings yet.</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Charts */}
           <div className="grid gap-4 lg:grid-cols-2">

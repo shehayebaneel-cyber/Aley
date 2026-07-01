@@ -133,8 +133,11 @@ export async function businessMetrics(businessId: number, range: Range) {
     insights.push(`Your listing performs ${ratio >= 100 ? `${ratio - 100}% above` : `${100 - ratio}% below`} the average ${business.category.name} business.`);
   }
 
+  const advanced = await advancedInsights(businessId, range, cur.PROFILE_VIEW);
+
   return {
     business: { id: business.id, name: business.name, slug: business.slug, category: business.category.name, rating: business.rating, reviewCount: business.reviewCount, hasReservations: business.hasReservations, hasDelivery: business.hasDelivery },
+    advanced,
     cards: {
       profileViews: metric(cur.PROFILE_VIEW, prev.PROFILE_VIEW ?? 0),
       searchAppearances: metric(cur.SEARCH_APPEARANCE, prev.SEARCH_APPEARANCE ?? 0),
@@ -163,6 +166,94 @@ async function categoryAverageViews(categoryId: number, range: Range): Promise<n
   const grouped = await prisma.analyticsEvent.groupBy({ by: ["businessId"], where: { businessId: { in: ids }, type: "PROFILE_VIEW", createdAt: { gte: range.start, lt: range.end } }, _count: { _all: true } });
   const total = grouped.reduce((s, g) => s + g._count._all, 0);
   return total / businesses.length;
+}
+
+const hourOf = (hhmm: string) => { const h = parseInt(String(hhmm).slice(0, 2), 10); return isNaN(h) ? -1 : h; };
+const topN = (map: Map<string, number>, n: number) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name, count]) => ({ name, count }));
+
+// Repeat / retention: lifetime customer activity keyed by phone across every channel.
+async function customerStats(businessId: number, range: Range) {
+  const [a, f, o, r] = await Promise.all([
+    prisma.appointment.findMany({ where: { businessId }, select: { customerPhone: true, createdAt: true } }),
+    prisma.facilityBooking.findMany({ where: { businessId }, select: { customerPhone: true, createdAt: true } }),
+    prisma.businessOrder.findMany({ where: { businessId }, select: { createdAt: true, order: { select: { customerPhone: true } } } }),
+    prisma.reservation.findMany({ where: { businessId }, select: { phone: true, createdAt: true } }),
+  ]);
+  const map = new Map<string, { count: number; first: number; inRange: boolean }>();
+  const add = (rawPhone: string | undefined, when: Date) => {
+    const p = (rawPhone || "").trim(); if (!p) return;
+    const t = when.getTime();
+    let e = map.get(p); if (!e) { e = { count: 0, first: t, inRange: false }; map.set(p, e); }
+    e.count++; if (t < e.first) e.first = t;
+    if (when >= range.start && when < range.end) e.inRange = true;
+  };
+  a.forEach((x) => add(x.customerPhone, x.createdAt));
+  f.forEach((x) => add(x.customerPhone, x.createdAt));
+  o.forEach((x) => add(x.order?.customerPhone, x.createdAt));
+  r.forEach((x) => add(x.phone, x.createdAt));
+  const all = [...map.values()];
+  const total = all.length;
+  const repeat = all.filter((e) => e.count > 1).length;
+  const active = all.filter((e) => e.inRange);
+  const isNew = active.filter((e) => e.first >= range.start.getTime()).length;
+  const returning = active.length - isNew;
+  return {
+    total, repeat, repeatRate: total ? Math.round((repeat / total) * 100) : 0,
+    active: active.length, new: isNew, returning,
+    retentionRate: active.length ? Math.round((returning / active.length) * 100) : 0,
+  };
+}
+
+// Deeper business insights: gift cards, redemptions, AOV, conversions, peak hours, popular items.
+async function advancedInsights(businessId: number, range: Range, profileViews: number) {
+  const inRange = { gte: range.start, lt: range.end };
+  const [vSales, vRedeems, offerRedeems, bOrders, appts, facs, quoteTargets, customers] = await Promise.all([
+    prisma.voucher.findMany({ where: { businessId, createdAt: inRange }, select: { price: true } }),
+    prisma.voucher.count({ where: { businessId, status: "REDEEMED", redeemedAt: inRange } }),
+    prisma.offerRedemption.count({ where: { businessId, status: "REDEEMED", redeemedAt: inRange } }),
+    prisma.businessOrder.findMany({ where: { businessId, createdAt: inRange, status: { not: "CANCELLED" } }, select: { subtotal: true, createdAt: true, items: { select: { name: true, quantity: true } } } }),
+    prisma.appointment.findMany({ where: { businessId, createdAt: inRange }, select: { time: true, serviceName: true, status: true } }),
+    prisma.facilityBooking.findMany({ where: { businessId, createdAt: inRange }, select: { startTime: true } }),
+    prisma.serviceRequestTarget.findMany({ where: { businessId, createdAt: inRange }, select: { status: true } }),
+    customerStats(businessId, range),
+  ]);
+
+  const giftCardSales = { count: vSales.length, revenue: round2(vSales.reduce((s, v) => s + v.price, 0)) };
+  const aov = bOrders.length ? round2(bOrders.reduce((s, o) => s + o.subtotal, 0) / bOrders.length) : 0;
+
+  // Peak hours: real demand from orders + appointments + field bookings.
+  const peakHours = new Array(24).fill(0) as number[];
+  for (const o of bOrders) peakHours[o.createdAt.getHours()]++;
+  for (const a of appts) { const h = hourOf(a.time); if (h >= 0) peakHours[h]++; }
+  for (const f of facs) { const h = hourOf(f.startTime); if (h >= 0) peakHours[h]++; }
+
+  // Popular products (order items) + services (appointments).
+  const itemMap = new Map<string, number>();
+  for (const o of bOrders) for (const it of o.items) itemMap.set(it.name, (itemMap.get(it.name) ?? 0) + it.quantity);
+  const svcMap = new Map<string, number>();
+  for (const a of appts) if (a.serviceName) svcMap.set(a.serviceName, (svcMap.get(a.serviceName) ?? 0) + 1);
+
+  // Conversions.
+  const keptAppts = appts.filter((a) => ["CONFIRMED", "COMPLETED", "RESCHEDULED"].includes(a.status)).length;
+  const repliedQuotes = quoteTargets.filter((q) => q.status === "REPLIED").length;
+  const actions = bOrders.length + appts.length + facs.length;
+  const conversion = {
+    rate: profileViews > 0 ? Math.round((actions / profileViews) * 1000) / 10 : 0, // actions per 100 views
+    booking: appts.length ? Math.round((keptAppts / appts.length) * 100) : 0,
+    quote: quoteTargets.length ? Math.round((repliedQuotes / quoteTargets.length) * 100) : 0,
+  };
+
+  return {
+    giftCards: { sales: giftCardSales, redemptions: vRedeems },
+    offerRedemptions: offerRedeems,
+    aov,
+    customers,
+    conversion,
+    quotes: { received: quoteTargets.length, replied: repliedQuotes },
+    peakHours,
+    popularItems: topN(itemMap, 5),
+    popularServices: topN(svcMap, 5),
+  };
 }
 
 // ---- Platform-wide analytics + leaderboards (admin) ----
