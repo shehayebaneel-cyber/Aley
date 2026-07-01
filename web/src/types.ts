@@ -161,6 +161,16 @@ export interface BusinessAnnouncement {
   createdAt: string;
 }
 
+export interface CustomerNotification {
+  id: number;
+  businessName: string;
+  title: string;
+  body: string;
+  link: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 /** A single selectable choice within an option group (e.g. "Large", "Oat Milk"). */
 export interface ProductChoice {
   label: string;

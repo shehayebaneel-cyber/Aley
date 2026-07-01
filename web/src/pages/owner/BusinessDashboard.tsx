@@ -19,7 +19,7 @@ import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
 import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessAnnouncement, BusinessOrder, Category, CustomerHistory, CustomerRow, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
-const TABS = ["Today", "Inbox", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Marketing", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
+const TABS = ["Today", "Inbox", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Marketing", "Engage", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
 type Tab = (typeof TABS)[number];
 
 // Group the tabs into a tidy 2-level nav so the dashboard isn't a wall of tabs.
@@ -30,7 +30,7 @@ const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
   { label: "Customers", icon: "👥", tabs: ["Customers"] },
   { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
   { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers", "Requests"] },
-  { label: "Marketing", icon: "📣", tabs: ["Marketing"] },
+  { label: "Marketing", icon: "📣", tabs: ["Marketing", "Engage"] },
   { label: "Bookings", icon: "📅", tabs: ["Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations"] },
   { label: "Page", icon: "✏️", tabs: ["Profile", "Photos", "Hours", "Events", "Reviews", "Share"] },
   { label: "Assistant", icon: "✨", tabs: ["Assistant"] },
@@ -157,6 +157,7 @@ export function BusinessDashboard() {
         {tab === "Hours" && <HoursTab biz={biz} save={save} />}
         {tab === "Menu" && <MenuTab biz={biz} save={save} />}
         {tab === "Marketing" && <MarketingTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
+        {tab === "Engage" && <EngageTab biz={biz} />}
         {tab === "Offers" && <OffersTab biz={biz} />}
         {tab === "Events" && <EventsTab biz={biz} />}
         {tab === "Reviews" && <ReviewsTab biz={biz} />}
@@ -2270,6 +2271,79 @@ function MarketingTab({ biz, onGo }: { biz: Business; onGo: (tab: string) => voi
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- Customer engagement: notify an audience segment ----
+interface SegCounts { all: number; followers: number; customers: number; giftcards: number; events: number }
+const SEG_OPTS: { key: keyof SegCounts; label: string; emoji: string; hint: string }[] = [
+  { key: "all", label: "Everyone reached", emoji: "🌍", hint: "Everyone who follows or has used your business" },
+  { key: "followers", label: "Followers", emoji: "❤️", hint: "Customers who saved your page" },
+  { key: "customers", label: "Past customers", emoji: "🧾", hint: "Ordered or booked before" },
+  { key: "giftcards", label: "Gift card holders", emoji: "🎁", hint: "Bought a gift card" },
+  { key: "events", label: "Event attendees", emoji: "🎟️", hint: "Registered for an event" },
+];
+
+function EngageTab({ biz }: { biz: Business }) {
+  const { data: counts } = useFetch<SegCounts>(`/api/owner/businesses/${biz.id}/engage`);
+  const [segment, setSegment] = useState<keyof SegCounts>("all");
+  const [form, setForm] = useState({ title: "", body: "", link: "" });
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<number | null>(null);
+  const [err, setErr] = useState("");
+  const audience = counts ? counts[segment] : 0;
+
+  async function send() {
+    if (!form.title.trim()) return setErr("Add a message title.");
+    setBusy(true); setErr(""); setSent(null);
+    try {
+      const r = await ownerApi.post<{ sent: number }>(`/api/owner/businesses/${biz.id}/engage`, { segment, ...form });
+      setSent(r.sent); setForm({ title: "", body: "", link: "" });
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't send."); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-2xl font-extrabold text-ink">Engage customers</h2>
+        <p className="text-sm text-muted">Send a notification to bring customers back — a new offer, an event reminder, or a thank-you.</p>
+      </div>
+
+      {sent !== null && (
+        <div className="flex items-center justify-between rounded-2xl bg-emerald-500/10 p-4">
+          <p className="text-sm font-semibold text-emerald-600">{sent > 0 ? `✅ Sent to ${sent} customer${sent === 1 ? "" : "s"}.` : "No customers in that audience yet — grow it first."}</p>
+          <button onClick={() => setSent(null)} className="text-xs font-semibold text-muted hover:text-ink">Dismiss</button>
+        </div>
+      )}
+
+      {/* Audience */}
+      <div>
+        <p className="text-sm font-semibold text-ink">Who should get this?</p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {SEG_OPTS.map((s) => (
+            <button key={s.key} onClick={() => setSegment(s.key)} className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${segment === s.key ? "border-brand bg-brand-soft/50" : "border-border hover:border-brand/50"}`}>
+              <span className="text-xl">{s.emoji}</span>
+              <span className="min-w-0 flex-1"><span className="block font-semibold text-ink">{s.label}</span><span className="block truncate text-xs text-muted">{s.hint}</span></span>
+              <span className="shrink-0 font-display font-extrabold text-ink">{counts ? counts[s.key] : "—"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Compose */}
+      <div className="card space-y-3 p-5">
+        <p className="font-display font-bold text-ink">Your message</p>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title — e.g. 20% off this weekend only! 🎉" className="input" />
+        <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={3} placeholder="Message (optional)" className="input" />
+        <input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder={`Link (optional) — e.g. /business/${biz.slug}`} className="input" />
+        {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted">Sending to <span className="font-bold text-ink">{audience}</span> customer{audience === 1 ? "" : "s"}</p>
+          <button onClick={send} disabled={busy || !audience} className="btn btn-primary px-6 py-2.5 disabled:opacity-50">{busy ? "Sending…" : "Send notification"}</button>
+        </div>
+      </div>
+      <p className="text-center text-xs text-muted">📣 Notifications appear in each customer's in-app bell. Email & SMS delivery can be added later.</p>
     </div>
   );
 }

@@ -212,6 +212,23 @@ userRouter.patch("/facility-bookings/:id", async (req, res) => {
   res.status(400).json({ error: "Unknown action." });
 });
 
+// ---- Notifications (messages from businesses the customer follows/uses) ----
+userRouter.get("/notifications", async (req, res) => {
+  const [items, unread] = await Promise.all([
+    prisma.customerNotification.findMany({ where: { userId: req.userId! }, orderBy: { id: "desc" }, take: 50 }),
+    prisma.customerNotification.count({ where: { userId: req.userId!, isRead: false } }),
+  ]);
+  res.json({ items, unread });
+});
+userRouter.post("/notifications/read-all", async (req, res) => {
+  await prisma.customerNotification.updateMany({ where: { userId: req.userId!, isRead: false }, data: { isRead: true } });
+  res.json({ ok: true });
+});
+userRouter.post("/notifications/:id/read", async (req, res) => {
+  await prisma.customerNotification.updateMany({ where: { id: Number(req.params.id), userId: req.userId! }, data: { isRead: true } });
+  res.json({ ok: true });
+});
+
 // ---- Wallet (prepaid balance) ----
 const TOPUP_METHODS = new Set(["CARD", "WHISH"]);
 

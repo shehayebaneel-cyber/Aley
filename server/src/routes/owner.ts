@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
 import { customerList, inboxItems, todaySummary } from "../lib/ownerHome";
+import { isSegment, resolveSegment, segmentCounts } from "../lib/engage";
 import { getMarketplaceSettings } from "../lib/marketplace";
 import { toCsv } from "../lib/csv";
 import { prisma } from "../db";
@@ -1164,6 +1165,27 @@ ownerRouter.get("/businesses/:id/announcements", async (req, res) => {
   const business = await ownedBusiness(req);
   if (!business) return res.status(404).json({ error: "Business not found." });
   res.json(await prisma.businessAnnouncement.findMany({ where: { businessId: business.id }, orderBy: [{ pinned: "desc" }, { createdAt: "desc" }] }));
+});
+
+// ---- Customer engagement: notify an audience segment ----
+ownerRouter.get("/businesses/:id/engage", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await segmentCounts(business.id));
+});
+ownerRouter.post("/businesses/:id/engage", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const b = req.body ?? {};
+  const segment = isSegment(String(b.segment)) ? String(b.segment) : "all";
+  const title = STR(b.title, 120);
+  const body = STR(b.body, 500);
+  const link = STR(b.link, 300);
+  if (!title) return res.status(400).json({ error: "A message title is required." });
+  const ids = await resolveSegment(business.id, segment);
+  if (!ids.length) return res.json({ sent: 0 });
+  await prisma.customerNotification.createMany({ data: ids.map((userId) => ({ userId, businessId: business.id, businessName: business.name, title, body, link })) });
+  res.json({ sent: ids.length });
 });
 ownerRouter.post("/businesses/:id/announcements", async (req, res) => {
   const business = await ownedBusiness(req);

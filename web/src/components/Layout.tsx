@@ -10,6 +10,8 @@ import { useTheme } from "../context/ThemeContext";
 import { useUserAuth } from "../context/UserAuthContext";
 import { BellIcon, CalendarIcon, CartIcon, CloseIcon, GlobeIcon, HeartIcon, InstagramIcon, LogoutIcon, MapPinIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon, UserIcon } from "./icons";
 import { COMMUNITY_URL } from "../lib/config";
+import { timeAgo, userApi } from "../lib/api";
+import type { CustomerNotification } from "../types";
 
 type NavItem = { to: string; key: string; end?: boolean };
 // Center navigation — the primary destinations.
@@ -135,6 +137,73 @@ function CartButton() {
   );
 }
 
+// In-app notifications from businesses the customer follows or has used.
+function NotificationBell() {
+  const { user } = useUserAuth();
+  const [data, setData] = useState<{ items: CustomerNotification[]; unread: number }>({ items: [], unread: 0 });
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) { setData({ items: [], unread: 0 }); return; }
+    let alive = true;
+    const poll = () => userApi.get<{ items: CustomerNotification[]; unread: number }>("/api/me/notifications").then((d) => alive && setData(d)).catch(() => {});
+    poll();
+    const t = setInterval(poll, 45000);
+    return () => { alive = false; clearInterval(t); };
+  }, [user]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  if (!user) return null;
+
+  async function markAll() { await userApi.post("/api/me/notifications/read-all", {}).catch(() => {}); setData((d) => ({ items: d.items.map((i) => ({ ...i, isRead: true })), unread: 0 })); }
+  function openItem(n: CustomerNotification) {
+    if (!n.isRead) { userApi.post(`/api/me/notifications/${n.id}/read`, {}).catch(() => {}); setData((d) => ({ items: d.items.map((i) => (i.id === n.id ? { ...i, isRead: true } : i)), unread: Math.max(0, d.unread - 1) })); }
+    setOpen(false);
+    if (n.link) { if (/^https?:\/\//.test(n.link)) window.open(n.link, "_blank"); else navigate(n.link); }
+  }
+
+  return (
+    <div ref={ref} className="relative hidden sm:block">
+      <button onClick={() => setOpen((o) => !o)} aria-label="Notifications" className="btn btn-ghost relative h-10 w-10 !p-0">
+        <BellIcon className="h-5 w-5" />
+        {data.unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{data.unread}</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+            <p className="font-display font-bold text-ink">Notifications</p>
+            {data.unread > 0 && <button onClick={markAll} className="text-xs font-semibold text-brand">Mark all read</button>}
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {data.items.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted">No notifications yet.</p>
+            ) : (
+              data.items.map((n) => (
+                <button key={n.id} onClick={() => openItem(n)} className={`flex w-full flex-col items-start gap-0.5 border-b border-border/60 px-4 py-3 text-left hover:surface-2 ${n.isRead ? "" : "bg-brand-soft/30"}`}>
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span className="truncate text-sm font-semibold text-ink">{n.title}</span>
+                    {!n.isRead && <span className="h-2 w-2 shrink-0 rounded-full bg-brand" />}
+                  </span>
+                  {n.body && <span className="line-clamp-2 text-xs text-muted">{n.body}</span>}
+                  <span className="text-[10px] text-muted">{n.businessName}{n.businessName ? " · " : ""}{timeAgo(n.createdAt)}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CitySelector() {
   const { city, setCity, cities, cityName } = useCity();
   const [open, setOpen] = useState(false);
@@ -197,9 +266,7 @@ export function Layout() {
             <button onClick={toggle} aria-label="Toggle theme" className="btn btn-ghost h-10 w-10 !p-0">
               {theme === "dark" ? <SunIcon /> : <MoonIcon />}
             </button>
-            <button aria-label="Notifications" title="Notifications — coming soon" className="btn btn-ghost hidden h-10 w-10 cursor-default !p-0 opacity-50 sm:inline-flex">
-              <BellIcon className="h-5 w-5" />
-            </button>
+            <NotificationBell />
             <Link to="/ai" aria-label={t("ai.title")} title={t("ai.title")} className="btn btn-ghost hidden h-10 w-10 !p-0 text-lg sm:inline-flex">✨</Link>
             <CartButton />
             <AccountMenu />

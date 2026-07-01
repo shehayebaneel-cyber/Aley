@@ -140,6 +140,7 @@ model Business {
   payouts        Payout[]
   analyticsEvents AnalyticsEvent[]
   announcements  BusinessAnnouncement[]
+  customerNotifications CustomerNotification[]
   // Spare-parts shop profile (JSON: {brands:[], makes:[], partCategories:[], newParts, usedParts, oem, aftermarket})
   partsProfile   String @default("{}")
   serviceQuotes  ServiceQuote[]
@@ -213,6 +214,24 @@ model User {
   savedGiftCards VoucherSave[]
   purchasedPlatformCards PlatformGiftCard[] @relation("purchasedPlatformCards")
   redeemedPlatformCards  PlatformGiftCard[] @relation("redeemedPlatformCards")
+  notifications CustomerNotification[]
+}
+
+// A message a business sends to a customer (engagement/marketing push). Shown in
+// the customer's in-app notification bell. Delivered to a resolved audience segment.
+model CustomerNotification {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId   Int?
+  business     Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  businessName String   @default("")
+  title        String
+  body         String   @default("")
+  link         String   @default("")
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  @@index([userId, isRead])
 }
 
 // A customer's saved vehicle ("garage") so they can reuse car details in requests.
