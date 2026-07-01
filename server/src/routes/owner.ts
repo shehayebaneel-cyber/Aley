@@ -1120,6 +1120,85 @@ ownerRouter.post("/reviews/:id/reply", async (req, res) => {
   res.json(updated);
 });
 
+// Feature / un-feature a review — featured reviews show first on the public page.
+ownerRouter.post("/reviews/:id/feature", async (req, res) => {
+  const review = await prisma.review.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!review || review.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Review not found." });
+  res.json(await prisma.review.update({ where: { id: review.id }, data: { featured: req.body?.featured !== false } }));
+});
+
+// Report a review as inappropriate — flags it for admin moderation.
+ownerRouter.post("/reviews/:id/report", async (req, res) => {
+  const review = await prisma.review.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true, name: true } } } });
+  if (!review || review.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Review not found." });
+  const reason = STR(req.body?.reason, 300);
+  const updated = await prisma.review.update({ where: { id: review.id }, data: { reported: true, reportReason: reason } });
+  await notifyAdmins({ kind: "REVIEW_REPORTED", title: `Review reported: ${review.business.name}`, body: `${review.authorName} (${review.rating}★): ${reason || "flagged as inappropriate"}`, link: "/admin/reviews" }).catch(() => {});
+  res.json(updated);
+});
+
+// ---- Marketing: announcements + campaign summary ----
+ownerRouter.get("/businesses/:id/marketing", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const now = new Date();
+  const [offersActive, offersTotal, eventsUpcoming, eventsTotal, vouchersActive, vouchersTotal, annActive, annTotal] = await Promise.all([
+    prisma.offer.count({ where: { businessId: business.id, isActive: true } }),
+    prisma.offer.count({ where: { businessId: business.id } }),
+    prisma.event.count({ where: { businessId: business.id, isPublished: true, startTime: { gte: now } } }),
+    prisma.event.count({ where: { businessId: business.id } }),
+    prisma.voucherType.count({ where: { businessId: business.id, status: "ACTIVE" } }),
+    prisma.voucherType.count({ where: { businessId: business.id } }),
+    prisma.businessAnnouncement.count({ where: { businessId: business.id, isActive: true } }),
+    prisma.businessAnnouncement.count({ where: { businessId: business.id } }),
+  ]);
+  res.json({
+    offers: { active: offersActive, total: offersTotal },
+    events: { active: eventsUpcoming, total: eventsTotal },
+    giftCards: { active: vouchersActive, total: vouchersTotal },
+    announcements: { active: annActive, total: annTotal },
+  });
+});
+
+ownerRouter.get("/businesses/:id/announcements", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await prisma.businessAnnouncement.findMany({ where: { businessId: business.id }, orderBy: [{ pinned: "desc" }, { createdAt: "desc" }] }));
+});
+ownerRouter.post("/businesses/:id/announcements", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const b = req.body ?? {};
+  const title = STR(b.title, 120);
+  if (!title) return res.status(400).json({ error: "A title is required." });
+  const a = await prisma.businessAnnouncement.create({ data: {
+    businessId: business.id, title, body: STR(b.body, 2000), image: b.image ? STR(b.image, 500) : null,
+    pinned: !!b.pinned, isActive: b.isActive !== false,
+    startsAt: b.startsAt ? new Date(String(b.startsAt)) : null, endsAt: b.endsAt ? new Date(String(b.endsAt)) : null,
+  } });
+  res.status(201).json(a);
+});
+ownerRouter.patch("/announcements/:id", async (req, res) => {
+  const a = await prisma.businessAnnouncement.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!a || a.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Announcement not found." });
+  const b = req.body ?? {};
+  const data: Record<string, unknown> = {};
+  if (b.title !== undefined) data.title = STR(b.title, 120);
+  if (b.body !== undefined) data.body = STR(b.body, 2000);
+  if (b.image !== undefined) data.image = b.image ? STR(b.image, 500) : null;
+  if (b.pinned !== undefined) data.pinned = !!b.pinned;
+  if (b.isActive !== undefined) data.isActive = !!b.isActive;
+  if (b.startsAt !== undefined) data.startsAt = b.startsAt ? new Date(String(b.startsAt)) : null;
+  if (b.endsAt !== undefined) data.endsAt = b.endsAt ? new Date(String(b.endsAt)) : null;
+  res.json(await prisma.businessAnnouncement.update({ where: { id: a.id }, data }));
+});
+ownerRouter.delete("/announcements/:id", async (req, res) => {
+  const a = await prisma.businessAnnouncement.findUnique({ where: { id: Number(req.params.id) }, include: { business: { select: { ownerId: true } } } });
+  if (!a || a.business.ownerId !== req.ownerId) return res.status(404).json({ error: "Announcement not found." });
+  await prisma.businessAnnouncement.delete({ where: { id: a.id } });
+  res.json({ ok: true });
+});
+
 // ---- Orders (this business's tickets only) ----
 ownerRouter.get("/businesses/:id/orders", async (req, res) => {
   const business = await ownedBusiness(req);

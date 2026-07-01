@@ -112,6 +112,21 @@ export function BusinessProfile() {
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           {/* Main column */}
           <div className="space-y-6 lg:col-span-2">
+            {/* Business announcements */}
+            {!!b.announcements?.length && (
+              <div className="space-y-2">
+                {b.announcements.map((a) => (
+                  <div key={a.id} className="overflow-hidden rounded-2xl border border-brand/30 bg-brand-soft/40">
+                    {a.image && <img src={a.image} alt="" className="h-40 w-full object-cover" />}
+                    <div className="p-4">
+                      <p className="flex items-center gap-2 font-display font-bold text-ink">📣 {a.title}</p>
+                      {a.body && <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{a.body}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {b.description && (
               <section className="card p-5">
                 <h2 className="font-display text-lg font-bold text-ink">About</h2>
@@ -453,7 +468,7 @@ function Reviews({ business }: { business: Business }) {
         {reviews.map((r) => (
           <div key={r.id} className="border-b border-border pb-4 last:border-0">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-ink">{r.authorName}</span>
+              <span className="flex items-center gap-2 font-semibold text-ink">{r.authorName}{r.featured && <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-600">★ Featured</span>}</span>
               <span className="text-xs text-muted">{timeAgo(r.createdAt)}</span>
             </div>
             <Stars rating={r.rating} className="mt-0.5 h-3.5 w-3.5" />

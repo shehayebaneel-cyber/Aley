@@ -64,16 +64,18 @@ businessesRouter.get("/", async (req, res) => {
 
 // GET /api/businesses/:slug — full public profile.
 businessesRouter.get("/:slug", async (req, res) => {
+  const now = new Date();
   const business = await prisma.business.findUnique({
     where: { slug: req.params.slug },
     include: {
       category: true,
       city: { select: { slug: true, name: true, lat: true, lng: true } },
-      reviews: { where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 50 },
+      reviews: { where: { status: "APPROVED" }, orderBy: [{ featured: "desc" }, { createdAt: "desc" }], take: 50 },
       offers: { where: { isActive: true }, orderBy: { createdAt: "desc" } },
       events: { where: { isPublished: true, startTime: { gte: new Date(Date.now() - 86400000) } }, orderBy: { startTime: "asc" } },
       facilities: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       voucherTypes: { where: { status: "ACTIVE" }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      announcements: { where: { isActive: true, AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }] }, orderBy: [{ pinned: "desc" }, { createdAt: "desc" }], take: 10 },
     },
   });
   if (!business || !business.isPublished) return res.status(404).json({ error: "Business not found." });

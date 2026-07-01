@@ -139,6 +139,7 @@ model Business {
   transactions   Transaction[]
   payouts        Payout[]
   analyticsEvents AnalyticsEvent[]
+  announcements  BusinessAnnouncement[]
   // Spare-parts shop profile (JSON: {brands:[], makes:[], partCategories:[], newParts, usedParts, oem, aftermarket})
   partsProfile   String @default("{}")
   serviceQuotes  ServiceQuote[]
@@ -733,7 +734,27 @@ model Review {
   reply      String? // business owner's response
   repliedAt  DateTime?
   status     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  featured   Boolean  @default(false) // owner-highlighted review (shown first on the public page)
+  reported   Boolean  @default(false) // owner flagged as inappropriate; admin reviews
+  reportReason String @default("")
   createdAt  DateTime @default(now())
+}
+
+// A business's own announcement / promotion post shown on its public page
+// (e.g. "Open late this Ramadan", "New summer menu", "20% off this weekend").
+model BusinessAnnouncement {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  body       String   @default("")
+  image      String?
+  pinned     Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  startsAt   DateTime?
+  endsAt     DateTime?
+  createdAt  DateTime @default(now())
+  @@index([businessId])
 }
 
 // An event published by a business or the city.

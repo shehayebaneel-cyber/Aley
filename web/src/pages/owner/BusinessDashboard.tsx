@@ -17,9 +17,9 @@ import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, tim
 import { kitFor, stepDone } from "../../lib/categoryKits";
 import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, CustomerRow, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessAnnouncement, BusinessOrder, Category, CustomerHistory, CustomerRow, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
-const TABS = ["Today", "Inbox", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
+const TABS = ["Today", "Inbox", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Marketing", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
 type Tab = (typeof TABS)[number];
 
 // Group the tabs into a tidy 2-level nav so the dashboard isn't a wall of tabs.
@@ -30,6 +30,7 @@ const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
   { label: "Customers", icon: "👥", tabs: ["Customers"] },
   { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
   { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers", "Requests"] },
+  { label: "Marketing", icon: "📣", tabs: ["Marketing"] },
   { label: "Bookings", icon: "📅", tabs: ["Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations"] },
   { label: "Page", icon: "✏️", tabs: ["Profile", "Photos", "Hours", "Events", "Reviews", "Share"] },
   { label: "Assistant", icon: "✨", tabs: ["Assistant"] },
@@ -155,6 +156,7 @@ export function BusinessDashboard() {
         {tab === "Photos" && <PhotosTab biz={biz} save={save} />}
         {tab === "Hours" && <HoursTab biz={biz} save={save} />}
         {tab === "Menu" && <MenuTab biz={biz} save={save} />}
+        {tab === "Marketing" && <MarketingTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
         {tab === "Offers" && <OffersTab biz={biz} />}
         {tab === "Events" && <EventsTab biz={biz} />}
         {tab === "Reviews" && <ReviewsTab biz={biz} />}
@@ -2156,27 +2158,196 @@ function EventsTab({ biz }: { biz: Business }) {
 }
 
 // ---- Reviews ----
+// ---- Marketing hub: one launchpad for offers, events, gift cards & announcements ----
+interface MarketingSummary { offers: { active: number; total: number }; events: { active: number; total: number }; giftCards: { active: number; total: number }; announcements: { active: number; total: number } }
+
+function AnnouncementForm({ bizId, initial, onClose, onSaved }: { bizId: number; initial: BusinessAnnouncement | null; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState({ title: initial?.title ?? "", body: initial?.body ?? "", image: initial?.image ?? "", pinned: initial?.pinned ?? false, isActive: initial?.isActive ?? true, startsAt: initial?.startsAt?.slice(0, 10) ?? "", endsAt: initial?.endsAt?.slice(0, 10) ?? "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function save() {
+    if (!f.title.trim()) return setErr("A title is required.");
+    setBusy(true); setErr("");
+    const body = { ...f, image: f.image || null, startsAt: f.startsAt || null, endsAt: f.endsAt || null };
+    try {
+      if (initial) await ownerApi.patch(`/api/owner/announcements/${initial.id}`, body);
+      else await ownerApi.post(`/api/owner/businesses/${bizId}/announcements`, body);
+      onSaved();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't save."); setBusy(false); }
+  }
+  return (
+    <div className="card border border-brand/30 p-4">
+      <div className="flex items-center justify-between">
+        <p className="font-display font-bold text-ink">{initial ? "Edit announcement" : "New announcement"}</p>
+        <button onClick={onClose} className="text-sm text-muted hover:text-ink">Cancel</button>
+      </div>
+      <div className="mt-3 space-y-3">
+        <input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Title — e.g. Open late this weekend 🎉" className="input" />
+        <textarea value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} rows={3} placeholder="Details (optional)" className="input" />
+        <div className="max-w-xs"><ImageField value={f.image} uploadWith={ownerApi} onChange={(image) => setF({ ...f, image: image ?? "" })} label="banner" /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm font-semibold text-ink">Show from <input type="date" value={f.startsAt} onChange={(e) => setF({ ...f, startsAt: e.target.value })} className="input mt-1" /></label>
+          <label className="text-sm font-semibold text-ink">Until <input type="date" value={f.endsAt} onChange={(e) => setF({ ...f, endsAt: e.target.value })} className="input mt-1" /></label>
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm font-semibold text-ink"><input type="checkbox" checked={f.pinned} onChange={(e) => setF({ ...f, pinned: e.target.checked })} /> 📌 Pin to top</label>
+          <label className="flex items-center gap-2 text-sm font-semibold text-ink"><input type="checkbox" checked={f.isActive} onChange={(e) => setF({ ...f, isActive: e.target.checked })} /> Live</label>
+        </div>
+        {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">{err}</p>}
+        <button onClick={save} disabled={busy} className="btn btn-primary w-full py-2.5 disabled:opacity-60">{busy ? "Saving…" : "Save announcement"}</button>
+      </div>
+    </div>
+  );
+}
+
+function MarketingTab({ biz, onGo }: { biz: Business; onGo: (tab: string) => void }) {
+  const { data: sum } = useFetch<MarketingSummary>(`/api/owner/businesses/${biz.id}/marketing`);
+  const [anns, setAnns] = useState<BusinessAnnouncement[] | null>(null);
+  const [editing, setEditing] = useState<BusinessAnnouncement | null | undefined>(undefined);
+  const reload = () => ownerApi.get<BusinessAnnouncement[]>(`/api/owner/businesses/${biz.id}/announcements`).then(setAnns);
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [biz.id]);
+
+  const cards = [
+    { emoji: "🏷️", label: "Offers & deals", tab: "Offers", s: sum?.offers, cta: "Create a deal" },
+    { emoji: "🎟️", label: "Events", tab: "Events", s: sum?.events, cta: "Host an event" },
+    { emoji: "🎁", label: "Gift cards", tab: "Gift Vouchers", s: sum?.giftCards, cta: "Sell gift cards" },
+  ];
+
+  async function toggle(a: BusinessAnnouncement, patch: Partial<BusinessAnnouncement>) { await ownerApi.patch(`/api/owner/announcements/${a.id}`, patch); reload(); }
+  async function del(a: BusinessAnnouncement) { if (!confirm(`Delete "${a.title}"?`)) return; await ownerApi.delete(`/api/owner/announcements/${a.id}`); reload(); }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-2xl font-extrabold text-ink">Marketing</h2>
+        <p className="text-sm text-muted">Create and manage everything that brings customers in — from one place.</p>
+      </div>
+
+      {/* Launchpad */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {cards.map((c) => (
+          <div key={c.label} className="card flex flex-col p-4">
+            <div className="flex items-center gap-2"><span className="text-2xl">{c.emoji}</span><p className="font-display font-bold text-ink">{c.label}</p></div>
+            <p className="mt-1 text-sm text-muted">{c.s ? `${c.s.active} active · ${c.s.total} total` : "—"}</p>
+            <button onClick={() => onGo(c.tab)} className="btn btn-primary mt-3 py-2 text-sm">{c.cta}</button>
+          </div>
+        ))}
+      </div>
+
+      {/* Announcements */}
+      <div>
+        <div className="flex items-center justify-between">
+          <div><h3 className="font-display font-bold text-ink">📣 Announcements</h3><p className="text-sm text-muted">Posts shown on your public page — new menu, holiday hours, a flash promo.</p></div>
+          {editing === undefined && <button onClick={() => setEditing(null)} className="btn btn-primary px-4 py-2 text-sm">+ New</button>}
+        </div>
+
+        {editing !== undefined && <div className="mt-3"><AnnouncementForm bizId={biz.id} initial={editing} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); reload(); }} /></div>}
+
+        <div className="mt-3 space-y-2">
+          {anns === null ? (
+            Array.from({ length: 2 }).map((_, i) => <div key={i} className="card h-16 animate-pulse" />)
+          ) : anns.length === 0 ? (
+            <div className="card p-8 text-center text-muted">No announcements yet. Post one to keep customers in the loop.</div>
+          ) : (
+            anns.map((a) => (
+              <div key={a.id} className="card flex items-center gap-3 p-3">
+                {a.image && <img src={a.image} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />}
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 truncate font-semibold text-ink">{a.title}
+                    {a.pinned && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-bold text-brand-dark">📌 Pinned</span>}
+                    {!a.isActive && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">Hidden</span>}
+                  </p>
+                  {a.body && <p className="truncate text-xs text-muted">{a.body}</p>}
+                </div>
+                <div className="flex shrink-0 gap-2 text-xs font-semibold">
+                  <button onClick={() => toggle(a, { pinned: !a.pinned })} className="text-muted hover:text-ink">{a.pinned ? "Unpin" : "Pin"}</button>
+                  <button onClick={() => toggle(a, { isActive: !a.isActive })} className="text-muted hover:text-ink">{a.isActive ? "Hide" : "Show"}</button>
+                  <button onClick={() => setEditing(a)} className="text-brand">Edit</button>
+                  <button onClick={() => del(a)} className="text-red-500">Delete</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReviewsTab({ biz }: { biz: Business }) {
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const reload = () => ownerApi.get<Review[]>(`/api/owner/businesses/${biz.id}/reviews`).then(setReviews);
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [biz.id]);
 
+  const approved = (reviews ?? []).filter((r) => (r.status ?? "APPROVED") === "APPROVED");
+  const total = approved.length;
+  const avg = total ? approved.reduce((s, r) => s + r.rating, 0) / total : 0;
+  const max = Math.max(1, ...[5, 4, 3, 2, 1].map((st) => approved.filter((r) => r.rating === st).length));
+  const now = Date.now();
+  const days = (r: Review) => (now - new Date(r.createdAt).getTime()) / 86400000;
+  const in30 = approved.filter((r) => days(r) < 30);
+  const prev30 = approved.filter((r) => days(r) >= 30 && days(r) < 60);
+  const avg30 = in30.length ? in30.reduce((s, r) => s + r.rating, 0) / in30.length : 0;
+  const replied = approved.filter((r) => r.reply).length;
+  const trendUp = in30.length - prev30.length;
+
   return (
     <div className="space-y-4">
+      {reviews && total > 0 && (
+        <div className="card p-5">
+          <h3 className="font-display font-bold text-ink">📊 Reputation at a glance</h3>
+          <div className="mt-3 grid gap-4 sm:grid-cols-[auto_1fr]">
+            <div className="text-center">
+              <p className="font-display text-4xl font-extrabold text-ink">{avg.toFixed(1)}</p>
+              <Stars rating={Math.round(avg)} className="mx-auto mt-1 h-4 w-4" />
+              <p className="mt-1 text-xs text-muted">{total} review{total === 1 ? "" : "s"}</p>
+            </div>
+            <div className="space-y-1.5">
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = approved.filter((r) => r.rating === star).length;
+                return (
+                  <div key={star} className="flex items-center gap-2 text-sm">
+                    <span className="inline-flex w-8 items-center gap-0.5 text-muted">{star}<StarIcon className="h-3 w-3 text-amber-400" /></span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full surface-2"><div className="h-full rounded-full bg-amber-400" style={{ width: `${(count / max) * 100}%` }} /></div>
+                    <span className="w-6 text-right text-muted">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3 text-center">
+            <div><p className="font-display text-lg font-extrabold text-ink">{in30.length}</p><p className="text-xs text-muted">new · 30d {trendUp !== 0 && <span className={trendUp > 0 ? "text-emerald-600" : "text-red-500"}>{trendUp > 0 ? "▲" : "▼"}{Math.abs(trendUp)}</span>}</p></div>
+            <div><p className="font-display text-lg font-extrabold text-ink">{avg30 ? avg30.toFixed(1) : "—"}</p><p className="text-xs text-muted">avg · 30d</p></div>
+            <div><p className="font-display text-lg font-extrabold text-ink">{total ? Math.round((replied / total) * 100) : 0}%</p><p className="text-xs text-muted">replied</p></div>
+          </div>
+        </div>
+      )}
       {reviews?.length === 0 && <div className="card p-8 text-center text-muted">No reviews yet.</div>}
-      {(reviews ?? []).map((r) => <ReviewRow key={r.id} review={r} businessName={biz.name} onReplied={reload} />)}
+      {(reviews ?? []).map((r) => <ReviewRow key={r.id} review={r} businessName={biz.name} onChanged={reload} />)}
     </div>
   );
 }
 
-function ReviewRow({ review, businessName, onReplied }: { review: Review; businessName: string; onReplied: () => void }) {
+function ReviewRow({ review, businessName, onChanged }: { review: Review; businessName: string; onChanged: () => void }) {
   const [reply, setReply] = useState(review.reply ?? "");
   const [open, setOpen] = useState(false);
-  const status = (review as Review & { status?: string }).status;
+  const [busy, setBusy] = useState(false);
+  const status = review.status;
+
+  async function feature() { setBusy(true); await ownerApi.post(`/api/owner/reviews/${review.id}/feature`, { featured: !review.featured }).finally(() => setBusy(false)); onChanged(); }
+  async function report() {
+    const reason = window.prompt("Report this review as inappropriate? Add a reason (optional):", "");
+    if (reason === null) return;
+    setBusy(true); await ownerApi.post(`/api/owner/reviews/${review.id}/report`, { reason }).finally(() => setBusy(false)); onChanged();
+  }
+
   return (
-    <div className="card p-5">
+    <div className={`card p-5 ${review.featured ? "ring-1 ring-amber-400/50" : ""}`}>
       <div className="flex items-center justify-between">
-        <span className="font-semibold text-ink">{review.authorName}</span>
+        <span className="flex items-center gap-2 font-semibold text-ink">{review.authorName}
+          {review.featured && <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-600">★ Featured</span>}
+          {review.reported && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold text-red-500">Reported</span>}
+        </span>
         <div className="flex items-center gap-2">
           {status && status !== "APPROVED" && <span className="chip !py-0 !text-[10px]">{status}</span>}
           <span className="text-xs text-muted">{timeAgo(review.createdAt)}</span>
@@ -2194,14 +2365,13 @@ function ReviewRow({ review, businessName, onReplied }: { review: Review; busine
       {(!review.reply || open) && (
         <div className="mt-3 flex gap-2">
           <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Write a public reply…" className="input !py-2 text-sm" />
-          <button
-            onClick={async () => { await ownerApi.post(`/api/owner/reviews/${review.id}/reply`, { reply }); setOpen(false); onReplied(); }}
-            className="btn btn-primary shrink-0 px-4 py-2 text-sm"
-          >
-            Reply
-          </button>
+          <button onClick={async () => { await ownerApi.post(`/api/owner/reviews/${review.id}/reply`, { reply }); setOpen(false); onChanged(); }} className="btn btn-primary shrink-0 px-4 py-2 text-sm">Reply</button>
         </div>
       )}
+      <div className="mt-3 flex gap-3 border-t border-border pt-3 text-xs font-semibold">
+        <button onClick={feature} disabled={busy} className={review.featured ? "text-amber-600" : "text-muted hover:text-ink"}>{review.featured ? "★ Featured" : "☆ Feature"}</button>
+        {!review.reported && <button onClick={report} disabled={busy} className="text-muted hover:text-red-500">🚩 Report</button>}
+      </div>
     </div>
   );
 }

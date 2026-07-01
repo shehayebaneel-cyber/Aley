@@ -142,6 +142,22 @@ export interface Review {
   rating: number;
   comment: string;
   reply: string | null;
+  status?: string;
+  featured?: boolean;
+  reported?: boolean;
+  reportReason?: string;
+  createdAt: string;
+}
+
+export interface BusinessAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  image: string | null;
+  pinned: boolean;
+  isActive: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
   createdAt: string;
 }
 
@@ -530,6 +546,7 @@ export interface Business {
   reviews?: Review[];
   offers?: Offer[];
   events?: EventItem[];
+  announcements?: BusinessAnnouncement[];
 }
 
 export interface EventTicketOption {
