@@ -452,9 +452,13 @@ export interface CustomerHistory {
   completed: number;
   noShows: number;
   spent: number;
+  spendTotal?: number; // across all channels (orders, bookings, gift cards…)
   lastVisit: string | null;
   appointments: Appointment[];
+  orders?: { number: string; subtotal: number; status: string; createdAt: string; items: { name: string; quantity: number }[] }[];
+  giftCards?: { code: string; title: string; value: number; status: string; createdAt: string }[];
 }
+export interface CustomerRow { phone: string; name: string; tag: string; visits: number; spend: number; lastVisit: string | null }
 
 export interface BookingBreak { day: number; start: string; end: string }
 export interface BookingConfig {

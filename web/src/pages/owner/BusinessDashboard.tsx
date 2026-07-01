@@ -17,9 +17,9 @@ import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, tim
 import { kitFor, stepDone } from "../../lib/categoryKits";
 import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, CustomerRow, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
-const TABS = ["Today", "Inbox", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
+const TABS = ["Today", "Inbox", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
 type Tab = (typeof TABS)[number];
 
 // Group the tabs into a tidy 2-level nav so the dashboard isn't a wall of tabs.
@@ -27,6 +27,7 @@ type Tab = (typeof TABS)[number];
 // nav highlights the ones that matter for this business's category.
 const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
   { label: "Home", icon: "🏠", tabs: ["Today", "Inbox", "Overview"] },
+  { label: "Customers", icon: "👥", tabs: ["Customers"] },
   { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
   { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers", "Requests"] },
   { label: "Bookings", icon: "📅", tabs: ["Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations"] },
@@ -137,6 +138,7 @@ export function BusinessDashboard() {
       <div className="mt-6">
         {tab === "Today" && <TodayTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
         {tab === "Inbox" && <InboxTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
+        {tab === "Customers" && <CustomersTab biz={biz} />}
         {tab === "Overview" && <Overview biz={biz} onGo={(t) => setTab(t as Tab)} />}
         {tab === "Earnings" && <EarningsTab biz={biz} />}
         {tab === "Analytics" && <AnalyticsTab biz={biz} />}
@@ -1025,7 +1027,7 @@ function CustomerPanel({ bizId, phone }: { bizId: number; phone: string }) {
         {effective && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${TAG_BADGE[effective] ?? "bg-surface-2 text-muted"}`}>{effective.replace("_", " ")}</span>}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[["Visits", String(data.visits)], ["Completed", String(data.completed)], ["No-shows", String(data.noShows)], ["Total spent", `$${Math.round(data.spent).toLocaleString()}`]].map(([l, v]) => (
+        {[["Visits", String(data.visits)], ["Completed", String(data.completed)], ["No-shows", String(data.noShows)], ["Total spent", `$${Math.round(data.spendTotal ?? data.spent).toLocaleString()}`]].map(([l, v]) => (
           <div key={l} className="rounded-lg bg-surface p-2"><p className="text-[11px] text-muted">{l}</p><p className="font-bold text-ink">{v}</p></div>
         ))}
       </div>
@@ -1048,6 +1050,82 @@ function CustomerPanel({ bizId, phone }: { bizId: number; phone: string }) {
           </ul>
         </div>
       )}
+      {!!data.orders?.length && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-ink">Orders</p>
+          <ul className="mt-1 space-y-1 text-xs text-muted">
+            {data.orders.slice(0, 8).map((o) => (
+              <li key={o.number} className="flex justify-between"><span>{o.number} · {o.items.map((i) => `${i.quantity}× ${i.name}`).join(", ") || "Order"}</span><span>${Math.round(o.subtotal)} · {o.status.toLowerCase()}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!data.giftCards?.length && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-ink">Gift cards received</p>
+          <ul className="mt-1 space-y-1 text-xs text-muted">
+            {data.giftCards.slice(0, 8).map((g) => (
+              <li key={g.code} className="flex justify-between"><span>{g.title || "Gift card"} · ${Math.round(g.value)}</span><span>{g.status.toLowerCase()}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Customers: the full customer book (CRM) ----
+const CUST_TAG_BADGE: Record<string, string> = { VIP: "bg-amber-400/20 text-amber-600", REGULAR: "bg-emerald-500/15 text-emerald-600", FIRST_VISIT: "bg-blue-500/15 text-blue-600" };
+function CustomersTab({ biz }: { biz: Business }) {
+  const [rows, setRows] = useState<CustomerRow[] | null>(null);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  const load = () => ownerApi.get<CustomerRow[]>(`/api/owner/businesses/${biz.id}/customers?q=${encodeURIComponent(q)}`).then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const totalSpend = (rows ?? []).reduce((s, r) => s + r.spend, 0);
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-display text-2xl font-extrabold text-ink">Customers</h2>
+          <p className="text-sm text-muted">Everyone who's ordered, booked or bought from you — with their history & notes.</p>
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); load(); }} className="flex gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name / phone" className="input !py-2 text-sm" />
+          <button className="btn btn-ghost px-3 py-2 text-sm">Search</button>
+        </form>
+      </div>
+
+      {rows && (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="card p-3"><p className="text-xs text-muted">Customers</p><p className="font-display text-xl font-extrabold text-ink">{rows.length}</p></div>
+          <div className="card p-3"><p className="text-xs text-muted">Total spend</p><p className="font-display text-xl font-extrabold text-ink">${Math.round(totalSpend).toLocaleString()}</p></div>
+          <div className="card p-3"><p className="text-xs text-muted">Repeat customers</p><p className="font-display text-xl font-extrabold text-ink">{rows.filter((r) => r.visits > 1).length}</p></div>
+        </div>
+      )}
+
+      <div className="mt-4 space-y-2">
+        {rows === null ? (
+          Array.from({ length: 6 }).map((_, i) => <div key={i} className="card h-14 animate-pulse" />)
+        ) : rows.length === 0 ? (
+          <div className="card p-12 text-center text-muted">No customers yet. They'll appear here after their first order or booking.</div>
+        ) : (
+          rows.map((r) => (
+            <div key={r.phone} className="card p-0">
+              <button onClick={() => setOpen(open === r.phone ? null : r.phone)} className="flex w-full items-center gap-3 p-3.5 text-left">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-bold text-brand-dark">{(r.name || r.phone).slice(0, 1).toUpperCase()}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 truncate font-semibold text-ink">{r.name || r.phone}{r.tag && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${CUST_TAG_BADGE[r.tag] ?? "bg-surface-2 text-muted"}`}>{r.tag.replace("_", " ")}</span>}</p>
+                  <p className="truncate text-xs text-muted">{r.phone} · {r.visits} visit{r.visits === 1 ? "" : "s"}{r.lastVisit ? ` · last ${timeAgo(r.lastVisit)}` : ""}</p>
+                </div>
+                <span className="shrink-0 text-right"><span className="block font-bold text-ink">${Math.round(r.spend).toLocaleString()}</span><span className="text-[10px] text-muted">spent</span></span>
+              </button>
+              {open === r.phone && <div className="px-3.5 pb-3.5"><CustomerPanel bizId={biz.id} phone={r.phone} /></div>}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

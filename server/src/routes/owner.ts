@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
-import { inboxItems, todaySummary } from "../lib/ownerHome";
+import { customerList, inboxItems, todaySummary } from "../lib/ownerHome";
 import { getMarketplaceSettings } from "../lib/marketplace";
 import { toCsv } from "../lib/csv";
 import { prisma } from "../db";
@@ -501,16 +501,28 @@ ownerRouter.get("/businesses/:id/booking-analytics", async (req, res) => {
 
 // ---- Customer CRM (keyed by phone within a business) ----
 const TAGS = ["", "VIP", "REGULAR", "FIRST_VISIT"];
+
+// GET /businesses/:id/customers?q= — the full customer book, aggregated across channels.
+ownerRouter.get("/businesses/:id/customers", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await customerList(business.id, String((req.query as Record<string, string>).q ?? "")));
+});
+
 ownerRouter.get("/businesses/:id/customers/:phone", async (req, res) => {
   const business = await ownedBusiness(req);
   if (!business) return res.status(404).json({ error: "Business not found." });
   const phone = decodeURIComponent(req.params.phone);
-  const [appts, profile] = await Promise.all([
+  const [appts, profile, orders, giftCards, txs] = await Promise.all([
     prisma.appointment.findMany({ where: { businessId: business.id, customerPhone: phone }, orderBy: [{ date: "desc" }, { time: "desc" }] }),
     prisma.customerProfile.findUnique({ where: { businessId_phone: { businessId: business.id, phone } } }),
+    prisma.businessOrder.findMany({ where: { businessId: business.id, order: { is: { customerPhone: phone } } }, orderBy: { createdAt: "desc" }, take: 20, include: { order: { select: { number: true } }, items: { select: { name: true, quantity: true } } } }),
+    prisma.voucher.findMany({ where: { businessId: business.id, recipientPhone: phone }, orderBy: { createdAt: "desc" }, take: 20, select: { code: true, title: true, value: true, status: true, createdAt: true } }),
+    prisma.transaction.findMany({ where: { businessId: business.id, customerPhone: phone, status: { in: ["PAID", "PARTIALLY_REFUNDED"] } }, select: { amount: true } }),
   ]);
   const completed = appts.filter((a) => a.status === "COMPLETED");
   const spent = Math.round(completed.reduce((s, a) => s + (a.price || 0), 0) * 100) / 100;
+  const spendTotal = Math.round(txs.reduce((s, t) => s + t.amount, 0) * 100) / 100;
   const suggested = completed.length === 0 ? "FIRST_VISIT" : completed.length >= 5 ? "VIP" : completed.length >= 2 ? "REGULAR" : "";
   res.json({
     phone,
@@ -523,8 +535,11 @@ ownerRouter.get("/businesses/:id/customers/:phone", async (req, res) => {
     completed: completed.length,
     noShows: appts.filter((a) => a.status === "NO_SHOW").length,
     spent,
+    spendTotal,
     lastVisit: appts[0]?.date ?? null,
     appointments: appts.slice(0, 20),
+    orders: orders.map((o) => ({ number: o.order?.number ?? "", subtotal: o.subtotal, status: o.status, createdAt: o.createdAt, items: o.items })),
+    giftCards,
   });
 });
 ownerRouter.patch("/businesses/:id/customers/:phone", async (req, res) => {

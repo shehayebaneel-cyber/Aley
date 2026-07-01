@@ -119,3 +119,45 @@ export async function inboxItems(businessId: number): Promise<InboxItem[]> {
   items.sort((a, b) => b.time.localeCompare(a.time));
   return items;
 }
+
+// ---- Customer CRM: one row per customer (keyed by phone) across all channels ----
+export interface CustomerRow { phone: string; name: string; tag: string; visits: number; spend: number; lastVisit: string | null }
+
+export async function customerList(businessId: number, q = ""): Promise<CustomerRow[]> {
+  const [appts, facs, orders, resvs, txs, profiles] = await Promise.all([
+    prisma.appointment.findMany({ where: { businessId }, select: { customerPhone: true, customerName: true, createdAt: true } }),
+    prisma.facilityBooking.findMany({ where: { businessId }, select: { customerPhone: true, customerName: true, createdAt: true } }),
+    prisma.businessOrder.findMany({ where: { businessId }, select: { createdAt: true, order: { select: { customerName: true, customerPhone: true } } } }),
+    prisma.reservation.findMany({ where: { businessId }, select: { phone: true, name: true, createdAt: true } }),
+    prisma.transaction.findMany({ where: { businessId, status: { in: ["PAID", "PARTIALLY_REFUNDED"] } }, select: { customerPhone: true, customerName: true, amount: true, createdAt: true } }),
+    prisma.customerProfile.findMany({ where: { businessId }, select: { phone: true, name: true, tag: true } }),
+  ]);
+  type Agg = { phone: string; name: string; tag: string; visits: number; spend: number; last: number };
+  const map = new Map<string, Agg>();
+  const touch = (rawPhone: string, name: string, when: Date): Agg | null => {
+    const phone = (rawPhone || "").trim();
+    if (!phone) return null;
+    let e = map.get(phone);
+    if (!e) { e = { phone, name: name || "", tag: "", visits: 0, spend: 0, last: 0 }; map.set(phone, e); }
+    if (!e.name && name) e.name = name;
+    const t = when.getTime();
+    if (t > e.last) e.last = t;
+    return e;
+  };
+  for (const a of appts) { const e = touch(a.customerPhone, a.customerName, a.createdAt); if (e) e.visits++; }
+  for (const f of facs) { const e = touch(f.customerPhone, f.customerName, f.createdAt); if (e) e.visits++; }
+  for (const o of orders) { const e = touch(o.order?.customerPhone ?? "", o.order?.customerName ?? "", o.createdAt); if (e) e.visits++; }
+  for (const r of resvs) { const e = touch(r.phone, r.name, r.createdAt); if (e) e.visits++; }
+  for (const t of txs) { const e = touch(t.customerPhone, t.customerName, t.createdAt); if (e) e.spend += t.amount; }
+  for (const p of profiles) {
+    const phone = p.phone.trim(); if (!phone) continue;
+    const e = map.get(phone);
+    if (e) { e.tag = p.tag; if (p.name) e.name = p.name; }
+    else map.set(phone, { phone, name: p.name, tag: p.tag, visits: 0, spend: 0, last: 0 });
+  }
+  let rows = [...map.values()];
+  const ql = q.trim().toLowerCase();
+  if (ql) rows = rows.filter((r) => `${r.name} ${r.phone}`.toLowerCase().includes(ql));
+  rows.sort((a, b) => b.spend - a.spend || b.last - a.last);
+  return rows.slice(0, 300).map((r) => ({ phone: r.phone, name: r.name, tag: r.tag, visits: r.visits, spend: round2(r.spend), lastVisit: r.last ? new Date(r.last).toISOString() : null }));
+}
