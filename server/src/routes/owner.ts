@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { requireOwner, signToken } from "../auth";
 import { businessMetrics, resolveRange } from "../lib/analytics";
+import { inboxItems, todaySummary } from "../lib/ownerHome";
 import { getMarketplaceSettings } from "../lib/marketplace";
 import { toCsv } from "../lib/csv";
 import { prisma } from "../db";
@@ -235,6 +236,31 @@ ownerRouter.get("/businesses/:id/metrics", async (req, res) => {
   const range = resolveRange(q.period ?? "30d", q.from, q.to);
   const data = await businessMetrics(business.id, range);
   res.json({ period: q.period ?? "30d", range: { start: range.start, end: range.end }, ...data });
+});
+
+// ---- Control center: Today summary + unified Inbox ----
+// GET /api/owner/businesses/:id/today — the daily at-a-glance dashboard.
+ownerRouter.get("/businesses/:id/today", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  res.json(await todaySummary(business.id));
+});
+
+// GET /api/owner/businesses/:id/inbox — one feed of everything needing attention.
+ownerRouter.get("/businesses/:id/inbox", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const items = await inboxItems(business.id);
+  const counts = {
+    all: items.length,
+    action: items.filter((i) => i.needsAction).length,
+    bookings: items.filter((i) => ["APPOINTMENT", "RESERVATION", "FACILITY", "EVENT"].includes(i.kind)).length,
+    orders: items.filter((i) => i.kind === "ORDER").length,
+    quotes: items.filter((i) => i.kind === "QUOTE").length,
+    sales: items.filter((i) => i.kind === "GIFTCARD").length,
+    reviews: items.filter((i) => i.kind === "REVIEW").length,
+  };
+  res.json({ items, counts });
 });
 
 // ---- Reservations ----

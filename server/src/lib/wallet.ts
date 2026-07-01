@@ -6,11 +6,11 @@ import { prisma } from "../db";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export type WalletSource = "ORDER" | "VOUCHER" | "FACILITY" | "APPOINTMENT" | "TOPUP" | "REFUND" | "ADJUSTMENT";
+export type WalletSource = "ORDER" | "VOUCHER" | "FACILITY" | "APPOINTMENT" | "TOPUP" | "REFUND" | "ADJUSTMENT" | "PLATFORM_GIFTCARD";
 
 export interface WalletEntryInput {
   userId: number;
-  type: "TOPUP" | "SPEND" | "REFUND" | "ADJUSTMENT" | "BONUS";
+  type: "TOPUP" | "SPEND" | "REFUND" | "ADJUSTMENT" | "BONUS" | "GIFT";
   amount: number; // always pass a positive magnitude; direction comes from `type`
   status?: string;
   method?: string;
@@ -21,7 +21,8 @@ export interface WalletEntryInput {
   createdBy?: string;
 }
 
-const CREDIT_TYPES = new Set(["TOPUP", "REFUND", "BONUS"]);
+// Credits add to the balance. GIFT = a redeemed Platform Gift Card.
+const CREDIT_TYPES = new Set(["TOPUP", "REFUND", "BONUS", "GIFT"]);
 
 /** Current spendable balance (sum of COMPLETED entries). */
 export async function walletBalance(userId: number): Promise<number> {

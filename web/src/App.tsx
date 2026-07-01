@@ -15,6 +15,8 @@ import { MyBookings } from "./pages/MyBookings";
 import { GiftVouchers } from "./pages/GiftVouchers";
 import { GiftCards } from "./pages/GiftCards";
 import { GiftCardDetail } from "./pages/GiftCardDetail";
+import { PlatformGiftCard } from "./pages/PlatformGiftCard";
+import { PlatformCardView } from "./pages/PlatformCardView";
 import { VoucherView } from "./pages/VoucherView";
 import { Wallet } from "./pages/Wallet";
 import { OrderTracking } from "./pages/OrderTracking";
@@ -59,6 +61,7 @@ import { AdminReviews } from "./pages/admin/AdminReviews";
 import { AdminUsers } from "./pages/admin/AdminUsers";
 import { AdminImport } from "./pages/admin/AdminImport";
 import { AdminVouchers } from "./pages/admin/AdminVouchers";
+import { AdminPlatformCards } from "./pages/admin/AdminPlatformCards";
 import { AdminPayments } from "./pages/admin/AdminPayments";
 import { BusinessDashboard } from "./pages/owner/BusinessDashboard";
 import { CheckIn } from "./pages/owner/CheckIn";
@@ -96,6 +99,7 @@ const TITLES: Record<string, string> = {
   "/orders": "My orders",
   "/bookings": "My appointments",
   "/gift-cards": "Gift Cards & Experiences",
+  "/platform-gift-card": "Platform Gift Card",
   "/gift-vouchers": "My gift vouchers",
   "/wallet": "My wallet",
   "/my-offers": "My offers",
@@ -154,6 +158,8 @@ export default function App() {
           <Route path="/bookings" element={<MyBookings />} />
           <Route path="/gift-cards" element={<GiftCards />} />
           <Route path="/gift-card/:id" element={<GiftCardDetail />} />
+          <Route path="/platform-gift-card" element={<PlatformGiftCard />} />
+          <Route path="/platform-card/:code" element={<PlatformCardView />} />
           <Route path="/gift-vouchers" element={<GiftVouchers />} />
           <Route path="/voucher/:code" element={<VoucherView />} />
           <Route path="/wallet" element={<Wallet />} />
@@ -201,6 +207,7 @@ export default function App() {
           <Route path="collections" element={<AdminCollections />} />
           <Route path="cities" element={<AdminCities />} />
           <Route path="vouchers" element={<AdminVouchers />} />
+          <Route path="platform-cards" element={<AdminPlatformCards />} />
           <Route path="payments" element={<AdminPayments />} />
           <Route path="marketplace" element={<AdminMarketplace />} />
           <Route path="content" element={<AdminContent />} />

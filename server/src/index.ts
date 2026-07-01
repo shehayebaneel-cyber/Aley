@@ -16,6 +16,7 @@ import { driverAuthRouter, driverRouter } from "./routes/driver";
 import { trackRouter } from "./routes/track";
 import { translateRouter } from "./routes/translate";
 import { vouchersRouter } from "./routes/vouchers";
+import { platformCardsRouter } from "./routes/platformCards";
 import { marketplaceRouter } from "./routes/marketplace";
 import { categoriesRouter, citiesRouter, homeRouter, reservationsRouter, reviewsRouter } from "./routes/misc";
 import { eventsRouter } from "./routes/events";
@@ -58,6 +59,7 @@ app.use("/api/reservations", reservationsRouter);
 app.use("/api/booking", bookingRouter);
 app.use("/api/facilities", facilityRouter);
 app.use("/api/vouchers", vouchersRouter);
+app.use("/api/platform-cards", platformCardsRouter);
 app.use("/api/lost-found", lostFoundRouter);
 app.use("/api/announcements", announcementsRouter);
 app.use("/api/delivery", deliveryRouter);
@@ -99,6 +101,12 @@ async function deliverDueVouchers() {
     for (const v of due) {
       await prisma.voucher.update({ where: { id: v.id }, data: { status: "ACTIVE" } });
       await notifyAdmins({ kind: "VOUCHER_DELIVERED", title: `Gift voucher delivered: ${v.business.name}`, body: `${v.title} for ${v.recipientName} is now active (${v.code}).`, link: "/admin/vouchers" }).catch(() => {});
+    }
+    // Platform gift cards scheduled for a future date: activate when due.
+    const dueCards = await prisma.platformGiftCard.findMany({ where: { status: "PENDING_DELIVERY", deliverAt: { lte: new Date() } }, take: 100 });
+    for (const c of dueCards) {
+      await prisma.platformGiftCard.update({ where: { id: c.id }, data: { status: "ACTIVE" } });
+      await notifyAdmins({ kind: "PLATFORM_CARD_DELIVERED", title: "Platform gift card delivered", body: `$${c.amount} gift card for ${c.recipientName} is now active (${c.code}).`, link: "/admin/platform-cards" }).catch(() => {});
     }
   } catch { /* ignore */ }
 }

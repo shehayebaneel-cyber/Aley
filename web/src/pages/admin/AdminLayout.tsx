@@ -25,6 +25,7 @@ const LINKS = [
   { to: "/admin/collections", tk: "anav.collections" },
   { to: "/admin/cities", tk: "anav.cities" },
   { to: "/admin/vouchers", tk: "anav.vouchers" },
+  { to: "/admin/platform-cards", tk: "anav.platformcards" },
   { to: "/admin/payments", tk: "anav.payments" },
   { to: "/admin/marketplace", tk: "anav.marketplace" },
   { to: "/admin/users", tk: "anav.users" },

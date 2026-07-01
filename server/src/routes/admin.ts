@@ -8,6 +8,8 @@ import { getMarketplaceSettings, saveMarketplaceSettings } from "../lib/marketpl
 import { prisma } from "../db";
 import { recomputeProject, recomputeRating } from "../lib/ratings";
 import { addAdjustment, generatePayout, refundTransaction, setPayoutStatus } from "../lib/ledger";
+import { refundToWallet } from "../lib/wallet";
+import { cardStatus, ensureDefaultDesigns, outDesign } from "../lib/platformCards";
 import { toCsv } from "../lib/csv";
 import { outBusiness, outProject, slugify, toJson } from "../lib/serialize";
 import { recomputeOrder } from "./orders";
@@ -220,6 +222,93 @@ adminRouter.post("/vouchers/:id/disable", async (req, res) => {
   if (!v) return res.status(404).json({ error: "Voucher not found." });
   const disable = req.body?.disable !== false;
   res.json(await prisma.voucher.update({ where: { id: v.id }, data: { status: disable ? "DISABLED" : "ACTIVE" } }));
+});
+
+// ---- Platform gift cards (redeemable anywhere) ----
+adminRouter.get("/platform-cards", async (req, res) => {
+  const q = req.query as Record<string, string>;
+  const where: Record<string, unknown> = {};
+  if (q.status) where.status = q.status;
+  if (q.q) where.OR = [{ code: { contains: q.q, mode: "insensitive" } }, { recipientName: { contains: q.q, mode: "insensitive" } }, { purchaserName: { contains: q.q, mode: "insensitive" } }];
+  const [items, all] = await Promise.all([
+    prisma.platformGiftCard.findMany({ where, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.platformGiftCard.findMany({ select: { amount: true, balance: true, status: true } }),
+  ]);
+  const issued = all.length;
+  const issuedValue = round2(all.reduce((s, c) => s + c.amount, 0));
+  const redeemedValue = round2(all.filter((c) => c.status === "REDEEMED").reduce((s, c) => s + c.amount, 0));
+  const outstanding = round2(all.filter((c) => c.status === "ACTIVE" || c.status === "PENDING_DELIVERY").reduce((s, c) => s + c.balance, 0));
+  const redeemed = all.filter((c) => c.status === "REDEEMED").length;
+  res.json({
+    items: items.map((c) => ({ ...c, status: cardStatus(c) })),
+    summary: { issued, issuedValue, redeemedValue, outstanding, redeemed, redemptionRate: issued ? Math.round((redeemed / issued) * 100) : 0 },
+  });
+});
+
+// Disable / re-enable a card (can't disable one already redeemed).
+adminRouter.post("/platform-cards/:id/disable", async (req, res) => {
+  const c = await prisma.platformGiftCard.findUnique({ where: { id: Number(req.params.id) } });
+  if (!c) return res.status(404).json({ error: "Gift card not found." });
+  if (c.status === "REDEEMED") return res.status(400).json({ error: "This card was already redeemed." });
+  const disable = req.body?.disable !== false;
+  res.json(await prisma.platformGiftCard.update({ where: { id: c.id }, data: { status: disable ? "DISABLED" : "ACTIVE" } }));
+});
+
+// Refund an un-redeemed card: mark REFUNDED and, if the buyer is known, credit
+// their wallet back. (A redeemed card's value already left as wallet credit.)
+adminRouter.post("/platform-cards/:id/refund", async (req, res) => {
+  const c = await prisma.platformGiftCard.findUnique({ where: { id: Number(req.params.id) } });
+  if (!c) return res.status(404).json({ error: "Gift card not found." });
+  if (c.status === "REDEEMED") return res.status(400).json({ error: "This card was already redeemed — refund the recipient's wallet manually." });
+  if (c.status === "REFUNDED") return res.status(400).json({ error: "This card was already refunded." });
+  await prisma.platformGiftCard.update({ where: { id: c.id }, data: { status: "REFUNDED", balance: 0 } });
+  let refunded = false;
+  if (c.purchaserUserId) {
+    await refundToWallet({ userId: c.purchaserUserId, amount: c.amount, source: "PLATFORM_GIFTCARD", refId: c.id, code: c.code, description: `Refund · platform gift card ${c.code}`, createdBy: "admin" });
+    refunded = true;
+  }
+  res.json({ ok: true, refundedToWallet: refunded });
+});
+
+// Design manager (CRUD).
+adminRouter.get("/platform-card-designs", async (_req, res) => {
+  await ensureDefaultDesigns();
+  const rows = await prisma.platformCardDesign.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
+  res.json(rows.map(outDesign));
+});
+adminRouter.post("/platform-card-designs", async (req, res) => {
+  const b = req.body ?? {};
+  const name = STR(b.name, 60);
+  if (!name) return res.status(400).json({ error: "A design name is required." });
+  const presets = Array.isArray(b.presets) ? JSON.stringify(b.presets.map(Number).filter((n: number) => n > 0)) : "[25,50,100,250]";
+  const d = await prisma.platformCardDesign.create({ data: {
+    name, occasion: STR(b.occasion, 20) || "GENERAL", emoji: STR(b.emoji, 8) || "🎁",
+    gradient: STR(b.gradient, 80) || "from-brand to-brand-dark", image: b.image ? STR(b.image, 500) : null,
+    minValue: Math.max(1, Number(b.minValue) || 10), maxValue: Math.max(1, Number(b.maxValue) || 1000),
+    presets, active: b.active !== false, sortOrder: Number(b.sortOrder) || 0,
+  } });
+  res.status(201).json(outDesign(d));
+});
+adminRouter.post("/platform-card-designs/:id", async (req, res) => {
+  const b = req.body ?? {};
+  const id = Number(req.params.id);
+  if (!(await prisma.platformCardDesign.findUnique({ where: { id } }))) return res.status(404).json({ error: "Design not found." });
+  const data: Record<string, unknown> = {};
+  if (b.name !== undefined) data.name = STR(b.name, 60);
+  if (b.occasion !== undefined) data.occasion = STR(b.occasion, 20) || "GENERAL";
+  if (b.emoji !== undefined) data.emoji = STR(b.emoji, 8) || "🎁";
+  if (b.gradient !== undefined) data.gradient = STR(b.gradient, 80) || "from-brand to-brand-dark";
+  if (b.image !== undefined) data.image = b.image ? STR(b.image, 500) : null;
+  if (b.minValue !== undefined) data.minValue = Math.max(1, Number(b.minValue) || 10);
+  if (b.maxValue !== undefined) data.maxValue = Math.max(1, Number(b.maxValue) || 1000);
+  if (b.presets !== undefined) data.presets = Array.isArray(b.presets) ? JSON.stringify(b.presets.map(Number).filter((n: number) => n > 0)) : "[25,50,100,250]";
+  if (b.active !== undefined) data.active = !!b.active;
+  if (b.sortOrder !== undefined) data.sortOrder = Number(b.sortOrder) || 0;
+  res.json(outDesign(await prisma.platformCardDesign.update({ where: { id }, data })));
+});
+adminRouter.delete("/platform-card-designs/:id", async (req, res) => {
+  await prisma.platformCardDesign.delete({ where: { id: Number(req.params.id) } }).catch(() => {});
+  res.json({ ok: true });
 });
 
 // ---- Finance: platform ledger, payouts, adjustments, commission settings ----

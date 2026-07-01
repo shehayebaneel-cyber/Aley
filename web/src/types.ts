@@ -288,10 +288,39 @@ export interface Wallet {
   pendingBalance: number; availableBalance: number; inPayout: number; paidOut: number;
   lifetimeEarnings: number; outstandingBalance: number;
 }
+// A Platform Gift Card design (visual theme + value limits) and issued card.
+export interface PlatformCardDesign {
+  id: number;
+  name: string;
+  occasion: string; // GENERAL | BIRTHDAY | HOLIDAY | WEDDING | GRADUATION | ANNIVERSARY | THANK_YOU | CONGRATS
+  emoji: string;
+  gradient: string; // tailwind gradient classes
+  image: string | null;
+  minValue: number;
+  maxValue: number;
+  presets: number[];
+  active: boolean;
+  sortOrder: number;
+}
+export interface PlatformCardView {
+  code: string;
+  amount: number;
+  balance: number;
+  status: string;
+  occasion: string;
+  emoji: string;
+  gradient: string;
+  recipientName: string;
+  message: string;
+  deliverAt: string | null;
+  expiresAt: string | null;
+  redeemable: boolean;
+}
+
 // Customer prepaid wallet (distinct from the business `Wallet` above).
 export interface WalletEntry {
   id: number;
-  type: "TOPUP" | "SPEND" | "REFUND" | "ADJUSTMENT" | "BONUS";
+  type: "TOPUP" | "SPEND" | "REFUND" | "ADJUSTMENT" | "BONUS" | "GIFT";
   amount: number; // signed: + credit, − debit
   status: string; // COMPLETED | PENDING | FAILED
   method: string;

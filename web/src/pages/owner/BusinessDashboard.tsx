@@ -9,30 +9,35 @@ import { EVENT_CATEGORIES } from "../../lib/events";
 import { fieldLabel } from "../../lib/requestForms";
 import { MenuEditor } from "../../components/MenuEditor";
 import { Stars } from "../../components/Stars";
+import { QRCode } from "../../components/QRCode";
+import QR from "qrcode";
 import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../components/icons";
 import { useOwnerAuth } from "../../context/OwnerAuthContext";
 import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, timeAgo } from "../../lib/api";
+import { kitFor, stepDone } from "../../lib/categoryKits";
 import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
 import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessOrder, Category, CustomerHistory, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
-const TABS = ["Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews"] as const;
+const TABS = ["Today", "Inbox", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
 type Tab = (typeof TABS)[number];
 
-// Group the tabs into a tidy 2-level nav so the dashboard isn't an 18-tab wall.
+// Group the tabs into a tidy 2-level nav so the dashboard isn't a wall of tabs.
+// The nav shows EVERY tool (nothing hidden); the industry toolkit strip below the
+// nav highlights the ones that matter for this business's category.
 const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
-  { label: "Overview", icon: "🏠", tabs: ["Overview"] },
+  { label: "Home", icon: "🏠", tabs: ["Today", "Inbox", "Overview"] },
   { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
   { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers", "Requests"] },
   { label: "Bookings", icon: "📅", tabs: ["Bookings", "Booking Setup", "Facilities", "Field Bookings", "Reservations"] },
-  { label: "Page", icon: "✏️", tabs: ["Profile", "Photos", "Hours", "Events", "Reviews"] },
+  { label: "Page", icon: "✏️", tabs: ["Profile", "Photos", "Hours", "Events", "Reviews", "Share"] },
   { label: "Assistant", icon: "✨", tabs: ["Assistant"] },
 ];
 
 export function BusinessDashboard() {
   const { id } = useParams();
   const { refresh } = useOwnerAuth();
-  const [tab, setTab] = useState<Tab>("Overview");
+  const [tab, setTab] = useState<Tab>("Today");
   const [biz, setBiz] = useState<Business | null>(null);
   const [error, setError] = useState("");
 
@@ -53,6 +58,10 @@ export function BusinessDashboard() {
   if (error) return <div className="card p-10 text-center text-muted">{error} <Link to="/owner" className="font-semibold text-brand">← Back</Link></div>;
   if (!biz) return <div className="card h-72 animate-pulse" />;
 
+  const kit = kitFor(biz.category);
+  const toolLabel = (t: string) => (t === "Menu" && kit.catalogLabel ? kit.catalogLabel : t === "Share" ? "🔗 Share & QR" : t);
+  const toolkit = Array.from(new Set([...kit.primary, "Share"]));
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -63,6 +72,20 @@ export function BusinessDashboard() {
       </div>
       <h1 className="mt-2 font-display text-3xl font-extrabold text-ink">{biz.name}</h1>
       <p className="text-muted">{biz.category.icon} {biz.category.name} · {PRICE(biz.priceRange)}</p>
+
+      {/* Industry toolkit — surfaces the tools that matter for this category. */}
+      <div className="mt-4 rounded-2xl border border-brand/30 bg-brand-soft/40 p-4">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{kit.emoji}</span>
+          <p className="font-display font-extrabold text-ink">Your {kit.label} toolkit</p>
+        </div>
+        <p className="mt-0.5 text-sm text-muted">{kit.blurb}</p>
+        <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
+          {toolkit.map((t) => (
+            <button key={t} onClick={() => setTab(t as Tab)} className={`chip whitespace-nowrap ${tab === t ? "chip-active" : ""}`}>{toolLabel(t)}</button>
+          ))}
+        </div>
+      </div>
 
       {biz.reviewStatus === "PENDING" && (
         <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">
@@ -112,7 +135,9 @@ export function BusinessDashboard() {
       })()}
 
       <div className="mt-6">
-        {tab === "Overview" && <Overview biz={biz} />}
+        {tab === "Today" && <TodayTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
+        {tab === "Inbox" && <InboxTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
+        {tab === "Overview" && <Overview biz={biz} onGo={(t) => setTab(t as Tab)} />}
         {tab === "Earnings" && <EarningsTab biz={biz} />}
         {tab === "Analytics" && <AnalyticsTab biz={biz} />}
         {tab === "Assistant" && <AssistantTab biz={biz} />}
@@ -131,6 +156,7 @@ export function BusinessDashboard() {
         {tab === "Offers" && <OffersTab biz={biz} />}
         {tab === "Events" && <EventsTab biz={biz} />}
         {tab === "Reviews" && <ReviewsTab biz={biz} />}
+        {tab === "Share" && <ShareTab biz={biz} />}
       </div>
     </div>
   );
@@ -153,8 +179,162 @@ function SaveBar({ onSave, dirty }: { onSave: () => Promise<void>; dirty: boolea
   );
 }
 
+// ---- Today: the daily control-center home ----
+interface TodaySummary {
+  today: { orders: number; bookings: number; newCustomers: number; revenue: number; giftCardSales: { count: number; value: number }; offerRedemptions: number };
+  upcoming: { count: number; list: { time: string; name: string; detail: string; status: string }[] };
+  actions: { pendingOrders: number; pendingReservations: number; pendingAppointments: number; quotesWaiting: number; unrepliedReviews: number };
+}
+function greeting() { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
+
+function TodayTab({ biz, onGo }: { biz: Business; onGo: (tab: string) => void }) {
+  const { data, loading } = useFetch<TodaySummary>(`/api/owner/businesses/${biz.id}/today`);
+  if (loading || !data) return <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="card h-24 animate-pulse" />)}</div>;
+
+  const A = data.actions;
+  const actionItems = [
+    { n: A.pendingOrders, label: "orders to confirm", tab: "Orders", icon: "🛍️" },
+    { n: A.pendingAppointments, label: "appointments to confirm", tab: "Bookings", icon: "📅" },
+    { n: A.pendingReservations, label: "reservations to confirm", tab: "Reservations", icon: "🍽️" },
+    { n: A.quotesWaiting, label: "quote requests waiting", tab: "Requests", icon: "🔧" },
+    { n: A.unrepliedReviews, label: "reviews to reply to", tab: "Reviews", icon: "⭐" },
+  ].filter((a) => a.n > 0);
+  const t = data.today;
+  const stats = [
+    { label: "Revenue today", value: currency(t.revenue) },
+    { label: "New orders", value: t.orders },
+    { label: "New bookings", value: t.bookings },
+    { label: "New customers", value: t.newCustomers },
+    { label: "Gift card sales", value: t.giftCardSales.count ? `${currency(t.giftCardSales.value)}` : "0" },
+    { label: "Offer redemptions", value: t.offerRedemptions },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-2xl font-extrabold text-ink">{greeting()}! 👋</h2>
+        <p className="text-muted">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · Here's what's happening at {biz.name}.</p>
+      </div>
+
+      {/* Needs your attention */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="font-display font-bold text-ink">Needs your attention</h3>
+          <button onClick={() => onGo("Inbox")} className="text-sm font-bold text-brand">Open inbox →</button>
+        </div>
+        {actionItems.length === 0 ? (
+          <p className="mt-3 rounded-xl bg-emerald-500/10 px-4 py-6 text-center text-sm font-semibold text-emerald-600">✨ You're all caught up — nothing waiting.</p>
+        ) : (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {actionItems.map((a) => (
+              <button key={a.tab} onClick={() => onGo(a.tab)} className="flex items-center gap-3 rounded-xl border border-brand/30 bg-brand-soft/40 p-3 text-left transition hover:border-brand">
+                <span className="text-xl">{a.icon}</span>
+                <span className="flex-1 text-sm font-semibold text-ink"><span className="font-extrabold text-brand-dark">{a.n}</span> {a.label}</span>
+                <span className="text-xs font-bold text-brand">Review →</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Today so far */}
+      <div>
+        <h3 className="mb-3 font-display font-bold text-ink">Today so far</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          {stats.map((s) => (
+            <div key={s.label} className="card p-4">
+              <p className="text-xs text-muted">{s.label}</p>
+              <p className="mt-1 font-display text-2xl font-extrabold text-ink">{s.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Upcoming today */}
+      <div className="card p-5">
+        <h3 className="font-display font-bold text-ink">📆 Upcoming today</h3>
+        {data.upcoming.list.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No appointments or bookings scheduled for the rest of today.</p>
+        ) : (
+          <div className="mt-3 divide-y divide-border">
+            {data.upcoming.list.map((u, i) => (
+              <div key={i} className="flex items-center gap-3 py-2.5">
+                <span className="w-14 shrink-0 font-mono text-sm font-bold text-brand-dark">{u.time}</span>
+                <span className="flex-1 text-sm"><span className="font-semibold text-ink">{u.name}</span> <span className="text-muted">· {u.detail}</span></span>
+                <span className="text-xs text-muted">{u.status.toLowerCase()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- Inbox: one unified feed of everything needing attention ----
+interface InboxItem { id: string; kind: string; icon: string; title: string; subtitle: string; time: string; status: string; needsAction: boolean; tab: string }
+interface InboxData { items: InboxItem[]; counts: Record<string, number> }
+const INBOX_FILTERS: { key: string; label: string; test: (i: InboxItem) => boolean }[] = [
+  { key: "all", label: "All", test: () => true },
+  { key: "action", label: "Needs action", test: (i) => i.needsAction },
+  { key: "bookings", label: "Bookings", test: (i) => ["APPOINTMENT", "RESERVATION", "FACILITY", "EVENT"].includes(i.kind) },
+  { key: "orders", label: "Orders", test: (i) => i.kind === "ORDER" },
+  { key: "quotes", label: "Quotes", test: (i) => i.kind === "QUOTE" },
+  { key: "sales", label: "Gift cards", test: (i) => i.kind === "GIFTCARD" },
+  { key: "reviews", label: "Reviews", test: (i) => i.kind === "REVIEW" },
+];
+
+function InboxTab({ biz, onGo }: { biz: Business; onGo: (tab: string) => void }) {
+  const { data, loading } = useFetch<InboxData>(`/api/owner/businesses/${biz.id}/inbox`);
+  const [filter, setFilter] = useState("all");
+  if (loading || !data) return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="card h-16 animate-pulse" />)}</div>;
+
+  const active = INBOX_FILTERS.find((f) => f.key === filter) ?? INBOX_FILTERS[0];
+  const shown = data.items.filter(active.test);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-display text-2xl font-extrabold text-ink">Inbox</h2>
+          <p className="text-sm text-muted">Everything happening at your business, in one place.</p>
+        </div>
+        {data.counts.action > 0 && <span className="rounded-full bg-brand px-3 py-1 text-sm font-bold text-white">{data.counts.action} need action</span>}
+      </div>
+
+      <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1">
+        {INBOX_FILTERS.map((f) => (
+          <button key={f.key} onClick={() => setFilter(f.key)} className={`chip whitespace-nowrap ${filter === f.key ? "chip-active" : ""}`}>
+            {f.label}{data.counts[f.key] ? ` (${data.counts[f.key]})` : ""}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {shown.length === 0 ? (
+          <div className="card p-12 text-center text-muted">Nothing here yet.</div>
+        ) : (
+          shown.map((i) => (
+            <button key={i.id} onClick={() => onGo(i.tab)} className={`flex w-full items-center gap-3 rounded-2xl border p-3.5 text-left transition hover:shadow-sm ${i.needsAction ? "border-brand/40 bg-brand-soft/30" : "border-border bg-surface"}`}>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl surface-2 text-lg">{i.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-ink">{i.title}</p>
+                <p className="truncate text-sm text-muted">{i.subtitle}</p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className="text-xs text-muted">{timeAgo(i.time)}</span>
+                {i.needsAction ? <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-white">Action</span> : <span className="text-[10px] font-semibold uppercase text-muted">{i.status.toLowerCase()}</span>}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---- Overview / analytics ----
-function Overview({ biz }: { biz: Business }) {
+function Overview({ biz, onGo }: { biz: Business; onGo: (tab: string) => void }) {
   const { data } = useFetch<{ viewCount: number; rating: number; reviewCount: number; pendingReviews: number; offers: number; events: number; breakdown: { star: number; count: number }[] }>(`/api/owner/businesses/${biz.id}/analytics`);
   const stats = [
     { label: "Profile views", value: data?.viewCount ?? "—" },
@@ -165,8 +345,36 @@ function Overview({ biz }: { biz: Business }) {
     { label: "Pending reviews", value: data?.pendingReviews ?? "—" },
   ];
   const max = Math.max(1, ...(data?.breakdown ?? []).map((b) => b.count));
+
+  // Category-specific setup checklist — guides owners to a complete, active page.
+  const kit = kitFor(biz.category);
+  const counts = { offers: data?.offers, events: data?.events };
+  const steps = kit.steps.map((s) => ({ ...s, done: stepDone(s.key, biz, counts) }));
+  const doneCount = steps.filter((s) => s.done).length;
+
   return (
     <div className="space-y-6">
+      {doneCount < steps.length && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-display font-bold text-ink">{kit.emoji} Set up your {kit.label.toLowerCase()} page</h3>
+              <p className="text-sm text-muted">Complete these to start winning more customers on your page.</p>
+            </div>
+            <span className="shrink-0 rounded-full surface-2 px-3 py-1 text-sm font-bold text-ink">{doneCount}/{steps.length}</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full surface-2"><div className="h-full rounded-full bg-brand transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} /></div>
+          <div className="mt-4 space-y-2">
+            {steps.map((s) => (
+              <button key={s.key + s.label} onClick={() => onGo(s.tab)} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${s.done ? "border-border opacity-70" : "border-brand/30 hover:border-brand hover:bg-brand-soft/40"}`}>
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${s.done ? "bg-emerald-500 text-white" : "surface-2 text-muted"}`}>{s.done ? "✓" : ""}</span>
+                <span className={`flex-1 text-sm font-semibold ${s.done ? "text-muted line-through" : "text-ink"}`}>{s.label}</span>
+                {!s.done && <span className="text-xs font-bold text-brand">Set up →</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s) => (
           <div key={s.label} className="card p-4">
@@ -188,6 +396,70 @@ function Overview({ biz }: { biz: Business }) {
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Share & QR — turn the page into the business's digital hub ----
+const PLACEMENTS = [
+  { icon: "🚪", label: "At the entrance", hint: "A window sticker so walk-ins can browse & book." },
+  { icon: "🍽️", label: "On tables & menus", hint: "Let diners see the menu, order or reserve." },
+  { icon: "🧾", label: "On receipts", hint: "Invite every customer to leave a review." },
+  { icon: "💳", label: "On business cards", hint: "One link with everything about you." },
+  { icon: "📦", label: "On packaging", hint: "Turn deliveries into repeat customers." },
+  { icon: "📱", label: "In your social bios", hint: "Send Instagram & Facebook traffic here." },
+];
+
+function ShareTab({ biz }: { biz: Business }) {
+  const pageUrl = `${window.location.origin}/business/${biz.slug}`;
+  const [copied, setCopied] = useState(false);
+
+  function copy() { navigator.clipboard?.writeText(pageUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }
+  async function downloadQr() {
+    try {
+      const url = await QR.toDataURL(pageUrl, { width: 1024, margin: 2 });
+      const a = document.createElement("a");
+      a.href = url; a.download = `${biz.slug}-qr.png`; a.click();
+    } catch { /* ignore */ }
+  }
+  const waShare = `https://wa.me/?text=${encodeURIComponent(`Check out ${biz.name} on our page: ${pageUrl}`)}`;
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-brand/30 bg-brand-soft/40 p-4">
+        <p className="font-display font-extrabold text-ink">📣 Share your page, not your Instagram</p>
+        <p className="mt-0.5 text-sm text-muted">Your page has everything in one place — menu, booking, ordering, gift cards, offers, reviews, directions & contact. Send customers here instead of a social profile, and they can act instantly.</p>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        {/* QR + link */}
+        <div className="card flex flex-col items-center p-6 text-center">
+          <QRCode value={pageUrl} size={200} />
+          <p className="mt-3 text-sm font-semibold text-ink">Your page QR code</p>
+          <p className="mt-0.5 break-all text-xs text-muted">{pageUrl}</p>
+          <div className="mt-4 flex w-full flex-col gap-2">
+            <button onClick={downloadQr} className="btn btn-primary py-2.5">⬇ Download QR (print-ready)</button>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={copy} className="btn btn-ghost py-2 text-sm">{copied ? "✓ Copied" : "Copy link"}</button>
+              <a href={waShare} target="_blank" rel="noreferrer" className="btn btn-ghost py-2 text-sm">Share on WhatsApp</a>
+            </div>
+          </div>
+        </div>
+
+        {/* Placement ideas */}
+        <div className="card p-6">
+          <h3 className="font-display font-bold text-ink">Where to put your QR</h3>
+          <p className="text-sm text-muted">The more places customers can scan it, the more bookings, orders & reviews you get.</p>
+          <div className="mt-4 space-y-3">
+            {PLACEMENTS.map((p) => (
+              <div key={p.label} className="flex gap-3">
+                <span className="text-xl">{p.icon}</span>
+                <div><p className="font-semibold text-ink">{p.label}</p><p className="text-sm text-muted">{p.hint}</p></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

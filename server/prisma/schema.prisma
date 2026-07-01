@@ -210,6 +210,8 @@ model User {
   savedCollections CollectionSave[]
   vehicles      UserVehicle[]
   savedGiftCards VoucherSave[]
+  purchasedPlatformCards PlatformGiftCard[] @relation("purchasedPlatformCards")
+  redeemedPlatformCards  PlatformGiftCard[] @relation("redeemedPlatformCards")
 }
 
 // A customer's saved vehicle ("garage") so they can reuse car details in requests.
@@ -585,6 +587,58 @@ model VoucherRedemption {
   amount    Float    @default(0)
   note      String   @default("")
   createdAt DateTime @default(now())
+}
+
+// A Platform Gift Card design (admin-managed): a visual theme + the value limits
+// buyers can pick within it. Unlike a business voucher, a platform gift card is
+// redeemable anywhere on the platform — the recipient redeems it into their wallet
+// and spends the credit at any participating business.
+model PlatformCardDesign {
+  id        Int      @id @default(autoincrement())
+  name      String                                  // "Birthday", "Classic"…
+  occasion  String   @default("GENERAL")            // GENERAL | BIRTHDAY | HOLIDAY | WEDDING | GRADUATION | ANNIVERSARY | THANK_YOU | CONGRATS
+  emoji     String   @default("🎁")
+  gradient  String   @default("from-brand to-brand-dark") // tailwind gradient classes for the card art
+  image     String?                                 // optional background image
+  minValue  Float    @default(10)
+  maxValue  Float    @default(1000)
+  presets   String   @default("[25,50,100,250]")    // JSON number[] of quick amounts
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  cards     PlatformGiftCard[]
+}
+
+// An issued Platform Gift Card. On redemption the amount is credited to the
+// recipient's wallet (a "GIFT" ledger entry) and the card is marked REDEEMED.
+model PlatformGiftCard {
+  id               Int      @id @default(autoincrement())
+  code             String   @unique
+  designId         Int?
+  design           PlatformCardDesign? @relation(fields: [designId], references: [id], onDelete: SetNull)
+  occasion         String   @default("GENERAL")     // snapshot of the design at purchase time
+  emoji            String   @default("🎁")           // snapshot
+  gradient         String   @default("from-brand to-brand-dark") // snapshot
+  amount           Float    @default(0)              // face value purchased
+  balance          Float    @default(0)              // un-redeemed value (== amount until redeemed, then 0)
+  // PENDING_DELIVERY | ACTIVE | REDEEMED | DISABLED | REFUNDED
+  status           String   @default("ACTIVE")
+  purchaserUserId  Int?
+  purchaser        User?    @relation("purchasedPlatformCards", fields: [purchaserUserId], references: [id], onDelete: SetNull)
+  purchaserName    String   @default("")
+  purchaserEmail   String   @default("")
+  recipientName    String   @default("")
+  recipientEmail   String   @default("")
+  recipientPhone   String   @default("")
+  message          String   @default("")
+  deliverAt        DateTime?                         // scheduled gift delivery; null = immediate
+  paymentMethod    String   @default("CARD")         // CARD | WALLET
+  redeemedByUserId Int?
+  redeemer         User?    @relation("redeemedPlatformCards", fields: [redeemedByUserId], references: [id], onDelete: SetNull)
+  redeemedAt       DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime @default(now())
+  @@index([status])
 }
 
 // A rentable facility/court/field/room a business books by the hour.
