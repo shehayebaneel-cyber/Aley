@@ -1187,6 +1187,42 @@ ownerRouter.post("/businesses/:id/engage", async (req, res) => {
   await prisma.customerNotification.createMany({ data: ids.map((userId) => ({ userId, businessId: business.id, businessName: business.name, title, body, link })) });
   res.json({ sent: ids.length });
 });
+
+// ---- Chat: customer conversations ----
+ownerRouter.get("/businesses/:id/chats-unread", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const agg = await prisma.conversation.aggregate({ where: { businessId: business.id }, _sum: { unreadBusiness: true } });
+  res.json({ unread: agg._sum.unreadBusiness ?? 0 });
+});
+ownerRouter.get("/businesses/:id/chats", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const convos = await prisma.conversation.findMany({ where: { businessId: business.id }, orderBy: { lastMessageAt: "desc" }, take: 100 });
+  res.json(convos.map((c) => ({ id: c.id, customerName: c.customerName, lastMessage: c.lastMessage, lastSender: c.lastSender, lastMessageAt: c.lastMessageAt, unread: c.unreadBusiness })));
+});
+ownerRouter.get("/businesses/:id/chats/:cid", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const convo = await prisma.conversation.findFirst({ where: { id: Number(req.params.cid), businessId: business.id } });
+  if (!convo) return res.status(404).json({ error: "Conversation not found." });
+  if (convo.unreadBusiness > 0) await prisma.conversation.update({ where: { id: convo.id }, data: { unreadBusiness: 0 } });
+  const messages = await prisma.message.findMany({ where: { conversationId: convo.id }, orderBy: { id: "asc" }, take: 200 });
+  res.json({ id: convo.id, customerName: convo.customerName, messages });
+});
+ownerRouter.post("/businesses/:id/chats/:cid", async (req, res) => {
+  const business = await ownedBusiness(req);
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const convo = await prisma.conversation.findFirst({ where: { id: Number(req.params.cid), businessId: business.id } });
+  if (!convo) return res.status(404).json({ error: "Conversation not found." });
+  const body = STR(req.body?.body, 2000);
+  if (!body) return res.status(400).json({ error: "Message can't be empty." });
+  await prisma.conversation.update({ where: { id: convo.id }, data: { lastMessage: body, lastSender: "BUSINESS", lastMessageAt: new Date(), unreadCustomer: { increment: 1 } } });
+  const message = await prisma.message.create({ data: { conversationId: convo.id, sender: "BUSINESS", body } });
+  // Surface the reply in the customer's notification bell too.
+  await prisma.customerNotification.create({ data: { userId: convo.userId, businessId: business.id, businessName: business.name, title: `New message from ${business.name}`, body, link: "/messages" } }).catch(() => {});
+  res.status(201).json(message);
+});
 ownerRouter.post("/businesses/:id/announcements", async (req, res) => {
   const business = await ownedBusiness(req);
   if (!business) return res.status(404).json({ error: "Business not found." });

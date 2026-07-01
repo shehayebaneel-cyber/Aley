@@ -171,6 +171,18 @@ export interface CustomerNotification {
   createdAt: string;
 }
 
+export interface ChatMessage { id: number; sender: string; body: string; createdAt: string }
+export interface ChatConversation {
+  id: number;
+  businessId?: number;
+  business?: { slug: string; name: string; logo: string | null };
+  customerName?: string;
+  lastMessage: string;
+  lastSender: string;
+  lastMessageAt: string;
+  unread: number;
+}
+
 /** A single selectable choice within an option group (e.g. "Large", "Oat Milk"). */
 export interface ProductChoice {
   label: string;

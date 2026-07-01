@@ -141,6 +141,7 @@ model Business {
   analyticsEvents AnalyticsEvent[]
   announcements  BusinessAnnouncement[]
   customerNotifications CustomerNotification[]
+  conversations  Conversation[]
   // Spare-parts shop profile (JSON: {brands:[], makes:[], partCategories:[], newParts, usedParts, oem, aftermarket})
   partsProfile   String @default("{}")
   serviceQuotes  ServiceQuote[]
@@ -215,6 +216,38 @@ model User {
   purchasedPlatformCards PlatformGiftCard[] @relation("purchasedPlatformCards")
   redeemedPlatformCards  PlatformGiftCard[] @relation("redeemedPlatformCards")
   notifications CustomerNotification[]
+  conversations Conversation[]
+}
+
+// A 1:1 message thread between a customer and a business. Unread counters let
+// each side badge new messages; near-real-time via polling (no websockets).
+model Conversation {
+  id             Int      @id @default(autoincrement())
+  businessId     Int
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerName   String   @default("")
+  lastMessage    String   @default("")
+  lastSender     String   @default("") // CUSTOMER | BUSINESS
+  lastMessageAt  DateTime @default(now())
+  unreadBusiness Int      @default(0) // unseen by the owner
+  unreadCustomer Int      @default(0) // unseen by the customer
+  createdAt      DateTime @default(now())
+  messages       Message[]
+  @@unique([businessId, userId])
+  @@index([businessId])
+  @@index([userId])
+}
+
+model Message {
+  id             Int      @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String   // CUSTOMER | BUSINESS
+  body           String
+  createdAt      DateTime @default(now())
+  @@index([conversationId])
 }
 
 // A message a business sends to a customer (engagement/marketing push). Shown in

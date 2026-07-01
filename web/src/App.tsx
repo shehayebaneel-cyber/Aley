@@ -19,6 +19,7 @@ import { PlatformGiftCard } from "./pages/PlatformGiftCard";
 import { PlatformCardView } from "./pages/PlatformCardView";
 import { VoucherView } from "./pages/VoucherView";
 import { Wallet } from "./pages/Wallet";
+import { Messages } from "./pages/Messages";
 import { OrderTracking } from "./pages/OrderTracking";
 import { Events } from "./pages/Events";
 import { EventDetail } from "./pages/EventDetail";
@@ -102,6 +103,7 @@ const TITLES: Record<string, string> = {
   "/platform-gift-card": "Platform Gift Card",
   "/gift-vouchers": "My gift vouchers",
   "/wallet": "My wallet",
+  "/messages": "Messages",
   "/my-offers": "My offers",
   "/my-events": "My events",
   "/spare-parts": "Spare Parts",
@@ -163,6 +165,7 @@ export default function App() {
           <Route path="/gift-vouchers" element={<GiftVouchers />} />
           <Route path="/voucher/:code" element={<VoucherView />} />
           <Route path="/wallet" element={<Wallet />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />

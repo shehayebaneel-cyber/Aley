@@ -9,6 +9,7 @@ import { EVENT_CATEGORIES } from "../../lib/events";
 import { fieldLabel } from "../../lib/requestForms";
 import { MenuEditor } from "../../components/MenuEditor";
 import { Stars } from "../../components/Stars";
+import { ChatBubbles } from "../../components/ChatBubbles";
 import { QRCode } from "../../components/QRCode";
 import QR from "qrcode";
 import { CalendarIcon, CheckIcon, GlobeIcon, StarIcon, TrashIcon } from "../../components/icons";
@@ -17,9 +18,9 @@ import { currency, dayName, formatEventDate, ownerApi, PRICE, TICKET_STATUS, tim
 import { kitFor, stepDone } from "../../lib/categoryKits";
 import { downloadCsv } from "../../lib/csv";
 import { useFetch } from "../../lib/useFetch";
-import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessAnnouncement, BusinessOrder, Category, CustomerHistory, CustomerRow, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
+import type { Appointment, AppointmentStatus, BookingAnalytics, BookingMode, Business, BusinessAnnouncement, BusinessOrder, Category, ChatConversation, ChatMessage, CustomerHistory, CustomerRow, EventItem, Facility, FacilityBooking, FacilityStats, GalleryImage, HoursRow, Offer, OwnerPartLead, Payout, Reservation, Review, Service, StaffMember, Transaction, Voucher, VoucherStats, VoucherType, Wallet, WaitlistEntry } from "../../types";
 
-const TABS = ["Today", "Inbox", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Marketing", "Engage", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
+const TABS = ["Today", "Inbox", "Messages", "Customers", "Overview", "Earnings", "Analytics", "Assistant", "Orders", "Bookings", "Booking Setup", "Facilities", "Field Bookings", "Gift Vouchers", "Requests", "Reservations", "Marketing", "Engage", "Profile", "Photos", "Hours", "Menu", "Offers", "Events", "Reviews", "Share"] as const;
 type Tab = (typeof TABS)[number];
 
 // Group the tabs into a tidy 2-level nav so the dashboard isn't a wall of tabs.
@@ -27,6 +28,7 @@ type Tab = (typeof TABS)[number];
 // nav highlights the ones that matter for this business's category.
 const TAB_GROUPS: { label: string; icon: string; tabs: Tab[] }[] = [
   { label: "Home", icon: "🏠", tabs: ["Today", "Inbox", "Overview"] },
+  { label: "Messages", icon: "💬", tabs: ["Messages"] },
   { label: "Customers", icon: "👥", tabs: ["Customers"] },
   { label: "Finance", icon: "💰", tabs: ["Earnings", "Analytics"] },
   { label: "Sales", icon: "🛍️", tabs: ["Orders", "Menu", "Offers", "Gift Vouchers", "Requests"] },
@@ -139,6 +141,7 @@ export function BusinessDashboard() {
       <div className="mt-6">
         {tab === "Today" && <TodayTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
         {tab === "Inbox" && <InboxTab biz={biz} onGo={(t) => setTab(t as Tab)} />}
+        {tab === "Messages" && <MessagesTab biz={biz} />}
         {tab === "Customers" && <CustomersTab biz={biz} />}
         {tab === "Overview" && <Overview biz={biz} onGo={(t) => setTab(t as Tab)} />}
         {tab === "Earnings" && <EarningsTab biz={biz} />}
@@ -332,6 +335,68 @@ function InboxTab({ biz, onGo }: { biz: Business; onGo: (tab: string) => void })
               </div>
             </button>
           ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- Messages: two-way chat with customers ----
+function MessagesTab({ biz }: { biz: Business }) {
+  const [convos, setConvos] = useState<ChatConversation[] | null>(null);
+  const [active, setActive] = useState<number | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const loadConvos = () => ownerApi.get<ChatConversation[]>(`/api/owner/businesses/${biz.id}/chats`).then(setConvos).catch(() => setConvos([]));
+  useEffect(() => { loadConvos(); /* eslint-disable-next-line */ }, [biz.id]);
+  useEffect(() => {
+    if (active === null) return;
+    let alive = true;
+    const load = () => ownerApi.get<{ messages: ChatMessage[] }>(`/api/owner/businesses/${biz.id}/chats/${active}`).then((d) => alive && setMessages(d.messages)).catch(() => {});
+    load();
+    const t = setInterval(load, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, [active, biz.id]);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const body = text.trim();
+    if (!body || busy || active === null) return;
+    setBusy(true);
+    try { const m = await ownerApi.post<ChatMessage>(`/api/owner/businesses/${biz.id}/chats/${active}`, { body }); setMessages((x) => [...x, m]); setText(""); loadConvos(); } finally { setBusy(false); }
+  }
+
+  const activeConvo = convos?.find((c) => c.id === active);
+  return (
+    <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+      <div className="card p-2 md:h-[62vh] md:overflow-y-auto">
+        {convos === null ? (
+          Array.from({ length: 4 }).map((_, i) => <div key={i} className="m-1 h-14 animate-pulse rounded-xl surface-2" />)
+        ) : convos.length === 0 ? (
+          <p className="p-6 text-center text-sm text-muted">No messages yet. Customers can message you from your public page.</p>
+        ) : (
+          convos.map((c) => (
+            <button key={c.id} onClick={() => setActive(c.id)} className={`flex w-full items-center gap-2 rounded-xl p-2.5 text-left ${active === c.id ? "bg-brand-soft" : "hover:surface-2"}`}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface font-bold text-brand-dark">{(c.customerName || "?").slice(0, 1).toUpperCase()}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-ink">{c.customerName || "Customer"}</span><span className="block truncate text-xs text-muted">{c.lastSender === "BUSINESS" ? "You: " : ""}{c.lastMessage}</span></span>
+              {c.unread > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">{c.unread}</span>}
+            </button>
+          ))
+        )}
+      </div>
+      <div className="card flex flex-col overflow-hidden p-0 md:h-[62vh]">
+        {active === null ? (
+          <div className="flex flex-1 items-center justify-center p-6 text-center text-muted">Select a conversation to reply.</div>
+        ) : (
+          <>
+            <div className="border-b border-border px-4 py-2.5 font-semibold text-ink">{activeConvo?.customerName || "Customer"}</div>
+            <div className="flex-1 overflow-y-auto p-4"><ChatBubbles messages={messages} mineSender="BUSINESS" /></div>
+            <form onSubmit={send} className="flex gap-2 border-t border-border p-3">
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply…" className="input !py-2 text-sm" />
+              <button type="submit" disabled={busy || !text.trim()} className="btn btn-primary shrink-0 px-4 py-2 text-sm disabled:opacity-50">Send</button>
+            </form>
+          </>
         )}
       </div>
     </div>

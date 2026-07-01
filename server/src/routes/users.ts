@@ -229,6 +229,44 @@ userRouter.post("/notifications/:id/read", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Chat with businesses ----
+userRouter.get("/chats", async (req, res) => {
+  const convos = await prisma.conversation.findMany({
+    where: { userId: req.userId! }, orderBy: { lastMessageAt: "desc" }, take: 50,
+    include: { business: { select: { slug: true, name: true, logo: true } } },
+  });
+  res.json(convos.map((c) => ({ id: c.id, businessId: c.businessId, business: c.business, lastMessage: c.lastMessage, lastSender: c.lastSender, lastMessageAt: c.lastMessageAt, unread: c.unreadCustomer })));
+});
+userRouter.get("/chats/unread", async (req, res) => {
+  const agg = await prisma.conversation.aggregate({ where: { userId: req.userId! }, _sum: { unreadCustomer: true } });
+  res.json({ unread: agg._sum.unreadCustomer ?? 0 });
+});
+userRouter.get("/chats/with/:businessId", async (req, res) => {
+  const businessId = Number(req.params.businessId);
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true, slug: true, name: true, logo: true } });
+  if (!business) return res.status(404).json({ error: "Business not found." });
+  const convo = await prisma.conversation.findUnique({ where: { businessId_userId: { businessId, userId: req.userId! } } });
+  if (!convo) return res.json({ business, conversationId: null, messages: [] });
+  if (convo.unreadCustomer > 0) await prisma.conversation.update({ where: { id: convo.id }, data: { unreadCustomer: 0 } });
+  const messages = await prisma.message.findMany({ where: { conversationId: convo.id }, orderBy: { id: "asc" }, take: 200 });
+  res.json({ business, conversationId: convo.id, messages });
+});
+userRouter.post("/chats/with/:businessId", async (req, res) => {
+  const businessId = Number(req.params.businessId);
+  const body = STR(req.body?.body, 2000);
+  if (!body) return res.status(400).json({ error: "Message can't be empty." });
+  const business = await prisma.business.findUnique({ where: { id: businessId } });
+  if (!business || !business.isPublished) return res.status(404).json({ error: "Business not found." });
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  const convo = await prisma.conversation.upsert({
+    where: { businessId_userId: { businessId, userId: req.userId! } },
+    create: { businessId, userId: req.userId!, customerName: user?.name ?? "", lastMessage: body, lastSender: "CUSTOMER", lastMessageAt: new Date(), unreadBusiness: 1 },
+    update: { lastMessage: body, lastSender: "CUSTOMER", lastMessageAt: new Date(), unreadBusiness: { increment: 1 }, customerName: user?.name || undefined },
+  });
+  const message = await prisma.message.create({ data: { conversationId: convo.id, sender: "CUSTOMER", body } });
+  res.status(201).json({ conversationId: convo.id, message });
+});
+
 // ---- Wallet (prepaid balance) ----
 const TOPUP_METHODS = new Set(["CARD", "WHISH"]);
 

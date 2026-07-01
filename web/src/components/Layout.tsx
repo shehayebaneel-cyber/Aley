@@ -94,6 +94,9 @@ function AccountMenu() {
             <p className="truncate font-semibold text-ink">{user.name}</p>
             <p className="truncate text-xs text-muted">{user.email}</p>
           </div>
+          <button onClick={() => { setOpen(false); navigate("/messages"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
+            💬 Messages
+          </button>
           <button onClick={() => { setOpen(false); navigate("/saved"); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:surface-2">
             <HeartIcon className="h-4 w-4 text-rose-500" /> {t("common.saved")}
           </button>

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { BookAppointmentModal } from "../components/BookAppointmentModal";
 import { BuyVoucherModal } from "../components/BuyVoucherModal";
 import { FacilityBookingModal } from "../components/FacilityBookingModal";
+import { ChatWidget } from "../components/ChatWidget";
 import { BusinessCard } from "../components/BusinessCard";
 import { FavoriteButton } from "../components/FavoriteButton";
 import { Gallery } from "../components/Gallery";
@@ -48,6 +49,7 @@ export function BusinessProfile() {
   const [appt, setAppt] = useState(false);
   const [facBook, setFacBook] = useState<{ open: boolean; facilityId?: number }>({ open: false });
   const [voucher, setVoucher] = useState(false);
+  const [chat, setChat] = useState(false);
   useTitle(b?.name);
 
   if (loading) return <div className="mx-auto max-w-5xl px-4 py-16"><div className="card h-96 animate-pulse" /></div>;
@@ -100,6 +102,7 @@ export function BusinessProfile() {
             <ShareButton name={b.name} tagline={b.tagline} />
             {b.phone && <a href={`tel:${b.phone}`} onClick={() => track(b.id, "CALL")} className="btn btn-ghost px-4 py-2.5"><PhoneIcon className="h-4 w-4" /> Call</a>}
             {wa && <a href={`https://wa.me/${wa}`} onClick={() => track(b.id, "WHATSAPP")} target="_blank" rel="noreferrer" className="btn px-4 py-2.5 bg-emerald-500 text-white"><WhatsAppIcon className="h-4 w-4" /> WhatsApp</a>}
+            <button onClick={() => setChat(true)} className="btn btn-ghost px-4 py-2.5">💬 Message</button>
             {b.hasFacilities && <button onClick={() => setFacBook({ open: true })} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> Book Now</button>}
             {b.appointmentBookable && <button onClick={() => setAppt(true)} className="btn btn-primary px-4 py-2.5"><CalendarIcon className="h-4 w-4" /> {b.bookingCta ?? "Book appointment"}</button>}
             {b.bookingMode === "table" && b.hasReservations && <button onClick={() => setBooking(true)} className="btn px-4 py-2.5 bg-accent text-white"><CalendarIcon className="h-4 w-4" /> Book a table</button>}
@@ -302,6 +305,7 @@ export function BusinessProfile() {
       {appt && <BookAppointmentModal business={b} onClose={() => setAppt(false)} />}
       {facBook.open && !!b.facilities?.length && <FacilityBookingModal business={b} facilities={b.facilities} initialFacilityId={facBook.facilityId} onClose={() => setFacBook({ open: false })} />}
       {voucher && <BuyVoucherModal business={b} onClose={() => setVoucher(false)} />}
+      {chat && <ChatWidget business={{ id: b.id, name: b.name, logo: b.logo }} onClose={() => setChat(false)} />}
     </div>
   );
 }
