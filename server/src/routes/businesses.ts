@@ -43,9 +43,14 @@ businessesRouter.get("/", async (req, res) => {
           ? [{ name: "asc" as const }]
           : [{ isFeatured: "desc" as const }, { rating: "desc" as const }, { reviewCount: "desc" as const }];
 
+  // Cap the result set so a broad browse can't pull the entire directory in one
+  // shot (the frontend filters/paginates from here). Generous default so real
+  // filtered queries are never truncated; overridable via ?limit=.
+  const take = Math.min(300, Math.max(1, Number(q.limit) || 200));
   let rows = await prisma.business.findMany({
     where,
     orderBy,
+    take,
     include: { category: true, city: { select: { slug: true, name: true } } },
   });
 

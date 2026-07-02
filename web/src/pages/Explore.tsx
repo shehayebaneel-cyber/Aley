@@ -61,13 +61,14 @@ export function Explore() {
     return p.toString();
   }, [params, city]);
 
-  const { data: businesses, loading } = useFetch<Business[]>(`/api/businesses?${query}`);
-  const activeCategory = params.get("category") ?? "";
-  const activeGroup = params.get("group") ?? "";
-
   // Idle = nothing chosen yet → show the visual "browse by category" tiles instead of results.
   const FILTER_KEYS = ["category", "group", "q", "openNow", "delivery", "reservations", "gift", "minRating", "priceMax", "sort"];
   const hasFilter = FILTER_KEYS.some((k) => params.get(k));
+  // Only hit the directory API when a filter/search is active — the idle landing
+  // just shows category tiles, so there's no need to pull the whole directory.
+  const { data: businesses, loading } = useFetch<Business[]>(hasFilter ? `/api/businesses?${query}` : null);
+  const activeCategory = params.get("category") ?? "";
+  const activeGroup = params.get("group") ?? "";
 
   // Group the categories in a fixed order.
   const grouped = useMemo(() => {
